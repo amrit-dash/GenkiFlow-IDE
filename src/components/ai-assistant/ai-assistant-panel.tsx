@@ -108,7 +108,7 @@ export function AiAssistantPanel() {
 
   const FeatureCard: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; action?: () => void; actionLabel?: string; requiresCode?: boolean }> = 
     ({ title, icon: Icon, children, action, actionLabel, requiresCode = false }) => (
-    <Card className="bg-card/50">
+    <Card className="bg-card/50 w-full"> {/* Ensure card takes full width of trigger */}
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -116,9 +116,37 @@ export function AiAssistantPanel() {
             <CardTitle className="text-base font-semibold">{title}</CardTitle>
           </div>
           {action && actionLabel && (
-            <Button size="sm" onClick={action} disabled={isLoading || (requiresCode && !currentCode)}>
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {actionLabel}
+            <Button
+              asChild
+              size="sm"
+              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                // Prevent the click from toggling the accordion
+                e.stopPropagation();
+                if (action) {
+                  action();
+                }
+              }}
+              disabled={isLoading || (requiresCode && !currentCode)}
+            >
+              <div
+                role="button"
+                tabIndex={isLoading || (requiresCode && !currentCode) ? -1 : 0}
+                onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (!(isLoading || (requiresCode && !currentCode))) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (action) {
+                        action();
+                      }
+                    }
+                  }
+                }}
+                aria-disabled={isLoading || (requiresCode && !currentCode)}
+              >
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                {actionLabel}
+              </div>
             </Button>
           )}
         </div>
@@ -144,7 +172,7 @@ export function AiAssistantPanel() {
         
         <Accordion type="single" collapsible value={activeAccordion} onValueChange={setActiveAccordion}>
           <AccordionItem value="summarize">
-            <AccordionTrigger className="p-0 hover:no-underline">
+            <AccordionTrigger className="p-0 hover:no-underline flex"> {/* Added flex to allow card to fill width */}
               <FeatureCard title="Summarize Code" icon={TextQuote} action={handleSummarize} actionLabel="Summarize" requiresCode>
                 {summary && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{summary}</p>}
                 {!summary && !isLoading && <p className="text-sm text-muted-foreground">Summarize the code in the active editor tab.</p>}
@@ -156,7 +184,7 @@ export function AiAssistantPanel() {
           </AccordionItem>
 
           <AccordionItem value="generate">
-             <AccordionTrigger className="p-0 hover:no-underline">
+             <AccordionTrigger className="p-0 hover:no-underline flex">
               <FeatureCard title="Generate Code" icon={Wand2}>
                  {!generatedCode && <p className="text-sm text-muted-foreground">Generate new code based on your prompt below.</p>}
                  {generatedCode && <p className="text-sm text-muted-foreground">Generated code based on your prompt. Displayed below.</p>}
@@ -173,7 +201,7 @@ export function AiAssistantPanel() {
           </AccordionItem>
 
           <AccordionItem value="refactor">
-             <AccordionTrigger className="p-0 hover:no-underline">
+             <AccordionTrigger className="p-0 hover:no-underline flex">
               <FeatureCard title="Refactor Code" icon={Replace} action={handleRefactor} actionLabel="Suggest" requiresCode>
                 {!refactorSuggestions && <p className="text-sm text-muted-foreground">Get refactoring suggestions for the active code.</p>}
                 {refactorSuggestions && <p className="text-sm text-muted-foreground">{refactorSuggestions.length} suggestion(s) found. Displayed below.</p>}
@@ -195,7 +223,7 @@ export function AiAssistantPanel() {
           </AccordionItem>
           
           <AccordionItem value="examples">
-             <AccordionTrigger className="p-0 hover:no-underline">
+             <AccordionTrigger className="p-0 hover:no-underline flex">
               <FeatureCard title="Find Code Examples" icon={SearchCode}>
                 {!codeExamples && <p className="text-sm text-muted-foreground">Find examples related to your query from the codebase.</p>}
                 {codeExamples && <p className="text-sm text-muted-foreground">{codeExamples.length} example(s) found. Displayed below.</p>}
