@@ -158,7 +158,7 @@ export function AiAssistantPanel() {
   );
 
   return (
-    <div className="w-full md:w-[400px] lg:w-[450px] border-l border-border bg-sidebar flex flex-col h-full">
+    <div className="w-full border-l border-border bg-sidebar flex flex-col h-full">
       <div className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-primary" />
