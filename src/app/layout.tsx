@@ -16,8 +16,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning={true}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" suppressHydrationWarning={true} />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" suppressHydrationWarning={true} />
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" suppressHydrationWarning={true} />
       </head>
       <body className="font-body antialiased" suppressHydrationWarning={true}>
