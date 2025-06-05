@@ -59,12 +59,16 @@ export function CodeEditorPanel() {
                   >
                     {file.name}
                     <Button 
+                      asChild
                       variant="ghost" 
                       size="icon" 
                       className="ml-2 h-5 w-5 absolute top-1/2 right-1 transform -translate-y-1/2 opacity-60 hover:opacity-100"
                       onClick={(e) => { e.stopPropagation(); closeFile(path); }}
+                      aria-label={`Close tab ${file.name}`}
                     >
-                      <XIcon className="h-3.5 w-3.5" />
+                      <span>
+                        <XIcon className="h-3.5 w-3.5" />
+                      </span>
                     </Button>
                   </TabsTrigger>
                 ))}
