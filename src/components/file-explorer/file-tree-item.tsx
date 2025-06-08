@@ -3,12 +3,22 @@
 
 import type React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Folder, FileText, ChevronRight, ChevronDown, PlusCircle, Trash2, Edit3, FolderPlus, Terminal } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, PlusCircle, Trash2, Edit3, FolderPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FileSystemNode } from '@/lib/types';
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface FileTreeItemProps {
   node: FileSystemNode;
@@ -16,11 +26,12 @@ interface FileTreeItemProps {
 }
 
 export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
-  const [isOpen, setIsOpen] = useState(node.type === 'folder' ? (node.path === '/src' || node.path === '/') : false); // Keep /src open by default
+  const [isOpen, setIsOpen] = useState(node.type === 'folder' ? (node.path === '/src' || node.path === '/') : false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const [showActions, setShowActions] = useState(false);
-  const { openFile, activeFilePath, addNode, deleteNode, renameNode } = useIde(); // Removed getFileSystemNode as it's not directly used here
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const { openFile, activeFilePath, addNode, deleteNode, renameNode, nodeToAutoRenameId, setNodeToAutoRenameId } = useIde();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isFolder = node.type === 'folder';
@@ -34,8 +45,16 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     }
   }, [isRenaming]);
 
+  useEffect(() => {
+    if (nodeToAutoRenameId === node.id && !isRenaming) {
+      setIsRenaming(true);
+      setRenameValue(node.name); // node.name will be the default unique name
+      setNodeToAutoRenameId(null); // Consume the signal
+    }
+  }, [nodeToAutoRenameId, node.id, node.name, setNodeToAutoRenameId, isRenaming]);
+
   const handleToggle = (e: React.MouseEvent | React.KeyboardEvent) => {
-    if (e.target instanceof HTMLElement && (e.target.closest('[data-action-button]') || e.target.closest('input'))) {
+    if (e.target instanceof HTMLElement && (e.target.closest('[data-action-button]') || e.target.closest('input') || e.target.closest('[role=dialog]'))) {
         return;
     }
     if (isRenaming) return;
@@ -49,27 +68,30 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
 
   const handleAddFile = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const fileName = window.prompt("Enter new file name (e.g., newFile.txt):");
-    if (fileName && fileName.trim() !== "") {
-      const added = addNode(node.id, fileName.trim(), 'file');
-      if (added && !isOpen) setIsOpen(true);
+    const newNode = addNode(node.id, "UntitledFile", 'file');
+    if (newNode) {
+      if (!isOpen) setIsOpen(true);
+      setNodeToAutoRenameId(newNode.id);
     }
   };
 
   const handleAddFolder = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const folderName = window.prompt("Enter new folder name (e.g., newFolder):");
-    if (folderName && folderName.trim() !== "") {
-      const added = addNode(node.id, folderName.trim(), 'folder');
-      if (added && !isOpen) setIsOpen(true);
+    const newNode = addNode(node.id, "NewFolder", 'folder');
+    if (newNode) {
+      if (!isOpen) setIsOpen(true);
+      setNodeToAutoRenameId(newNode.id);
     }
   };
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDeleteInitiate = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${node.name}"? This action cannot be undone.`)) {
-      deleteNode(node.id);
-    }
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = () => {
+    deleteNode(node.id);
+    setShowDeleteDialog(false);
   };
 
   const handleRenameStart = (e: React.MouseEvent) => {
@@ -83,8 +105,8 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       const success = renameNode(node.id, renameValue.trim());
       if (!success) {
          setRenameValue(node.name); 
-         // Optionally, inform user about name collision if that was the cause
-         alert(`Failed to rename. A file or folder with the name "${renameValue.trim()}" might already exist in this directory, or the name is invalid.`);
+         // TODO: Consider using a toast notification for rename failure
+         console.error(`Failed to rename. A file or folder with the name "${renameValue.trim()}" might already exist in this directory, or the name is invalid.`);
       }
     }
     setIsRenaming(false);
@@ -95,7 +117,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       handleRenameConfirm();
     } else if (e.key === 'Escape') {
       setIsRenaming(false);
-      setRenameValue(node.name); // Revert to original name on escape
+      setRenameValue(node.name); 
     }
   };
 
@@ -117,7 +139,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
         tabIndex={0}
         onKeyDown={(e) => {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
-            if (e.key === 'F2' && !isRenaming) { e.preventDefault(); setIsRenaming(true); setRenameValue(node.name); }
+            if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
         title={node.path}
       >
@@ -132,10 +154,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             type="text"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameConfirm} // Confirm on blur
+            onBlur={handleRenameConfirm} 
             onKeyDown={handleRenameKeyDown}
             className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary"
-            onClick={(e) => e.stopPropagation()} // Prevent toggle when clicking input
+            onClick={(e) => e.stopPropagation()} 
           />
         ) : (
           <>
@@ -156,7 +178,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRenameStart} data-action-button title="Rename (F2)">
                   <Edit3 className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={handleDelete} data-action-button title="Delete">
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={handleDeleteInitiate} data-action-button title="Delete">
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -166,7 +188,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       </div>
       {isFolder && isOpen && !isRenaming && node.children && (
         <div>
-          {node.children.length > 0 ? node.children.sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).map((child) => ( // Sort folders first, then by name
+          {node.children.length > 0 ? node.children.sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).map((child) => (
             <FileTreeItem key={child.id} node={child} level={level + 1} />
           )) : (
              <div 
@@ -178,8 +200,25 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           )}
         </div>
       )}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete "{node.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the {node.type}
+              {node.type === 'folder' && node.children && node.children.length > 0 ? ` and all its contents (${node.children.length} item(s)).` : '.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={(e) => {e.stopPropagation(); setShowDeleteDialog(false);}}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => {e.stopPropagation(); confirmDelete();}} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
+    
     

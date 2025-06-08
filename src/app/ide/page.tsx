@@ -77,7 +77,7 @@ export default function IdePage() {
       </SidebarInset>
       
       {/* Global toggle buttons in bottom left corner */}
-      <div className="absolute bottom-4 left-4 z-50 flex flex-col gap-2">
+      <div className="absolute bottom-4 left-4 z-50 flex flex-row gap-2">
         <Button
           size="icon"
           onClick={toggleAiPanel}
@@ -110,3 +110,5 @@ export default function IdePage() {
     </div>
   );
 }
+
+    
