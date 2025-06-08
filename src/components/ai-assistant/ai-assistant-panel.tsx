@@ -64,11 +64,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     }
   }, [chatHistory]);
 
-  const setTemporaryButtonState = (key: string) => {
+  const setButtonAppliedState = (key: string) => {
     setActionAppliedStates(prev => ({ ...prev, [key]: true }));
-    setTimeout(() => {
-      setActionAppliedStates(prev => ({ ...prev, [key]: false }));
-    }, 2500);
   };
 
   const handleApplyToEditor = (codeToApply: string, messageId: string, targetPath?: string) => {
@@ -78,7 +75,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     if (path) {
       updateFileContent(path, codeToApply);
       toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name || 'the editor'}.`});
-      setTemporaryButtonState(buttonKey);
+      setButtonAppliedState(buttonKey);
     } else {
       toast({ variant: "destructive", title: "Error", description: "No active file selected to apply code."});
     }
@@ -114,7 +111,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       openFile(newNode.path);
       updateFileContent(newNode.path, code);
       toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
-      setTemporaryButtonState(buttonKey);
+      setButtonAppliedState(buttonKey);
     } else {
       toast({ variant: "destructive", title: "Error", description: `Could not create file "${suggestedFileName}". It might already exist or the name is invalid.`});
     }
@@ -241,11 +238,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      console.error("AI Assistant Error:", error); // Log the full error to console
       setChatHistory(prev => prev.filter(msg => msg.id !== loadingMessageId).concat({
         id: generateId(),
         role: 'assistant',
         type: 'error',
-        content: errorMessage
+        content: "Sorry, I ran into an issue. Please try again or check the server console for details."
       }));
     }
     setIsLoading(false);
