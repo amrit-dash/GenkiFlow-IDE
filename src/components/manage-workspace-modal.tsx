@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning } from 'lucide-react';
+import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning, Settings2 } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { useToast } from '@/hooks/use-toast';
 import { downloadWorkspaceAsZip, processZipFile } from '@/lib/workspace-utils';
@@ -133,13 +133,16 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="text-xl">Manage Workspace</DialogTitle>
+          <DialogTitle className="text-xl flex items-center">
+            <Settings2 className="mr-2 h-5 w-5 text-primary" />
+            Manage Workspace
+          </DialogTitle>
           <DialogDescription>
             Download your current workspace or import a new one by uploading a ZIP file. Importing will replace your current workspace.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-6 pr-2 py-2">
+        <div className="flex-1 overflow-y-auto space-y-6">
           {/* Download Section */}
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><Download className="mr-2 h-4 w-4 text-primary" />Download Current Workspace</h3>
@@ -180,7 +183,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                 className="hidden"
                 disabled={isProcessingZip}
               />
-              <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip}>
+              <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip || zipProcessingStep !== 'idle'}>
                 {isProcessingZip && zipProcessingStep === 'idle' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Process ZIP
               </Button>
