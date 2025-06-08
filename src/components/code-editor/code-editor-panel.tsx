@@ -165,8 +165,7 @@ export function CodeEditorPanel() {
        {activeFilePath && hasUnsavedChanges && (
         <Button
           onClick={handleSave}
-          size="icon"
-          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-14 w-14 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
+          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-12 w-12 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
           disabled={isSaving}
           title="Save File (Ctrl+S)"
         >
@@ -176,7 +175,7 @@ export function CodeEditorPanel() {
       )}
       {activeFilePath && isFileActuallySaved && !isSaving && (
          <div
-          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-14 w-14 p-0 bg-green-600 text-white flex items-center justify-center"
+          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-12 w-12 p-0 bg-primary text-primary-foreground flex items-center justify-center"
           title="File Saved"
         >
           <CheckCircle className="h-6 w-6" />
@@ -186,3 +185,4 @@ export function CodeEditorPanel() {
     </div>
   );
 }
+
