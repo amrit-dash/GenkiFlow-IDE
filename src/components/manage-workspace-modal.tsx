@@ -30,7 +30,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   const downloadInputRef = useRef<HTMLInputElement>(null);
 
   // GitHub Import state
-  const [githubUrlInput, setGithubUrlInput] = useState(""); // Renamed from githubZipUrl
+  const [githubUrlInput, setGithubUrlInput] = useState("");
   const [isFetchingGitHub, setIsFetchingGitHub] = useState(false);
 
   // ZIP Upload state
@@ -78,7 +78,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
   const processAndReplaceWorkspace = async (zipArrayBuffer: ArrayBuffer, source: 'GitHub' | 'Upload') => {
     setIsProcessingZip(true); 
-    setIsFetchingGitHub(source === 'GitHub'); 
+    if (source === 'GitHub') setIsFetchingGitHub(true); 
 
     try {
       const { fileSystem: newFs, unsupportedFiles: newUnsupported, singleRootDir } = await processZipFile(zipArrayBuffer);
@@ -97,7 +97,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       setZipProcessingStep('idle');
     } finally {
       setIsProcessingZip(false);
-      setIsFetchingGitHub(false);
+      if (source === 'GitHub') setIsFetchingGitHub(false);
     }
   };
 
@@ -112,25 +112,36 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     let isTransformedUrl = false;
 
     if (!rawUrl.endsWith('.zip')) {
-      // Try to parse standard GitHub repo URL (HTTPS only)
-      const githubRepoRegex = /^(?:https?:\/\/)?github\.com\/([^\/]+)\/([^\/.]+?)(?:\.git)?\/?$/;
-      const match = rawUrl.match(githubRepoRegex);
-
-      if (match && match[1] && match[2]) {
-        const user = match[1];
-        const repo = match[2];
-        targetZipUrl = `https://github.com/${user}/${repo}/archive/refs/heads/main.zip`;
-        isTransformedUrl = true;
-        toast({ 
-          title: "Transforming URL", 
-          description: `Attempting to fetch main branch ZIP from ${rawUrl}` 
-        });
-      } else {
+      try {
+        const parsedUrl = new URL(rawUrl); // This can throw if rawUrl is not a valid URL structure
+        if (parsedUrl.hostname === 'github.com') {
+          const pathSegments = parsedUrl.pathname.split('/').filter(Boolean); // Filter out empty strings from leading/trailing slashes
+          if (pathSegments.length >= 2) {
+            const user = pathSegments[0];
+            let repo = pathSegments[1];
+            // Remove .git suffix from repo name if present
+            if (repo.endsWith('.git')) {
+              repo = repo.substring(0, repo.length - 4);
+            }
+            targetZipUrl = `https://github.com/${user}/${repo}/archive/refs/heads/main.zip`;
+            isTransformedUrl = true;
+            toast({ 
+              title: "Transforming URL", 
+              description: `Attempting to fetch main branch ZIP for ${user}/${repo}` 
+            });
+          } else {
+            throw new Error("Invalid GitHub repository URL format. Expected format like https://github.com/user/repo.");
+          }
+        } else {
+          throw new Error("URL is not a direct .zip link or a standard github.com repository URL.");
+        }
+      } catch (e: any) {
         toast({ 
           variant: "destructive", 
-          title: "Invalid URL Format", 
-          description: "Please provide a direct .zip download link or a standard GitHub repository URL (e.g., https://github.com/user/repo)." 
+          title: "Invalid URL", 
+          description: e.message || "Could not parse the GitHub URL. Please provide a direct .zip link or a standard GitHub repository URL." 
         });
+        setIsFetchingGitHub(false);
         return;
       }
     }
@@ -139,11 +150,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     toast({ title: "Fetching from GitHub...", description: `Downloading from ${targetZipUrl}` });
     
     try {
-      const response = await fetch(targetZipUrl);
+      const response = await fetch(targetZipUrl); // This is line 142 from the error
       if (!response.ok) {
         let errorDetail = `Failed to fetch ZIP: ${response.status} ${response.statusText}.`;
         if (isTransformedUrl && response.status === 404) {
-          errorDetail += " This might mean the 'main' branch doesn't exist or the repository is private. Try a direct .zip link for a specific branch or ensure the repository is public and 'main' is the default branch.";
+          errorDetail += " This might mean the 'main' branch doesn't exist or the repository is private/incorrect. Try a direct .zip link for a specific branch or ensure the repository is public and 'main' is the default branch.";
         } else if (!isTransformedUrl) {
            errorDetail += " Ensure the URL is a direct download link to a .zip file and is publicly accessible.";
         }
@@ -153,17 +164,26 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       await processAndReplaceWorkspace(zipArrayBuffer, 'GitHub');
     } catch (error: any) {
       console.error("Failed to fetch or process GitHub ZIP:", error);
-      let description = "Could not fetch or process the repository ZIP. Please check the URL and your network connection.";
-      if (error.message.includes("Failed to fetch")) {
-        description = `Failed to fetch from ${targetZipUrl}. This might be due to network issues, an incorrect URL, or CORS restrictions. ${error.message}`;
-      } else if (error.message) {
-        description = error.message;
+      let descriptionToast = "An unexpected error occurred during GitHub import.";
+
+      if (error.message.startsWith("Failed to fetch ZIP:")) { // My custom error for HTTP issues
+        descriptionToast = error.message; // Contains status and text from response
+      } else if (error.message.toLowerCase().includes("failed to fetch")) { // Generic browser fetch failure (network, CORS, etc.)
+        descriptionToast = `The browser could not fetch the URL. This might be due to:
+- Network connectivity issues.
+- The URL being incorrect or inaccessible (${targetZipUrl}).
+- Browser security (CORS) preventing the request.
+- If you entered a repository URL, the default branch might not be 'main'.
+Please verify the URL. Using a direct '.zip' download link from GitHub is often the most reliable.`;
+      } else if (error.message) { // Other errors, e.g., from URL parsing, ZIP processing
+        descriptionToast = `Error processing the data: ${error.message}`;
       }
+      
       toast({ 
         variant: "destructive", 
         title: "GitHub Import Failed", 
-        description: description,
-        duration: 7000,
+        description: descriptionToast,
+        duration: 9000, // Increased duration for more complex error messages
       });
       setIsFetchingGitHub(false);
     }
@@ -271,7 +291,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><UploadCloud className="mr-2 h-4 w-4 text-primary" />Upload ZIP & Replace Workspace</h3>
             <div className="flex items-center gap-2">
-              <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="flex-shrink-0" disabled={isProcessingZip}>
+              <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="flex-shrink-0" disabled={isProcessingZip || isFetchingGitHub}>
                 {selectedZipFile ? `Selected: ${selectedZipFile.name}` : "Select .zip File"}
               </Button>
               <input
@@ -280,10 +300,10 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                 accept=".zip"
                 onChange={handleZipFileSelect}
                 className="hidden"
-                disabled={isProcessingZip}
+                disabled={isProcessingZip || isFetchingGitHub}
               />
-              <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip}>
-                {isProcessingZip && zipProcessingStep === 'idle' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip || isFetchingGitHub}>
+                {isProcessingZip && zipProcessingStep === 'idle' && !isFetchingGitHub ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Process ZIP
               </Button>
             </div>
@@ -339,4 +359,3 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
-
