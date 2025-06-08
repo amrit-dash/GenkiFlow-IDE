@@ -30,16 +30,16 @@ export function FileExplorer() {
   return (
     <>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center">
            <div className="flex items-center gap-2">
             <Workflow className="w-6 h-6 text-primary" />
             <h2 className="text-lg font-headline font-semibold">GenkiFlow IDE</h2>
            </div>
-           <div className="flex items-center gap-0">
+           <div className="flex items-center gap-0 ml-auto">
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-7 w-7 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sidebar-foreground hover:text-primary" 
+              className="h-6 w-6 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sidebar-foreground hover:text-primary" 
               onClick={handleAddRootFile} 
               title="Add File to Root"
             >
@@ -48,7 +48,7 @@ export function FileExplorer() {
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-7 w-7 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sidebar-foreground hover:text-primary" 
+              className="h-6 w-6 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sidebar-foreground hover:text-primary" 
               onClick={handleAddRootFolder} 
               title="Add Folder to Root"
             >
