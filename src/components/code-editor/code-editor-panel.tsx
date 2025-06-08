@@ -156,8 +156,8 @@ export function CodeEditorPanel() {
           </div>
           
           {activeFilePath && openedFiles.has(activeFilePath) && (
-             <TabsContent value={activeFilePath} className="flex-1 flex flex-col p-0 m-0 overflow-hidden">
-                <ScrollArea className="flex-1 min-h-0">
+             <TabsContent value={activeFilePath} className="flex-1 p-0 m-0 overflow-hidden min-h-0">
+                <ScrollArea className="h-full w-full">
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
