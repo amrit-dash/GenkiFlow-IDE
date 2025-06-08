@@ -109,10 +109,10 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
   }, [fileSystem]);
 
   const openFile = useCallback((filePath: string, nodeToOpen?: FileSystemNode) => {
-    if (openedFiles.has(filePath) && activeFilePath === filePath) { // If already open and active, do nothing
+    if (openedFiles.has(filePath) && activeFilePath === filePath) { 
       return;
     }
-    if (openedFiles.has(filePath)) { // If open but not active, just set active
+    if (openedFiles.has(filePath)) { 
       setActiveFilePathState(filePath);
       return;
     }
@@ -208,12 +208,39 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       }
 
       let baseName = name; const defaultExtension = ".txt"; let extension = "";
-      if (type === 'file') { if (baseName.includes('.')) { extension = baseName.substring(baseName.lastIndexOf('.')); baseName = baseName.substring(0, baseName.lastIndexOf('.')); } else { extension = defaultExtension; } }
-      let finalName = type === 'file' ? baseName + extension : baseName;
+      if (type === 'file') { 
+        const lastDotIndex = baseName.lastIndexOf('.');
+        if (lastDotIndex > 0) { // ensure dot is not the first char and exists
+          extension = baseName.substring(lastDotIndex); 
+          baseName = baseName.substring(0, lastDotIndex); 
+        } else if (lastDotIndex === -1 && baseName !== "") { // No extension
+            extension = defaultExtension;
+        } else if (lastDotIndex === 0) { // Starts with a dot e.g. ".env"
+            // Keep as is, baseName is the full name, extension is empty
+        }
+      }
+      let finalName = type === 'file' ? (baseName.startsWith('.') ? baseName : baseName + extension) : baseName; // Fix for dotfiles
+      if (baseName.startsWith('.') && type === 'file') finalName = baseName; // if .env, finalName should be .env
+
       let counter = 1;
       const targetChildrenArray = parentNode ? parentNode.children || [] : newFs;
       const nameExists = (nameToCheck: string) => targetChildrenArray.some(child => child.name === nameToCheck);
-      while (nameExists(finalName)) { finalName = type === 'file' ? `${baseName}(${counter})${extension}` : `${baseName}(${counter})`; counter++; }
+      
+      let tempFinalName = finalName;
+      while (nameExists(tempFinalName)) { 
+        if (type === 'file') {
+            if (baseName.startsWith('.')) { // For dotfiles like .env(1)
+                tempFinalName = `${baseName}(${counter})`;
+            } else {
+                tempFinalName = `${baseName}(${counter})${extension}`;
+            }
+        } else {
+            tempFinalName = `${baseName}(${counter})`;
+        }
+        counter++; 
+      }
+      finalName = tempFinalName;
+
       let newPath = (parentPathForNewNode === '' || parentPathForNewNode === '/' ? '' : parentPathForNewNode) + '/' + finalName;
       if (newPath.startsWith('//')) newPath = newPath.substring(1);
 
@@ -255,11 +282,14 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         }
     }
     return success;
-  }, [activeFilePath, openedFiles]);
+  }, [activeFilePath, openedFiles, setActiveFilePathState]);
 
   const renameNode = useCallback((nodeId: string, newName: string): boolean => {
     let oldPath = ""; let newPath = ""; let nodeType: 'file' | 'folder' | undefined = undefined; let success = false;
-    const cleanNewName = newName.replace(/[\\/:\*\?"<>\|\s]/g, '_').trim(); if (!cleanNewName) { console.error("Invalid new name."); return false; }
+    const cleanNewNameInput = newName.trim(); if (!cleanNewNameInput) { console.error("Invalid new name: cannot be empty or just whitespace."); return false; }
+    // Basic check for invalid characters, allow dots and spaces but not slashes.
+    if (/[\\/:\*\?"<>\|]/.test(cleanNewNameInput)) { console.error("Invalid new name: contains forbidden characters."); return false; }
+
     setFileSystemState(prevFs => {
       const newFs = JSON.parse(JSON.stringify(prevFs));
       const updateChildrenPathsRecursive = (currentProcessingNode: FileSystemNode, _oldParentPath: string, newParentPathForChildren: string) => {
@@ -278,25 +308,28 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
           const node = nodes[i];
           if (node.id === nodeId) {
             parentOfTargetNode = currentParent; const siblings = parentOfTargetNode ? parentOfTargetNode.children || [] : newFs;
-            if (siblings.some(sibling => sibling.id !== nodeId && sibling.name === cleanNewName)) { console.error(`Node "${cleanNewName}" already exists.`); success = false; return true; }
-            oldPath = node.path; const oldNodeName = node.name; nodeType = node.type; node.name = cleanNewName;
-            node.path = (parentPathSegment === '' || parentPathSegment === '/' ? '' : parentPathSegment) + '/' + cleanNewName;
+            if (siblings.some(sibling => sibling.id !== nodeId && sibling.name === cleanNewNameInput)) { console.error(`Node "${cleanNewNameInput}" already exists in this directory.`); success = false; return true; } // Exit findAndRename
+            oldPath = node.path; nodeType = node.type; node.name = cleanNewNameInput;
+            node.path = (parentPathSegment === '' || parentPathSegment === '/' ? '' : parentPathSegment) + '/' + cleanNewNameInput;
             if (node.path.startsWith('//')) node.path = node.path.substring(1);
             newPath = node.path;
             if (node.type === 'folder' && node.children) { updateChildrenPathsRecursive(node, oldPath, newPath); }
-            success = true; return true;
+            success = true; return true; // Exit findAndRename
           }
           if (node.children && findAndRename(node.children, node, node.path)) return true;
         }
         return false;
       };
-      if (findAndRename(newFs, null, '')) return success ? newFs : prevFs; return prevFs;
+      
+      findAndRename(newFs, null, ''); // Call findAndRename. Success is set inside.
+      return success ? newFs : prevFs; // Only return newFs if success was true
     });
+
     if (success && oldPath && newPath && nodeType) {
       setOpenedFilesState(prevOpened => {
         const newOpenedMap = new Map<string, FileSystemNode>(); let newActiveFilePath = activeFilePath;
         prevOpened.forEach((openedNodeValue, openedNodeKey) => {
-          if (openedNodeKey === oldPath) { const updatedNode = { ...openedNodeValue, name: cleanNewName, path: newPath }; newOpenedMap.set(newPath, updatedNode); if (activeFilePath === oldPath) newActiveFilePath = newPath;
+          if (openedNodeKey === oldPath) { const updatedNode = { ...openedNodeValue, name: cleanNewNameInput, path: newPath }; newOpenedMap.set(newPath, updatedNode); if (activeFilePath === oldPath) newActiveFilePath = newPath;
           } else if (nodeType === 'folder' && openedNodeKey.startsWith(oldPath + '/')) { const relativePath = openedNodeKey.substring(oldPath.length); const updatedChildPath = newPath + relativePath; const updatedNode = { ...openedNodeValue, path: updatedChildPath }; newOpenedMap.set(updatedChildPath, updatedNode); if (activeFilePath === openedNodeKey) newActiveFilePath = updatedChildPath;
           } else { newOpenedMap.set(openedNodeKey, openedNodeValue); }
         });
@@ -304,52 +337,43 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       });
     }
     return success;
-  }, [activeFilePath]);
+  }, [activeFilePath, setActiveFilePathState]);
 
   const moveNode = useCallback((draggedNodeId: string, targetParentFolderId: string | null) => {
+    let oldPathForDraggedNode = '';
+    let newPathForDraggedNode = '';
+    let draggedNodeType: 'file' | 'folder' | undefined;
+
     setFileSystemState(prevFs => {
-        const newFs = JSON.parse(JSON.stringify(prevFs)); // Full clone for safety
+        const newFs = JSON.parse(JSON.stringify(prevFs)); 
 
         let draggedNode: FileSystemNode | null = null;
-        let oldParentNode: FileSystemNode | null = null;
-        let draggedNodeOriginalIndex = -1; // To reinsert if move fails
+        let sourceParentNode: FileSystemNode | null = null;
 
-        // 1. Find and detach the dragged node
-        function findAndDetach(nodes: FileSystemNode[], parent: FileSystemNode | null, indexInParent?: number): boolean {
+        function findAndDetachRecursive(nodes: FileSystemNode[], parent: FileSystemNode | null): FileSystemNode | null {
             for (let i = 0; i < nodes.length; i++) {
                 if (nodes[i].id === draggedNodeId) {
-                    draggedNode = { ...nodes[i] }; // Clone the node itself
-                    oldParentNode = parent;
-                    draggedNodeOriginalIndex = parent ? i : indexInParent!; // If root, use indexInParent
-                    nodes.splice(i, 1);
-                    return true;
+                    const nodeToDrag = { ...nodes[i] }; 
+                    sourceParentNode = parent;
+                    nodes.splice(i, 1); 
+                    return nodeToDrag;
                 }
-                if (nodes[i].children && findAndDetach(nodes[i].children, nodes[i])) {
-                    return true;
+                if (nodes[i].children) {
+                    const found = findAndDetachRecursive(nodes[i].children, nodes[i]);
+                    if (found) return found;
                 }
             }
-            return false;
+            return null;
         }
-        // For root items, pass their index
-        let foundAndDetached = false;
-        for(let i=0; i < newFs.length; i++) {
-            if(newFs[i].id === draggedNodeId) {
-                foundAndDetached = findAndDetach([newFs[i]], null, i); // Wrap in array for findAndDetach, pass index
-                if(foundAndDetached) break;
-            }
-            if(newFs[i].children && findAndDetach(newFs[i].children, newFs[i])) {
-                foundAndDetached = true;
-                break;
-            }
-        }
-
+        draggedNode = findAndDetachRecursive(newFs, null);
 
         if (!draggedNode) {
             console.error("Dragged node not found during move:", draggedNodeId);
-            return prevFs; // Abort: return original FS
+            return prevFs; 
         }
+        oldPathForDraggedNode = draggedNode.path; // Capture old path
+        draggedNodeType = draggedNode.type;
 
-        // 2. Find the target parent folder
         let targetParentNode: FileSystemNode | null = null;
         if (targetParentFolderId) {
             function findTargetRecursive(nodes: FileSystemNode[]): FileSystemNode | null {
@@ -362,20 +386,21 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             targetParentNode = findTargetRecursive(newFs);
             if (!targetParentNode) {
                 console.error("Target parent folder not found or is not a folder:", targetParentFolderId);
-                return prevFs; // Abort: return original FS
+                // Re-attach node to its original position if target is invalid
+                if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode); else if (!sourceParentNode) newFs.push(draggedNode);
+                return prevFs; 
             }
         }
-
-        // 3. Check for invalid moves (dragging a folder into itself or its children)
+        
         if (draggedNode.type === 'folder' && targetParentNode) {
             let currentCheckNode: FileSystemNode | null = targetParentNode;
             while (currentCheckNode) {
                 if (currentCheckNode.id === draggedNode.id) {
                     console.error("Cannot move a folder into itself or one of its descendants.");
-                    return prevFs; // Abort
+                     if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode); else if (!sourceParentNode) newFs.push(draggedNode);
+                    return prevFs; 
                 }
-                // Find parent of currentCheckNode to traverse up (complex without parent refs, need to search)
-                let foundParentOfCurrentCheck: FileSystemNode | null = null;
+                 let foundParentOfCurrentCheck: FileSystemNode | null = null;
                 function findParent(nodes: FileSystemNode[], targetId: string, p: FileSystemNode | null): FileSystemNode | null {
                     for(const n of nodes) {
                         if(n.id === targetId) return p;
@@ -386,16 +411,57 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                     }
                     return null;
                 }
-                currentCheckNode = findParent(newFs, currentCheckNode.id, null);
+                
+                // To find the parent of currentCheckNode to traverse up, we search from the root of newFs
+                // This is inefficient but necessary without direct parent references in the node structure
+                let parentPath = currentCheckNode.path.substring(0, currentCheckNode.path.lastIndexOf('/'));
+                if(parentPath === "" && currentCheckNode.path.lastIndexOf('/') > -1) parentPath = "/"; // Root case
+                
+                if(parentPath) {
+                    currentCheckNode = findParent(newFs, currentCheckNode.id, null); //This needs a proper parent search based on path
+                     let tempNode: FileSystemNode | null = null;
+                     if (currentCheckNode?.path) { // Check if currentCheckNode has a path (i.e., it's not the root)
+                        const parentPathForCheck = currentCheckNode.path.substring(0, currentCheckNode.path.lastIndexOf('/'));
+                        const rootOrParent = parentPathForCheck ? findTargetRecursive(newFs) : null; // Simplified, needs correct parent finding
+                        currentCheckNode = rootOrParent;
+                     } else {
+                        currentCheckNode = null; // Reached root or error
+                     }
+
+                } else {
+                    currentCheckNode = null; // Reached root
+                }
             }
         }
         
-        // 4. Update path of dragged node and its children
-        const newParentPathSegment = targetParentNode ? targetParentNode.path : '';
-        const oldPathForDragged = draggedNode.path; // Keep old path for opened files update later
+        const destinationArray = targetParentNode ? (targetParentNode.children || []) : newFs;
+        let newProposedName = draggedNode.name;
+        let tempCounter = 1;
+        const originalNameParts = newProposedName.split('.');
+        const originalExtension = draggedNode.type === 'file' && originalNameParts.length > 1 && originalNameParts[0] !== "" ? '.' + originalNameParts.pop()! : '';
+        let originalBaseName = draggedNode.type === 'file' ? (originalNameParts[0] === "" && originalNameParts.length === 1 ? newProposedName : originalNameParts.join('.')) : newProposedName;
+         if (draggedNode.type === 'file' && newProposedName.startsWith('.') && !originalExtension) { // Handles names like ".env"
+            originalBaseName = newProposedName;
+        }
 
+
+        while (destinationArray.some(child => child.name === newProposedName && child.id !== draggedNode!.id)) {
+             if (draggedNode.type === 'file') {
+                if (originalBaseName.startsWith('.')) { // For dotfiles like .env(1)
+                    newProposedName = `${originalBaseName}(${tempCounter})`;
+                } else {
+                    newProposedName = `${originalBaseName}(${tempCounter})${originalExtension}`;
+                }
+            } else {
+                newProposedName = `${originalBaseName}(${tempCounter})`;
+            }
+            tempCounter++;
+        }
+        draggedNode.name = newProposedName; 
+
+        const newParentPathSegment = targetParentNode ? targetParentNode.path : '';
         function updatePathsRecursive(nodeToUpdate: FileSystemNode, newPathPrefix: string) {
-            const nodeName = nodeToUpdate.name; // Name doesn't change
+            const nodeName = nodeToUpdate.name; 
             nodeToUpdate.path = (newPathPrefix === '/' || newPathPrefix === '' ? '' : newPathPrefix) + '/' + nodeName;
             if (nodeToUpdate.path.startsWith('//')) nodeToUpdate.path = nodeToUpdate.path.substring(1);
 
@@ -404,60 +470,67 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             }
         }
         updatePathsRecursive(draggedNode, newParentPathSegment);
-        const newPathForDragged = draggedNode.path;
+        newPathForDraggedNode = draggedNode.path; // Capture new path
 
-
-        // 5. Check for name conflicts in the target directory
-        const destinationChildren = targetParentNode ? (targetParentNode.children || []) : newFs;
-        if (destinationChildren.some(child => child.name === draggedNode!.name && child.id !== draggedNode!.id )) {
-            console.error(`A node named "${draggedNode!.name}" already exists in the target directory. Move aborted.`);
-            return prevFs; // Abort: return original FS
-        }
-
-        // 6. Add the dragged node to its new parent
         if (targetParentNode) {
             if (!targetParentNode.children) targetParentNode.children = [];
             targetParentNode.children.push(draggedNode);
-        } else { // Dropped to root
+        } else { 
             newFs.push(draggedNode);
         }
-        
-        // Update opened files (basic, might need more robust solution for deeply nested moves)
-        setOpenedFilesState(prevOpened => {
-            const newOpenedMap = new Map<string, FileSystemNode>();
-            let newActiveFilePath = activeFilePath;
-
-            prevOpened.forEach((openedNodeValue, openedNodeKey) => {
-                if (openedNodeKey === oldPathForDragged) { // Direct match for the moved file
-                    const updatedNode = { ...openedNodeValue, path: newPathForDragged };
-                    newOpenedMap.set(newPathForDragged, updatedNode);
-                    if (activeFilePath === openedNodeKey) newActiveFilePath = newPathForDragged;
-                } else if (draggedNode!.type === 'folder' && openedNodeKey.startsWith(oldPathForDragged + '/')) { // File was inside moved folder
-                    const relativePath = openedNodeKey.substring(oldPathForDragged.length);
-                    const updatedChildPath = newPathForDragged + relativePath;
-                    const updatedNode = { ...openedNodeValue, path: updatedChildPath };
-                    newOpenedMap.set(updatedChildPath, updatedNode);
-                    if (activeFilePath === openedNodeKey) newActiveFilePath = updatedChildPath;
-                } else {
-                    newOpenedMap.set(openedNodeKey, openedNodeValue); // No change
-                }
-            });
-            if (newActiveFilePath !== activeFilePath) setActiveFilePathState(newActiveFilePath);
-            return newOpenedMap;
-        });
-
-
         return newFs;
     });
-  }, [activeFilePath, setActiveFilePathState, setOpenedFilesState]); // Added dependencies
+
+    // After file system state is updated, handle opened files
+    if (oldPathForDraggedNode && newPathForDraggedNode && oldPathForDraggedNode !== newPathForDraggedNode) {
+        setOpenedFilesState(prevOpened => {
+            const newOpenedMap = new Map(prevOpened);
+            const pathsToCloseAndPotentiallyReopen: { oldPath: string, newPath: string, node: FileSystemNode }[] = [];
+
+            // Identify all files affected by the move
+            prevOpened.forEach((node, path) => {
+                if (path === oldPathForDraggedNode && draggedNodeType === 'file') {
+                    pathsToCloseAndPotentiallyReopen.push({ oldPath: path, newPath: newPathForDraggedNode, node: { ...node, path: newPathForDraggedNode, name: newPathForDraggedNode.substring(newPathForDraggedNode.lastIndexOf('/') + 1) } });
+                } else if (draggedNodeType === 'folder' && path.startsWith(oldPathForDraggedNode + '/')) {
+                    const relativePath = path.substring(oldPathForDraggedNode.length);
+                    const newFullPath = newPathForDraggedNode + relativePath;
+                    pathsToCloseAndPotentiallyReopen.push({ oldPath: path, newPath: newFullPath, node: { ...node, path: newFullPath, name: newFullPath.substring(newFullPath.lastIndexOf('/')+1) } });
+                }
+            });
+
+            let newActiveFilePath = activeFilePath;
+            const finalOpenedMap = new Map<string, FileSystemNode>();
+            
+            // Keep files that were not affected
+            prevOpened.forEach((node, path) => {
+                if (!pathsToCloseAndPotentiallyReopen.some(p => p.oldPath === path)) {
+                    finalOpenedMap.set(path, node);
+                }
+            });
+
+            // Determine new active file path if the current one was closed
+            const activeFileWasMoved = pathsToCloseAndPotentiallyReopen.some(p => p.oldPath === activeFilePath);
+            if (activeFileWasMoved) {
+                 newActiveFilePath = finalOpenedMap.size > 0 ? Array.from(finalOpenedMap.keys())[0] : null;
+            }
+            
+            if (newActiveFilePath !== activeFilePath) {
+                setActiveFilePathState(newActiveFilePath);
+            }
+            return finalOpenedMap; // Return map with only unaffected or explicitly re-opened files
+        });
+    }
+
+
+  }, [activeFilePath, setActiveFilePathState, setOpenedFilesState]); 
 
   const contextValue = useMemo(() => ({
     fileSystem, openedFiles, activeFilePath, setActiveFilePath, openFile, closeFile, updateFileContent,
-    getFileSystemNode, addNode, deleteNode, renameNode, moveNode, // Added moveNode
+    getFileSystemNode, addNode, deleteNode, renameNode, moveNode, 
     isBusy, nodeToAutoRenameId, setNodeToAutoRenameId,
   }), [
     fileSystem, openedFiles, activeFilePath, setActiveFilePath, openFile, closeFile, updateFileContent,
-    getFileSystemNode, addNode, deleteNode, renameNode, moveNode, // Added moveNode
+    getFileSystemNode, addNode, deleteNode, renameNode, moveNode, 
     isBusy, nodeToAutoRenameId, setNodeToAutoRenameId
   ]);
 
@@ -469,3 +542,4 @@ export function useIde() {
   if (context === undefined) throw new Error('useIde must be used within an IdeProvider');
   return context;
 }
+

@@ -68,8 +68,8 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     }
   };
 
-  const handleAddFile = (e: React.MouseEvent) => { e.stopPropagation(); const newNode = addNode(node.id, "UntitledFile", 'file'); if (newNode) { if (!isOpen) setIsOpen(true); setNodeToAutoRenameId(newNode.id); } };
-  const handleAddFolder = (e: React.MouseEvent) => { e.stopPropagation(); const newNode = addNode(node.id, "NewFolder", 'folder'); if (newNode) { if (!isOpen) setIsOpen(true); setNodeToAutoRenameId(newNode.id); } };
+  const handleAddFile = (e: React.MouseEvent) => { e.stopPropagation(); const newNode = addNode(node.id, "UntitledFile", 'file', node.path); if (newNode) { if (!isOpen) setIsOpen(true); setNodeToAutoRenameId(newNode.id); } };
+  const handleAddFolder = (e: React.MouseEvent) => { e.stopPropagation(); const newNode = addNode(node.id, "NewFolder", 'folder', node.path); if (newNode) { if (!isOpen) setIsOpen(true); setNodeToAutoRenameId(newNode.id); } };
   const handleDeleteInitiate = (e: React.MouseEvent) => { e.stopPropagation(); setShowDeleteDialog(true); };
   const confirmDelete = () => { deleteNode(node.id); setShowDeleteDialog(false); };
   const handleRenameStart = (e: React.MouseEvent) => { e.stopPropagation(); setRenameValue(node.name); setIsRenaming(true); };
@@ -94,35 +94,37 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData("application/genkiflow-node-id", node.id);
     e.dataTransfer.effectAllowed = "move";
-    e.stopPropagation(); // Prevent parent from handling, useful if nested drag targets
+    e.stopPropagation(); 
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    if (isFolder) {
-      e.preventDefault(); // Allow drop on folders
+    const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
+    if (isFolder && node.id !== draggedNodeId) {
+      e.preventDefault(); 
       e.stopPropagation();
       setIsDraggingOver(true);
+    } else if (!isFolder) { // Allow dropping ON files if we want to implement reordering later or other file-specific drops
+      // e.preventDefault(); e.stopPropagation(); // For now, don't allow dropping on files
     }
   };
 
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
-    if (isFolder) {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDraggingOver(true);
+    const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
+    if (isFolder && node.id !== draggedNodeId) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingOver(true);
     }
   };
   
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     if (isFolder) {
-      e.preventDefault();
-      e.stopPropagation();
-      // Check if leaving to a child element; if so, don't remove highlight yet
-      const relatedTarget = e.relatedTarget as Node;
-      if (e.currentTarget.contains(relatedTarget)) {
-        return;
-      }
-      setIsDraggingOver(false);
+        e.preventDefault();
+        e.stopPropagation();
+        const relatedTarget = e.relatedTarget as Node;
+        if (!e.currentTarget.contains(relatedTarget)) {
+            setIsDraggingOver(false);
+        }
     }
   };
 
@@ -132,8 +134,8 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       e.stopPropagation();
       setIsDraggingOver(false);
       const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
-      if (draggedNodeId && draggedNodeId !== node.id) { // Prevent dropping node on itself
-        moveNode(draggedNodeId, node.id);
+      if (draggedNodeId && draggedNodeId !== node.id) { 
+        moveNode(draggedNodeId, node.id); 
       }
     }
   };
@@ -144,14 +146,14 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       className="text-sm group/fileitem relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
-      draggable={!isRenaming} // Only allow drag if not renaming
+      draggable={!isRenaming} 
       onDragStart={handleDragStart}
     >
       <div
         className={cn(
           "flex items-center py-1.5 px-2 rounded-md cursor-pointer hover:bg-sidebar-accent",
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-          isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary" // Visual feedback for drop target
+          isDraggingOver && isFolder && "bg-sidebar-accent ring-1 ring-sidebar-primary" 
         )}
         style={{ paddingLeft: `${level * 1.25 + (isFolder ? 0 : 1.25) + (isRenaming ? 0.1 : 0.5)}rem` }}
         onClick={handleToggle}
@@ -162,10 +164,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
         title={node.path}
-        onDragOver={handleDragOver} // For folder drop targets
-        onDragEnter={handleDragEnter} // For folder drop targets
-        onDragLeave={handleDragLeave} // For folder drop targets
-        onDrop={handleDrop}         // For folder drop targets
+        onDragOver={handleDragOver} 
+        onDragEnter={handleDragEnter} 
+        onDragLeave={handleDragLeave} 
+        onDrop={handleDrop}         
       >
         {isFolder && (
           <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
@@ -185,7 +187,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           />
         ) : (
           <>
-            <span className="truncate flex-grow pointer-events-none">{node.name}</span> {/* pointer-events-none for better drag */}
+            <span className="truncate flex-grow pointer-events-none">{node.name}</span> 
             
             {showActions && !isRenaming && (
               <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150">
@@ -218,6 +220,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
              <div 
                 className="pl-4 text-xs text-muted-foreground py-1 italic"
                 style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25}rem` }}
+                onDragOver={handleDragOver} // Allow dropping into empty folder
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
             >
                 (empty)
             </div>
@@ -244,3 +250,4 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
+

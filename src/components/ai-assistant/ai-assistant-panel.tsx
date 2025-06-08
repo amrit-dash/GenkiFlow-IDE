@@ -109,9 +109,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const newNode = addNode(parentIdForNewNode, suggestedFileName, 'file', baseDirForNewNode);
 
     if (newNode) {
-      openFile(newNode.path, newNode); // Pass the newNode object
+      openFile(newNode.path, newNode); 
       updateFileContent(newNode.path, code);
-      toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
+      const toastResult = toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
+      setTimeout(() => {
+        toastResult.dismiss();
+      }, 1000);
       if (!actionAppliedStates[buttonKey]) { 
         setButtonAppliedState(buttonKey);
       }

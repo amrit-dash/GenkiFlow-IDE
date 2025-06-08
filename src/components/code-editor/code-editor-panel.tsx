@@ -25,9 +25,9 @@ export function CodeEditorPanel() {
   const { toast } = useToast();
 
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
+  // const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 }); // Not directly used if using invisible trigger correctly
   const [isRefactoringContextMenu, setIsRefactoringContextMenu] = useState(false);
-  const dropdownTriggerRef = useRef<HTMLDivElement>(null); // Invisible trigger
+  const dropdownTriggerRef = useRef<HTMLButtonElement>(null); 
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
@@ -36,7 +36,9 @@ export function CodeEditorPanel() {
         setCurrentContent(fileNode?.content || "");
       }
       const persistedNode = getFileSystemNode(activeFilePath);
-      setHasUnsavedChanges(fileNode?.content !== persistedNode?.content);
+      // Ensure persistedNode is a FileSystemNode and not an array before accessing content
+      const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      setHasUnsavedChanges(fileNode?.content !== persistedContent);
     } else if (!activeFilePath && openedFiles.size > 0) {
       setActiveFilePath(Array.from(openedFiles.keys())[0]);
     } else if (openedFiles.size === 0) {
@@ -44,26 +46,30 @@ export function CodeEditorPanel() {
       setHasUnsavedChanges(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilePath, openedFiles]);
+  }, [activeFilePath, openedFiles]); // currentContent removed to prevent loops with its own setter
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
         const fileInTab = openedFiles.get(activeFilePath);
-        const persistedFile = getFileSystemNode(activeFilePath);
+        const persistedFileNode = getFileSystemNode(activeFilePath);
+        const persistedContent = (persistedFileNode && !Array.isArray(persistedFileNode)) ? persistedFileNode.content : undefined;
+
         if (fileInTab?.content !== currentContent) {
-            setCurrentContent(fileInTab?.content || "");
+             // This check might be redundant if currentContent is primarily driven by user input
+             // and initial load. The key is to correctly set currentContent on tab switch.
         }
-        setHasUnsavedChanges(fileInTab?.content !== persistedFile?.content);
+        setHasUnsavedChanges(fileInTab?.content !== persistedContent);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openedFiles.get(activeFilePath)?.content, activeFilePath, getFileSystemNode]);
+  }, [openedFiles.get(activeFilePath)?.content, activeFilePath, getFileSystemNode]); // currentContent removed
 
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
     setCurrentContent(newText);
     if (activeFilePath) {
-      const originalPersistedContent = getFileSystemNode(activeFilePath)?.content;
+      const persistedNode = getFileSystemNode(activeFilePath);
+      const originalPersistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
       setHasUnsavedChanges(newText !== originalPersistedContent);
     }
   };
@@ -72,18 +78,12 @@ export function CodeEditorPanel() {
     if (activeFilePath && hasUnsavedChanges) {
       setIsSaving(true);
       updateFileContent(activeFilePath, currentContent);
-      // updateFileContent handles persistence, so hasUnsavedChanges is derived from comparison
       setTimeout(() => {
         setIsSaving(false);
-        // Removed toast notification as per user request
-        // toast({
-        //   title: "File Saved",
-        //   description: `${getFileSystemNode(activeFilePath)?.name || 'File'} saved successfully.`,
-        //   variant: "default",
-        // });
+        // Toast notification removed as per request
       }, 300);
     }
-  }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent, getFileSystemNode]);
+  }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -102,9 +102,16 @@ export function CodeEditorPanel() {
     event.preventDefault();
     if (dropdownTriggerRef.current) {
       // Position the invisible trigger at the mouse click
-      dropdownTriggerRef.current.style.top = `${event.clientY}px`;
-      dropdownTriggerRef.current.style.left = `${event.clientX}px`;
-      setContextMenuOpen(true); // This will trigger the DropdownMenu associated with our invisible trigger
+      // This method for positioning can be finicky; Radix usually handles positioning relative to the trigger.
+      // A common pattern is to have the trigger be the textarea itself, or a wrapper.
+      // For simplicity with an invisible trigger, we ensure it's "clicked" programmatically or by state.
+      // dropdownTriggerRef.current.style.top = `${event.clientY}px`; // Not needed if Radix handles trigger
+      // dropdownTriggerRef.current.style.left = `${event.clientX}px`;
+      
+      // Instead of manually positioning an invisible div, make the DropdownMenuTrigger wrap the Textarea
+      // or use Radix's dynamic positioning based on the event.
+      // For now, simply opening by state is enough as Radix will position near the trigger.
+      setContextMenuOpen(true);
     }
   };
 
@@ -115,12 +122,17 @@ export function CodeEditorPanel() {
     setContextMenuOpen(false); 
 
     try {
+      const activeNode = getFileSystemNode(activeFilePath);
+      const fileNameForContext = (activeNode && !Array.isArray(activeNode)) ? activeNode.name : activeFilePath;
+
       const result = await refactorCodeServer({
         codeSnippet: currentContent,
-        fileContext: `File: ${getFileSystemNode(activeFilePath)?.name || activeFilePath}`,
+        fileContext: `File: ${fileNameForContext}`,
       });
 
       if (result.suggestion && result.suggestion.proposedCode) {
+        // Update currentContent immediately for visual feedback, then persist
+        setCurrentContent(result.suggestion.proposedCode); 
         updateFileContent(activeFilePath, result.suggestion.proposedCode);
         toast({
           title: "Refactor Applied",
@@ -161,7 +173,9 @@ export function CodeEditorPanel() {
             <ScrollArea className="w-full whitespace-nowrap">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
-                  const isFileUnsavedInThisTab = file.content !== getFileSystemNode(path)?.content;
+                  const persistedNode = getFileSystemNode(path);
+                  const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                  const isFileUnsavedInThisTab = file.content !== persistedContent;
                   return (
                     <TabsTrigger
                       key={path}
@@ -169,7 +183,7 @@ export function CodeEditorPanel() {
                       className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group"
                       title={path}
                     >
-                      {file.name}
+                      {(file && file.name) ? file.name : path.substring(path.lastIndexOf('/') + 1)}
                       {isFileUnsavedInThisTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
                       <div
                         role="button"
@@ -202,7 +216,7 @@ export function CodeEditorPanel() {
                              closeFile(path);
                            }
                         }}
-                        aria-label={`Close tab ${file.name}`}
+                        aria-label={`Close tab ${file?.name}`}
                       >
                         <XIcon className="h-3.5 w-3.5" />
                       </div>
@@ -210,15 +224,24 @@ export function CodeEditorPanel() {
                   );
                 })}
               </TabsList>
-              <ScrollBar orientation="horizontal" />
+              {/* Horizontal ScrollBar removed as per request */}
             </ScrollArea>
           </div>
             
           <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
-            <DropdownMenuTrigger ref={dropdownTriggerRef} className="fixed" style={{ opacity: 0, pointerEvents: 'none', width: 0, height: 0 }} />
+            {/* 
+              The DropdownMenuTrigger should ideally wrap the Textarea or be positioned by Radix.
+              Using an invisible, fixed-positioned trigger is a workaround.
+              For better accessibility and behavior, consider making Textarea the trigger,
+              or using Radix's Popper capabilities for dynamic positioning if available.
+            */}
+            <DropdownMenuTrigger ref={dropdownTriggerRef} asChild>
+                {/* This button is invisible and programmatically "clicked" or controlled by contextMenuOpen state */}
+                <button className="fixed opacity-0 pointer-events-none" style={{top:0, left:0, width:0, height:0}} />
+            </DropdownMenuTrigger>
             <DropdownMenuContent
               className="w-56"
-              onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus issues
+              onCloseAutoFocus={(e) => e.preventDefault()} 
             >
               <DropdownMenuItem
                 onClick={handleContextMenuRefactor}
@@ -254,7 +277,7 @@ export function CodeEditorPanel() {
         </Tabs>
       )}
        <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center shrink-0">
-          <p>Ln: 1, Col: 1</p> {/* This is a placeholder, actual line/col count is more complex */}
+          <p>Ln: 1, Col: 1</p> 
           {activeFilePath && hasUnsavedChanges && !isSaving && (
             <button 
               onClick={handleSave} 
@@ -274,5 +297,3 @@ export function CodeEditorPanel() {
     </div>
   );
 }
-
-    
