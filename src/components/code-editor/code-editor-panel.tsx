@@ -1,14 +1,21 @@
 
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useIde } from '@/contexts/ide-context';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { XIcon, Loader2, Save } from 'lucide-react';
+import { XIcon, Loader2, Save, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { refactorCodeServer } from '@/app/(ide)/actions';
 
 export function CodeEditorPanel() {
   const { activeFilePath, openedFiles, setActiveFilePath, closeFile, updateFileContent, getFileSystemNode } = useIde();
@@ -16,6 +23,11 @@ export function CodeEditorPanel() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
+  const [isRefactoringContextMenu, setIsRefactoringContextMenu] = useState(false);
+  const dropdownTriggerRef = useRef<HTMLDivElement>(null); // Invisible trigger
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
@@ -60,7 +72,8 @@ export function CodeEditorPanel() {
     if (activeFilePath && hasUnsavedChanges) {
       setIsSaving(true);
       updateFileContent(activeFilePath, currentContent);
-      setHasUnsavedChanges(false);
+      // updateFileContent handles persistence, so hasUnsavedChanges is derived from comparison
+      // No need to explicitly setHasUnsavedChanges(false) here, as it's reactive
       setTimeout(() => {
         setIsSaving(false);
         toast({
@@ -84,6 +97,52 @@ export function CodeEditorPanel() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleSave]);
+
+  const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    if (dropdownTriggerRef.current) {
+      // Position the invisible trigger at the mouse click
+      dropdownTriggerRef.current.style.top = `${event.clientY}px`;
+      dropdownTriggerRef.current.style.left = `${event.clientX}px`;
+      setContextMenuOpen(true); // This will trigger the DropdownMenu associated with our invisible trigger
+    }
+  };
+
+  const handleContextMenuRefactor = async () => {
+    if (!activeFilePath || !currentContent.trim() || isRefactoringContextMenu) return;
+
+    setIsRefactoringContextMenu(true);
+    setContextMenuOpen(false); 
+
+    try {
+      const result = await refactorCodeServer({
+        codeSnippet: currentContent,
+        fileContext: `File: ${getFileSystemNode(activeFilePath)?.name || activeFilePath}`,
+      });
+
+      if (result.suggestion && result.suggestion.proposedCode) {
+        updateFileContent(activeFilePath, result.suggestion.proposedCode);
+        toast({
+          title: "Refactor Applied",
+          description: "Code refactored and applied to the editor.",
+        });
+      } else {
+        toast({
+          variant: "default",
+          title: "No Refactoring Suggestion",
+          description: "The AI did not find any specific refactoring for this code.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Context menu refactor error:", error);
+      toast({
+        variant: "destructive",
+        title: "Refactor Failed",
+        description: error.message || "Could not refactor the code.",
+      });
+    }
+    setIsRefactoringContextMenu(false);
+  };
 
 
   if (openedFiles.size === 0) {
@@ -154,6 +213,26 @@ export function CodeEditorPanel() {
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
           </div>
+            
+          <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+            <DropdownMenuTrigger ref={dropdownTriggerRef} className="fixed" style={{ opacity: 0, pointerEvents: 'none', width: 0, height: 0 }} />
+            <DropdownMenuContent
+              className="w-56"
+              onCloseAutoFocus={(e) => e.preventDefault()} // Prevent focus issues
+            >
+              <DropdownMenuItem
+                onClick={handleContextMenuRefactor}
+                disabled={!activeFilePath || isRefactoringContextMenu || !currentContent.trim()}
+              >
+                {isRefactoringContextMenu ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="mr-2 h-4 w-4" />
+                )}
+                <span>Refactor Code</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent
@@ -164,6 +243,7 @@ export function CodeEditorPanel() {
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
+                    onContextMenu={handleTextareaContextMenu}
                     className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
                     placeholder="Select a file to view its content or start typing..."
                     spellCheck="false"
@@ -194,3 +274,5 @@ export function CodeEditorPanel() {
     </div>
   );
 }
+
+    
