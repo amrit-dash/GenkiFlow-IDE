@@ -17,42 +17,52 @@ export function CodeEditorPanel() {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
-  const [debouncedContent, setDebouncedContent] = useState("");
-
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
       const fileNode = openedFiles.get(activeFilePath);
-      // Initialize currentContent and debouncedContent from fileNode if they are different
       if (fileNode?.content !== currentContent) {
         setCurrentContent(fileNode?.content || "");
-        setDebouncedContent(fileNode?.content || "");
       }
-      setHasUnsavedChanges(false); // Reset on tab switch
+      // Check against persisted FS content for unsaved changes status
+      const persistedNode = getFileSystemNode(activeFilePath);
+      setHasUnsavedChanges(fileNode?.content !== persistedNode?.content);
     } else if (!activeFilePath && openedFiles.size > 0) {
       setActiveFilePath(Array.from(openedFiles.keys())[0]);
     } else if (openedFiles.size === 0) {
       setCurrentContent("");
-      setDebouncedContent("");
       setHasUnsavedChanges(false);
     }
-  // Only re-run if activeFilePath or openedFiles map itself changes, not its content here
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilePath, openedFiles, setActiveFilePath]); 
+  }, [activeFilePath, openedFiles]); 
+
+  // Effect to update currentContent and hasUnsavedChanges when file content changes from context (e.g., AI suggestion applied)
+  useEffect(() => {
+    if (activeFilePath && openedFiles.has(activeFilePath)) {
+        const fileInTab = openedFiles.get(activeFilePath);
+        const persistedFile = getFileSystemNode(activeFilePath); // Get the "true" saved state
+        if (fileInTab?.content !== currentContent) {
+            setCurrentContent(fileInTab?.content || "");
+        }
+        setHasUnsavedChanges(fileInTab?.content !== persistedFile?.content);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openedFiles.get(activeFilePath)?.content, activeFilePath, getFileSystemNode]);
+
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
-    setCurrentContent(newText); // Update UI immediately
+    setCurrentContent(newText); 
     if (activeFilePath) {
-      const originalContent = getFileSystemNode(activeFilePath)?.content; // Check against persisted FS content
-      setHasUnsavedChanges(newText !== originalContent);
+      const originalPersistedContent = getFileSystemNode(activeFilePath)?.content;
+      setHasUnsavedChanges(newText !== originalPersistedContent);
     }
   };
 
   const handleSave = useCallback(() => {
     if (activeFilePath && hasUnsavedChanges) {
       setIsSaving(true);
-      updateFileContent(activeFilePath, currentContent);
-      setHasUnsavedChanges(false);
+      updateFileContent(activeFilePath, currentContent); // This updates IdeContext and triggers localStorage save
+      setHasUnsavedChanges(false); // Mark as saved in UI immediately
       setTimeout(() => {
         setIsSaving(false);
         toast({
@@ -77,7 +87,12 @@ export function CodeEditorPanel() {
     };
   }, [handleSave]);
 
-  const isFileActuallySaved = activeFilePath && !hasUnsavedChanges && !isSaving && openedFiles.get(activeFilePath)?.content === getFileSystemNode(activeFilePath)?.content;
+  // Determine if the file is truly saved by comparing current editor content with what's in the (simulated) persisted file system
+  const isFileActuallySaved = activeFilePath && 
+                              !hasUnsavedChanges && 
+                              !isSaving && 
+                              openedFiles.get(activeFilePath)?.content === getFileSystemNode(activeFilePath)?.content;
+
 
   if (openedFiles.size === 0) {
     return (
@@ -86,16 +101,16 @@ export function CodeEditorPanel() {
       </div>
     );
   }
-
+  
   return (
-    <div className="flex-1 flex flex-col bg-background h-full relative">
+    <div className="flex-1 flex flex-col bg-background h-full relative"> {/* This 'relative' is important for absolute positioning of children */}
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex flex-col h-full">
           <div className="border-b border-border">
             <ScrollArea orientation="horizontal" className="pb-0">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
-                  const isFileUnsavedInTab = file.content !== getFileSystemNode(path)?.content;
+                  const isFileUnsavedInThisTab = file.content !== getFileSystemNode(path)?.content;
                   return (
                     <TabsTrigger 
                       key={path} 
@@ -104,7 +119,7 @@ export function CodeEditorPanel() {
                       title={path}
                     >
                       {file.name}
-                      {isFileUnsavedInTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
+                      {isFileUnsavedInThisTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
                       <Button 
                         asChild
                         variant="ghost" 
@@ -112,7 +127,7 @@ export function CodeEditorPanel() {
                         className="ml-2 h-5 w-5 absolute top-1/2 right-1 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 hover:bg-muted/50 data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100"
                         onClick={(e) => { 
                           e.stopPropagation();
-                          if (isFileUnsavedInTab) {
+                          if (isFileUnsavedInThisTab) {
                             if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                               return;
                             }
@@ -136,7 +151,7 @@ export function CodeEditorPanel() {
              <TabsContent value={activeFilePath} className="flex-1 flex flex-col p-0 m-0 h-full overflow-hidden">
                 <ScrollArea className="flex-1">
                   <Textarea
-                    value={currentContent} // Directly use currentContent for textarea value
+                    value={currentContent}
                     onChange={handleContentChange}
                     className="w-full h-full min-h-[calc(100vh-150px)] p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
                     placeholder="Select a file to view its content or start typing..."
@@ -150,8 +165,8 @@ export function CodeEditorPanel() {
        {activeFilePath && hasUnsavedChanges && (
         <Button
           onClick={handleSave}
-          size="icon" // Make it a proper icon button
-          className="fixed bottom-6 right-6 z-20 rounded-full shadow-lg h-14 w-14 p-0 flex items-center justify-center"
+          size="icon"
+          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-14 w-14 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
           disabled={isSaving}
           title="Save File (Ctrl+S)"
         >
@@ -159,9 +174,9 @@ export function CodeEditorPanel() {
           <span className="sr-only">Save File</span>
         </Button>
       )}
-      {activeFilePath && isFileActuallySaved && ( // Show green check only if truly saved and not in saving process
+      {activeFilePath && isFileActuallySaved && !isSaving && (
          <div
-          className="fixed bottom-6 right-6 z-20 rounded-full shadow-lg h-14 w-14 p-0 bg-green-600 text-white flex items-center justify-center"
+          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-14 w-14 p-0 bg-green-600 text-white flex items-center justify-center"
           title="File Saved"
         >
           <CheckCircle className="h-6 w-6" />
@@ -171,5 +186,3 @@ export function CodeEditorPanel() {
     </div>
   );
 }
-
-    
