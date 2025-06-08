@@ -138,7 +138,7 @@ export default function IdePage() {
           title="Download Workspace"
           className={cn(
             "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
-            "bg-card text-card-foreground hover:bg-muted border border-border"
+            "bg-card text-card-foreground border border-border hover:bg-accent hover:text-accent-foreground"
           )}
         >
           <Download className="h-5 w-5"/>
