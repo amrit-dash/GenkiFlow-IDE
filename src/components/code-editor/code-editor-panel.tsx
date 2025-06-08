@@ -17,6 +17,13 @@ export function CodeEditorPanel() {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
+  // DEBUG: Added background colors
+  const debugRootClass = "bg-red-500/30";
+  const debugTabsClass = "bg-blue-500/30";
+  const debugTabsContentClass = "bg-green-500/30";
+  const debugScrollAreaClass = "bg-yellow-500/30";
+  const debugTextareaClass = "bg-purple-500/30";
+
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
       const fileNode = openedFiles.get(activeFilePath);
@@ -32,12 +39,12 @@ export function CodeEditorPanel() {
       setHasUnsavedChanges(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilePath, openedFiles]); 
+  }, [activeFilePath, openedFiles]);
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
         const fileInTab = openedFiles.get(activeFilePath);
-        const persistedFile = getFileSystemNode(activeFilePath); 
+        const persistedFile = getFileSystemNode(activeFilePath);
         if (fileInTab?.content !== currentContent) {
             setCurrentContent(fileInTab?.content || "");
         }
@@ -49,7 +56,7 @@ export function CodeEditorPanel() {
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
-    setCurrentContent(newText); 
+    setCurrentContent(newText);
     if (activeFilePath) {
       const originalPersistedContent = getFileSystemNode(activeFilePath)?.content;
       setHasUnsavedChanges(newText !== originalPersistedContent);
@@ -59,8 +66,8 @@ export function CodeEditorPanel() {
   const handleSave = useCallback(() => {
     if (activeFilePath && hasUnsavedChanges) {
       setIsSaving(true);
-      updateFileContent(activeFilePath, currentContent); 
-      setHasUnsavedChanges(false); 
+      updateFileContent(activeFilePath, currentContent);
+      setHasUnsavedChanges(false);
       setTimeout(() => {
         setIsSaving(false);
         toast({
@@ -71,7 +78,7 @@ export function CodeEditorPanel() {
       }, 300);
     }
   }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent, toast, getFileSystemNode]);
-  
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 's') {
@@ -88,25 +95,25 @@ export function CodeEditorPanel() {
 
   if (openedFiles.size === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-background p-4 h-full">
+      <div className={cn("flex-1 flex flex-col items-center justify-center bg-background p-4 h-full", debugRootClass)}>
         <p className="text-muted-foreground">No files open. Select a file from the explorer.</p>
       </div>
     );
   }
-  
+
   return (
-    <div className="flex flex-col bg-background h-full relative">
+    <div className={cn("flex flex-col bg-background h-full relative", debugRootClass)}>
       {openedFiles.size > 0 && (
-        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden min-h-0">
+        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className={cn("flex-1 flex flex-col overflow-hidden min-h-0", debugTabsClass)}>
           <div className="border-b border-border">
-            <ScrollArea className="w-full whitespace-nowrap"> 
+            <ScrollArea className="w-full whitespace-nowrap">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const isFileUnsavedInThisTab = file.content !== getFileSystemNode(path)?.content;
                   return (
-                    <TabsTrigger 
-                      key={path} 
-                      value={path} 
+                    <TabsTrigger
+                      key={path}
+                      value={path}
                       className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group"
                       title={path}
                     >
@@ -116,21 +123,21 @@ export function CodeEditorPanel() {
                         role="button"
                         tabIndex={0}
                         className={cn(
-                          "inline-flex items-center justify-center transition-colors", 
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", 
-                          "text-foreground hover:text-accent", 
-                          "p-0.5 h-auto w-auto", 
+                          "inline-flex items-center justify-center transition-colors",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                          "text-foreground hover:text-accent",
+                          "p-0.5 h-auto w-auto",
                           "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2",
-                          "opacity-60 hover:opacity-100 focus-visible:opacity-100" 
+                          "opacity-60 hover:opacity-100 focus-visible:opacity-100"
                         )}
-                        onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
+                        onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                           e.stopPropagation();
                           if (isFileUnsavedInThisTab) {
                             if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                               return;
                             }
                           }
-                          closeFile(path); 
+                          closeFile(path);
                         }}
                         onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                            if (e.key === 'Enter' || e.key === ' ') {
@@ -151,20 +158,20 @@ export function CodeEditorPanel() {
                   );
                 })}
               </TabsList>
-              <ScrollBar orientation="horizontal" /> 
+              <ScrollBar orientation="horizontal" />
             </ScrollArea>
           </div>
-          
+
           {activeFilePath && openedFiles.has(activeFilePath) && (
-             <TabsContent 
-                value={activeFilePath} 
-                className="flex-1 p-0 m-0 overflow-auto min-h-0"
-              > 
-                <ScrollArea className="h-full w-full">
+             <TabsContent
+                value={activeFilePath}
+                className={cn("flex-1 p-0 m-0 overflow-auto min-h-0", debugTabsContentClass)}
+              >
+                <ScrollArea className={cn("h-full w-full", debugScrollAreaClass)}>
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
-                    className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+                    className={cn("w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none", debugTextareaClass)}
                     placeholder="Select a file to view its content or start typing..."
                     spellCheck="false"
                   />
@@ -176,13 +183,13 @@ export function CodeEditorPanel() {
        <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center shrink-0">
           <p>Ln: 1, Col: 1</p>
        </div>
-       <div 
+       <div
           role="button"
           tabIndex={(activeFilePath && hasUnsavedChanges && !isSaving) ? 0 : -1}
           onClick={handleSave}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
           className={cn(
-            "absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer", 
+            "absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer",
             "bg-primary hover:bg-primary/90",
             "transition-opacity duration-150 ease-in-out",
             (activeFilePath && hasUnsavedChanges && !isSaving) ? "opacity-100" : "opacity-0 pointer-events-none"
