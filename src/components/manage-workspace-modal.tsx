@@ -113,13 +113,13 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
     if (!rawUrl.endsWith('.zip')) {
       try {
-        const parsedUrl = new URL(rawUrl); // This can throw if rawUrl is not a valid URL structure
+        const parsedUrl = new URL(rawUrl); 
         if (parsedUrl.hostname === 'github.com') {
-          const pathSegments = parsedUrl.pathname.split('/').filter(Boolean); // Filter out empty strings from leading/trailing slashes
+          const pathSegments = parsedUrl.pathname.split('/').filter(Boolean); 
           if (pathSegments.length >= 2) {
             const user = pathSegments[0];
             let repo = pathSegments[1];
-            // Remove .git suffix from repo name if present
+            
             if (repo.endsWith('.git')) {
               repo = repo.substring(0, repo.length - 4);
             }
@@ -150,7 +150,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     toast({ title: "Fetching from GitHub...", description: `Downloading from ${targetZipUrl}` });
     
     try {
-      const response = await fetch(targetZipUrl); // This is line 142 from the error
+      const response = await fetch(targetZipUrl);
       if (!response.ok) {
         let errorDetail = `Failed to fetch ZIP: ${response.status} ${response.statusText}.`;
         if (isTransformedUrl && response.status === 404) {
@@ -163,19 +163,18 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       const zipArrayBuffer = await response.arrayBuffer();
       await processAndReplaceWorkspace(zipArrayBuffer, 'GitHub');
     } catch (error: any) {
-      console.error("Failed to fetch or process GitHub ZIP:", error);
+      console.error(`Failed to fetch or process GitHub ZIP from URL: ${targetZipUrl}`, error);
       let descriptionToast = "An unexpected error occurred during GitHub import.";
 
-      if (error.message.startsWith("Failed to fetch ZIP:")) { // My custom error for HTTP issues
-        descriptionToast = error.message; // Contains status and text from response
-      } else if (error.message.toLowerCase().includes("failed to fetch")) { // Generic browser fetch failure (network, CORS, etc.)
-        descriptionToast = `The browser could not fetch the URL. This might be due to:
+      if (error instanceof TypeError && error.message.toLowerCase().includes("failed to fetch")) {
+        descriptionToast = `The browser could not fetch the URL: ${targetZipUrl}. This might be due to:
 - Network connectivity issues.
-- The URL being incorrect or inaccessible (${targetZipUrl}).
-- Browser security (CORS) preventing the request.
-- If you entered a repository URL, the default branch might not be 'main'.
-Please verify the URL. Using a direct '.zip' download link from GitHub is often the most reliable.`;
-      } else if (error.message) { // Other errors, e.g., from URL parsing, ZIP processing
+- The URL being incorrect or inaccessible.
+- Browser security (CORS) preventing the request. If you used a repository URL, the default branch might not be 'main', or the repo could be private.
+Please verify the URL or try a direct '.zip' download link from GitHub.`;
+      } else if (error.message.startsWith("Failed to fetch ZIP:")) { 
+        descriptionToast = error.message; 
+      } else if (error.message) { 
         descriptionToast = `Error processing the data: ${error.message}`;
       }
       
@@ -183,7 +182,7 @@ Please verify the URL. Using a direct '.zip' download link from GitHub is often 
         variant: "destructive", 
         title: "GitHub Import Failed", 
         description: descriptionToast,
-        duration: 9000, // Increased duration for more complex error messages
+        duration: 12000, 
       });
       setIsFetchingGitHub(false);
     }
@@ -359,3 +358,4 @@ Please verify the URL. Using a direct '.zip' download link from GitHub is often 
     </Dialog>
   );
 }
+
