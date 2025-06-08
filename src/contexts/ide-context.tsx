@@ -182,16 +182,13 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
           parentNode = findParentById(newFs, parentId);
           if (!parentNode || parentNode.type !== 'folder') {
               console.error("Parent not found or is not a folder for ID:", parentId);
-              // Fallback or error, but for robustness, let's assume root if parent not found
-              // This scenario should ideally be prevented by UI, but defensively:
               parentNode = undefined; 
-              parentPathForNewNode = ''; // Adding to root
+              parentPathForNewNode = ''; 
           } else {
               parentPathForNewNode = parentNode.path;
           }
       } else { // Typically from terminal 'mkdir /a/b' or 'touch /a/b' OR adding to root
           if (currentDirectoryPath && currentDirectoryPath !== '/') {
-            // Need to find the parent based on currentDirectoryPath for name collision checks etc.
             const findParentByPath = (nodes: FileSystemNode[], path: string): FileSystemNode | undefined => {
               for (const n of nodes) {
                   if (n.path === path && n.type === 'folder') return n;
@@ -205,24 +202,23 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             parentNode = findParentByPath(newFs, currentDirectoryPath);
             if (!parentNode) {
                 console.error("Specified current directory path for addNode not found:", currentDirectoryPath);
-                parentPathForNewNode = ''; // Default to root on error
+                parentPathForNewNode = ''; 
             } else {
                 parentPathForNewNode = parentNode.path;
             }
-          } else { // Adding to root
+          } else { 
             parentPathForNewNode = ''; 
-            parentNode = undefined; // No specific parent object when adding to root
+            parentNode = undefined; 
           }
       }
       
       const newPath = (parentPathForNewNode === '' || parentPathForNewNode === '/' ? '' : parentPathForNewNode) + '/' + cleanName;
       
-      // Check for name collision
       const targetChildrenArray = parentNode ? parentNode.children || [] : newFs;
       if (targetChildrenArray.some(child => child.name === cleanName)) {
           console.error(`Node with name "${cleanName}" already exists in "${parentPathForNewNode || '/'}".`);
-          addedNodeInstance = null; // ensure it's null
-          return prevFileSystem; // Return original FS on error
+          addedNodeInstance = null; 
+          return prevFileSystem; 
       }
 
       const newNodeId = generateId();
@@ -235,9 +231,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         content: type === 'file' ? '' : undefined,
       };
 
-      if (parentNode) { // Adding to a specific folder
+      if (parentNode) { 
           parentNode.children = [...(parentNode.children || []), addedNodeInstance!];
-          // Update the parent in the tree
            const updateParentInTree = (nodes: FileSystemNode[]): FileSystemNode[] => {
               return nodes.map(n => {
                   if (n.id === parentNode!.id) return parentNode!; 
@@ -246,7 +241,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
               });
           };
           return updateParentInTree(newFs);
-      } else { // Adding to root
+      } else { 
           return [...newFs, addedNodeInstance!];
       }
     });
@@ -255,10 +250,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
 
   const deleteNode = useCallback((nodeIdOrPath: string): boolean => {
-    let nodeToDelete: FileSystemNode | undefined;
     let success = false;
 
-    // Function to find the node and its parent
     const findNodeAndParentRecursive = (
       nodes: FileSystemNode[], 
       targetIdOrPath: string, 
@@ -277,13 +270,18 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     };
 
     setFileSystemState(prevFs => {
-        const { node: foundNode, parent: parentNode } = findNodeAndParentRecursive(prevFs, nodeIdOrPath, null);
+        const newFsDeepClone = JSON.parse(JSON.stringify(prevFs)); // Operate on a deep clone
+        let nodeToDelete: FileSystemNode | undefined;
+        let parentOfDeletedNode: FileSystemNode | null = null;
+
+        const { node: foundNode, parent: foundParent } = findNodeAndParentRecursive(newFsDeepClone, nodeIdOrPath, null);
         nodeToDelete = foundNode;
+        parentOfDeletedNode = foundParent;
 
         if (!nodeToDelete) {
             console.error("Node to delete not found:", nodeIdOrPath);
             success = false;
-            return prevFs;
+            return prevFs; // Return original FS if node not found
         }
 
         const pathsToClose: string[] = [];
@@ -294,27 +292,18 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
         if (nodeToDelete.type === 'file') {
             pathsToClose.push(nodeToDelete.path);
-        } else if (nodeToDelete.type === 'folder') {
-             if(nodeToDelete.children) collectPathsRecursive(nodeToDelete);
+        } else if (nodeToDelete.type === 'folder' && nodeToDelete.children) {
+            collectPathsRecursive(nodeToDelete);
         }
         
-        let newFsStructure;
-        if (parentNode && parentNode.children) { // Node is not at root
-            parentNode.children = parentNode.children.filter(child => child.id !== nodeToDelete!.id);
-             // Need to reconstruct the tree to reflect the updated parent
-            const updateTree = (nodes: FileSystemNode[]): FileSystemNode[] => {
-                return nodes.map(n => {
-                    if (n.id === parentNode!.id) return { ...parentNode! }; // Use the modified parent
-                    if (n.children) return { ...n, children: updateTree(n.children) };
-                    return n;
-                });
-            };
-            newFsStructure = updateTree(JSON.parse(JSON.stringify(prevFs))); // Deep clone and update
-        } else { // Node is at root
-            newFsStructure = prevFs.filter(n => n.id !== nodeToDelete!.id);
+        let finalFsStructure;
+        if (parentOfDeletedNode && parentOfDeletedNode.children) {
+            parentOfDeletedNode.children = parentOfDeletedNode.children.filter(child => child.id !== nodeToDelete!.id);
+            finalFsStructure = newFsDeepClone; 
+        } else { 
+            finalFsStructure = newFsDeepClone.filter(n => n.id !== nodeToDelete!.id);
         }
         success = true;
-
 
         if (pathsToClose.length > 0) {
             setOpenedFilesState(prevOpened => {
@@ -329,16 +318,12 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                 if (newActivePath === null && newOpened.size > 0) { 
                     newActivePath = Array.from(newOpened.keys())[0];
                 }
-                // Only update active path if it actually changed
                 if (newActivePath !== activeFilePath) {
                     setActiveFilePathState(newActivePath);
                 }
                 return newOpened;
             });
-        } else if (nodeToDelete!.type === 'folder' && activeFilePath && activeFilePath.startsWith(nodeToDelete!.path + '/')) {
-            // If active file was inside the deleted folder, and no files were "closed" (e.g. folder was empty)
-            // This case might be covered by pathsToClose if the folder had files.
-            // If the folder was empty and an active file path *somehow* related to it, this is a fallback.
+        } else if (nodeToDelete.type === 'folder' && activeFilePath && activeFilePath.startsWith(nodeToDelete.path + '/')) {
              const currentOpenedFiles = Array.from(openedFiles.keys());
              const remainingKeys = currentOpenedFiles.filter(k => !k.startsWith(nodeToDelete!.path + '/'));
              const newActivePath = remainingKeys.length > 0 ? remainingKeys[0] : null;
@@ -346,7 +331,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                 setActiveFilePathState(newActivePath);
              }
         }
-        return newFsStructure;
+        return finalFsStructure;
     });
     return success;
   }, [activeFilePath, openedFiles]); 
@@ -405,10 +390,10 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         return false;
       };
       
-      if (findAndRename(newFs, null, '')) { // Start search from root
-         return success ? newFs : prevFs; // Return new FS if rename was successful, else original
+      if (findAndRename(newFs, null, '')) { 
+         return success ? newFs : prevFs; 
       }
-      return prevFs; // If node not found, return original
+      return prevFs; 
     });
 
     if (success && oldPath && newPath && nodeType) {
