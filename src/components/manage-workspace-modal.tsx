@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning, Settings2, RotateCcwIcon } from 'lucide-react';
+import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning, Settings2, RotateCcwIcon, FileArchive, FileUp, Cog } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { useToast } from '@/hooks/use-toast';
 import { downloadWorkspaceAsZip, processZipFile } from '@/lib/workspace-utils';
@@ -153,7 +153,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 space-y-6 overflow-y-auto">
+        <div className="space-y-6 overflow-y-auto">
           {/* Download Section */}
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><Download className="mr-2 h-4 w-4 text-primary" />Download Current Workspace</h3>
@@ -169,6 +169,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                 placeholder="Project Name"
               />
               <Button onClick={handleDownload} disabled={!downloadProjectName.trim()}>
+                <FileArchive className="mr-2 h-4 w-4" />
                 Download ZIP
               </Button>
             </div>
@@ -180,10 +181,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><UploadCloud className="mr-2 h-4 w-4 text-primary" />Upload ZIP & Replace Workspace</h3>
             <p className="text-xs text-muted-foreground mb-2">
-              Select a .zip file containing your project. Unsupported file types (e.g., images, PDFs, executables) will be excluded.
+              Select a .zip file containing your project. Unsupported file types will be excluded.
             </p>
             <div className="flex items-center gap-2">
               <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="flex-shrink-0" disabled={isProcessingZip}>
+                <FileUp className="mr-2 h-4 w-4" />
                 {selectedZipFile ? `Selected: ${selectedZipFile.name}` : "Select .zip File"}
               </Button>
               <input
@@ -195,7 +197,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                 disabled={isProcessingZip}
               />
               <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip || zipProcessingStep !== 'idle'}>
-                {isProcessingZip && zipProcessingStep === 'idle' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {isProcessingZip && zipProcessingStep === 'idle' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Cog className="mr-2 h-4 w-4" />}
                 Process ZIP
               </Button>
             </div>
@@ -283,3 +285,4 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
+
