@@ -62,7 +62,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     if (isFolder) {
       setIsOpen(!isOpen);
     } else {
-      openFile(node.path);
+      openFile(node.path, node); // Pass the node object
     }
   };
 

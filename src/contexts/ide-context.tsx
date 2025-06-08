@@ -18,7 +18,7 @@ interface IdeState {
   openedFiles: Map<string, FileSystemNode>; // path -> FileSystemNode
   activeFilePath: string | null;
   setActiveFilePath: (path: string | null) => void;
-  openFile: (filePath: string) => void;
+  openFile: (filePath: string, nodeToOpen?: FileSystemNode) => void;
   closeFile: (filePath: string) => void;
   updateFileContent: (filePath: string, newContent: string) => void;
   getFileSystemNode: (pathOrId: string) => FileSystemNode | FileSystemNode[] | undefined; // Can return array for root listing
@@ -126,14 +126,24 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     return findNode(fileSystem, pathOrId);
   }, [fileSystem]);
 
-  const openFile = useCallback((filePath: string) => {
+  const openFile = useCallback((filePath: string, nodeToOpen?: FileSystemNode) => {
     if (openedFiles.has(filePath)) {
       setActiveFilePathState(filePath);
       return;
     }
-    const node = getFileSystemNode(filePath);
-    if (node && typeof node === 'object' && !Array.isArray(node) && node.type === 'file') {
-      setOpenedFilesState(prev => new Map(prev).set(filePath, { ...(node as FileSystemNode) }));
+
+    let fileNode: FileSystemNode | undefined;
+    if (nodeToOpen && nodeToOpen.type === 'file' && nodeToOpen.path === filePath) {
+      fileNode = nodeToOpen;
+    } else {
+      const foundNode = getFileSystemNode(filePath);
+      if (foundNode && typeof foundNode === 'object' && !Array.isArray(foundNode) && foundNode.type === 'file') {
+        fileNode = foundNode as FileSystemNode;
+      }
+    }
+    
+    if (fileNode) {
+      setOpenedFilesState(prev => new Map(prev).set(filePath, { ...fileNode }));
       setActiveFilePathState(filePath);
     }
   }, [getFileSystemNode, openedFiles]);

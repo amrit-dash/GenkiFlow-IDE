@@ -74,7 +74,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     if (path) {
       updateFileContent(path, codeToApply);
       toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name || 'the editor'}.`});
-      if (!actionAppliedStates[buttonKey]) { // Only set if not already applied (for re-apply)
+      if (!actionAppliedStates[buttonKey]) { 
         setButtonAppliedState(buttonKey);
       }
     } else {
@@ -109,10 +109,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const newNode = addNode(parentIdForNewNode, suggestedFileName, 'file', baseDirForNewNode);
 
     if (newNode) {
-      openFile(newNode.path);
+      openFile(newNode.path, newNode); // Pass the newNode object
       updateFileContent(newNode.path, code);
       toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
-      if (!actionAppliedStates[buttonKey]) { // Only set if not already applied (for re-apply)
+      if (!actionAppliedStates[buttonKey]) { 
         setButtonAppliedState(buttonKey);
       }
     } else {
@@ -137,7 +137,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const handleNewChat = () => {
     setChatHistory([]);
     setPrompt("");
-    setActionAppliedStates({}); // Reset applied states for new chat
+    setActionAppliedStates({}); 
     textareaRef.current?.focus();
   };
 
