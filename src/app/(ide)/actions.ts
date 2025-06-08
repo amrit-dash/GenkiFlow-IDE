@@ -32,18 +32,13 @@ function logDetailedError(actionName: string, error: any) {
     if (error.stack) {
       console.error("Error Stack:", error.stack);
     }
-    // Genkit errors might have a 'cause' that is an object with more details
-    // or a 'rootCause'. Let's try to log these.
     if ((error as any).rootCause) {
         console.error("Error Root Cause (Genkit?):", JSON.stringify((error as any).rootCause, null, 2));
     } else if (error.cause) {
-      // Check if cause is a function (older Genkit style) or an object
       const cause = typeof (error as any).cause === 'function' ? (error as any).cause() : (error as any).cause;
       try {
-        // Attempt to stringify, handling potential circular references or non-stringifiable properties
         console.error("Error Cause:", JSON.stringify(cause, Object.getOwnPropertyNames(cause), 2));
       } catch (e) {
-        // Fallback if stringify fails
         console.error("Error Cause (could not stringify):", cause);
       }
     }
@@ -62,10 +57,24 @@ function logDetailedError(actionName: string, error: any) {
   console.error(`--- END OF DETAILED SERVER ERROR in ${actionName} at ${timestamp} ---`);
 }
 
-// Updated to return only the base message for the client
+// Updated to return only the base message for the client, detailed logging on server
 function formatErrorForClient(baseMessage: string, error: any): string {
-  // The detailed logging is now handled by logDetailedError
-  return baseMessage;
+  logDetailedError("Client-facing error formatting", error); // Log detailed error on server
+  // Check if the error has a message property that might be more specific (e.g., from Genkit validation)
+  if (error && error.message && typeof error.message === 'string' && error.message.length < 200) { // Avoid overly long messages
+    // Check if error message already contains known patterns we don't want to expose directly.
+    if (error.message.includes("Model") && error.message.includes("not found")) {
+        return baseMessage; // Keep it generic
+    }
+    // If it's a Zod validation error from Genkit, it might start with "Input validation failed"
+    if (error.message.startsWith("Input validation failed") || error.message.startsWith("Output validation failed")) {
+        // Could attempt to parse error.cause for Zod issues if desired for client, but simple message is safer
+        return `${baseMessage} There was an issue with the data format.`;
+    }
+    // For other relatively short messages, it might be safe to append.
+    // return `${baseMessage} Details: ${error.message}`; // Potentially exposing too much
+  }
+  return baseMessage; // Default to simple base message
 }
 
 export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInput): Promise<SummarizeCodeSnippetOutput> {
@@ -103,3 +112,4 @@ export async function findExamplesServer(input: FindCodebaseExamplesInput): Prom
     throw new Error(formatErrorForClient("Failed to find codebase examples.", error));
   }
 }
+

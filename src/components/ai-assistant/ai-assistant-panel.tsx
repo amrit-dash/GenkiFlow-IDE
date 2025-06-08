@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2 } from 'lucide-react';
+import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
 import type { AiSuggestion, ChatMessage } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface AiAssistantPanelProps {
   isVisible: boolean; 
@@ -40,17 +41,18 @@ const HintCard = ({ icon: Icon, title, description, onActivate }: { icon: React.
 
 
 export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantPanelProps) {
-  const { activeFilePath, openedFiles, updateFileContent, getFileSystemNode } = useIde();
+  const { activeFilePath, openedFiles, updateFileContent, getFileSystemNode, addNode, openFile } = useIde();
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+  const { toast } = useToast();
 
 
   const currentCode = activeFilePath ? openedFiles.get(activeFilePath)?.content : undefined;
-  const currentFileName = activeFilePath ? getFileSystemNode(activeFilePath)?.name : "current file";
+  const currentFileName = activeFilePath ? getFileSystemNode(activeFilePath)?.name : undefined;
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -61,15 +63,17 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     }
   }, [chatHistory]);
 
-  const handleApplySuggestion = (suggestedCode: string) => {
-    if (activeFilePath) {
-      updateFileContent(activeFilePath, suggestedCode);
+  const handleApplyToEditor = (codeToApply: string, targetPath?: string) => {
+    const path = targetPath || activeFilePath;
+    if (path) {
+      updateFileContent(path, codeToApply);
       setChatHistory(prev => [...prev, {
         id: generateId(),
         role: 'assistant',
         type: 'text',
-        content: "Code has been applied to the editor."
+        content: `Code has been applied to ${getFileSystemNode(path)?.name || 'the editor'}.`
       }]);
+      toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name}.`});
     } else {
        setChatHistory(prev => [...prev, {
         id: generateId(),
@@ -77,8 +81,58 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         type: 'error',
         content: "No active file to apply the code to."
       }]);
+      toast({ variant: "destructive", title: "Error", description: "No active file selected."});
     }
   };
+
+  const handleCreateFileAndInsert = async (suggestedFileName: string, code: string) => {
+    setIsLoading(true);
+    let parentDirNode = activeFilePath ? getFileSystemNode(activeFilePath) : null;
+    let parentIdForNewNode: string | null = null;
+    let baseDirForNewNode = "/";
+
+    if (parentDirNode && !Array.isArray(parentDirNode) && parentDirNode.type === 'file') {
+        const pathParts = parentDirNode.path.split('/');
+        pathParts.pop(); // remove filename
+        baseDirForNewNode = pathParts.join('/') || '/';
+        const actualParentDirNode = getFileSystemNode(baseDirForNewNode);
+        if (actualParentDirNode && !Array.isArray(actualParentDirNode) && actualParentDirNode.type === 'folder') {
+            parentIdForNewNode = actualParentDirNode.id;
+        } else { // fallback to root if parent dir not found (should not happen with valid paths)
+            parentIdForNewNode = null;
+            baseDirForNewNode = "/";
+        }
+
+    } else if (parentDirNode && !Array.isArray(parentDirNode) && parentDirNode.type === 'folder') {
+        parentIdForNewNode = parentDirNode.id;
+        baseDirForNewNode = parentDirNode.path;
+    }
+
+
+    const newNode = addNode(parentIdForNewNode, suggestedFileName, 'file', baseDirForNewNode);
+
+    if (newNode) {
+      openFile(newNode.path);
+      updateFileContent(newNode.path, code); // Update content *after* opening to ensure it's in openedFiles map
+      setChatHistory(prev => [...prev, {
+        id: generateId(),
+        role: 'assistant',
+        type: 'text',
+        content: `File "${newNode.name}" created and code inserted.`
+      }]);
+      toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
+    } else {
+      setChatHistory(prev => [...prev, {
+        id: generateId(),
+        role: 'assistant',
+        type: 'error',
+        content: `Failed to create file "${suggestedFileName}". It might already exist or the name is invalid.`
+      }]);
+      toast({ variant: "destructive", title: "Error", description: `Could not create file "${suggestedFileName}".`});
+    }
+    setIsLoading(false);
+  };
+
 
   const handleCopyCode = (codeToCopy: string, messageId: string) => {
     navigator.clipboard.writeText(codeToCopy).then(() => {
@@ -141,15 +195,21 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         if (!currentCode) {
           aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "No active file or content to refactor." };
         } else {
-          const result = await refactorCodeServer({ codeSnippet: currentCode, fileContext: `File: ${currentFileName}\n\n${currentCode}` });
-          if (result.suggestions && result.suggestions.length > 0) {
-            aiResponse = { id: generateId(), role: 'assistant', type: 'refactorSuggestions', content: "Here are some refactoring suggestions:", suggestions: result.suggestions };
+          const result = await refactorCodeServer({ codeSnippet: currentCode, fileContext: `File: ${currentFileName || 'current file'}\n\n${currentCode}` });
+          if (result.suggestion) {
+            aiResponse = { 
+              id: generateId(), 
+              role: 'assistant', 
+              type: 'refactorSuggestion', // Singular
+              content: "Here's a refactoring suggestion:", 
+              suggestion: result.suggestion // Single suggestion object
+            };
           } else {
-            aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: "No refactoring suggestions found for the current code." };
+            aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: "No specific refactoring suggestions found for the current code." };
           }
         }
       } else if (lowerCasePrompt.includes("find example") || lowerCasePrompt.includes("show example") || lowerCasePrompt.includes("how to use")) {
-        const queryMatch = currentPromptValue.match(/(?:find example|show example|how to use)\s*(?:of|for)?\s*([\w\s.<>(){}!"';:,[-]+)/i); // Extended regex
+        const queryMatch = currentPromptValue.match(/(?:find example|show example|how to use)\s*(?:of|for)?\s*([\w\s.<>(){}!"';:,[-]+)/i); 
         const query = queryMatch && queryMatch[1] ? queryMatch[1].trim() : currentPromptValue;
         const result = await findExamplesServer({ query });
          if (result.examples && result.examples.length > 0) {
@@ -157,22 +217,42 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } else {
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: `No examples found for "${query}".` };
         }
-      } else { // Default to code generation
+      } else { 
+        // Default to code generation, pass current file context
         let effectivePrompt = currentPromptValue;
-        // Use chat history (excluding the current user message being added) for context
         const historyForContext = currentChatHistory.slice(0, -1); 
         if (historyForContext.length > 0) {
             const lastMessages = historyForContext
                 .slice(-3) 
-                .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+                .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`)
                 .join('\n\n');
             effectivePrompt = `${lastMessages}\n\nUser: ${currentPromptValue}`;
         }
         
-        const finalPromptForGenkit = `${effectivePrompt}\n\nActive File Context (if relevant):\nFile: ${currentFileName}\nCode:\n${currentCode || "No active file content."}`;
+        const result = await generateCodeServer({ 
+            prompt: effectivePrompt, 
+            currentFilePath: activeFilePath || undefined, 
+            currentFileContent: currentCode 
+        });
 
-        const result = await generateCodeServer({ prompt: finalPromptForGenkit });
-        aiResponse = { id: generateId(), role: 'assistant', type: 'generatedCode', content: "Here's the generated code:", code: result.code };
+        if (result.isNewFile && result.suggestedFileName) {
+            aiResponse = {
+                id: generateId(),
+                role: 'assistant',
+                type: 'newFileSuggestion',
+                content: `I've generated code for a new file. Suggested name: ${result.suggestedFileName}`,
+                code: result.code,
+                suggestedFileName: result.suggestedFileName
+            };
+        } else {
+             aiResponse = { 
+                id: generateId(), 
+                role: 'assistant', 
+                type: 'generatedCode', 
+                content: "Here's the generated code:", 
+                code: result.code 
+            };
+        }
       }
       
       setChatHistory(prev => prev.filter(msg => msg.id !== loadingMessageId).concat(aiResponse!));
@@ -256,7 +336,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                     {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
                     {msg.type === 'error' && <p className="text-destructive whitespace-pre-wrap">{msg.content}</p>}
                     
-                    {msg.type === 'generatedCode' && msg.code && (
+                    {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion') && msg.code && (
                       <div className="space-y-2">
                         <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
                         <div className="relative bg-muted p-2 rounded-md group">
@@ -271,37 +351,50 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             {copiedStates[msg.id] ? <Check className="h-3.5 w-3.5 text-green-500" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
                           </Button>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => handleApplySuggestion(msg.code!)}>Insert into Editor</Button>
+                        {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
+                          <Button size="sm" variant="outline" onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!)} disabled={isLoading}>
+                            <FilePlus2 className="mr-1.5 h-4 w-4" /> Create File & Insert
+                          </Button>
+                        )}
+                        {msg.type === 'generatedCode' && (
+                           <Button size="sm" variant="outline" onClick={() => handleApplyToEditor(msg.code!)} disabled={isLoading || !activeFilePath}>
+                            <Edit className="mr-1.5 h-4 w-4" /> {activeFilePath ? `Insert into ${currentFileName || 'Editor'}` : 'Insert into Editor (No file open)'}
+                           </Button>
+                        )}
                       </div>
                     )}
 
-                    {msg.type === 'refactorSuggestions' && msg.suggestions && (
+                    {msg.type === 'refactorSuggestion' && msg.suggestion && (
                       <div className="space-y-3">
                         <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
-                        {msg.suggestions.map((s, i) => (
-                          <Card key={i} className="bg-muted/60 shadow-none">
-                            <CardHeader className="p-2">
-                              <CardDescription className="text-xs">{s.description}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-2 pt-0">
-                              <div className="relative bg-background/70 p-1.5 rounded-md group mb-1.5">
-                                <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{s.proposedCode}</code></pre>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={() => handleCopyCode(s.proposedCode, `${msg.id}-suggestion-${i}`)}
-                                  title={copiedStates[`${msg.id}-suggestion-${i}`] ? "Copied!" : "Copy code"}
-                                >
-                                  {copiedStates[`${msg.id}-suggestion-${i}`] ? <Check className="h-3 w-3 text-green-500" /> : <ClipboardCopy className="h-3 w-3" />}
-                                </Button>
-                              </div>
-                              <Button size="xs" variant="outline" className="mt-1" onClick={() => handleApplySuggestion(s.proposedCode)}>Apply Suggestion</Button>
-                            </CardContent>
-                          </Card>
-                        ))}
+                        <Card className="bg-muted/60 shadow-none">
+                          <CardHeader className="p-2">
+                            <CardDescription className="text-xs">{msg.suggestion.description}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="p-2 pt-0">
+                            <div className="relative bg-background/70 p-1.5 rounded-md group mb-1.5">
+                              <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{msg.suggestion.proposedCode}</code></pre>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleCopyCode(msg.suggestion!.proposedCode, `${msg.id}-suggestion`)}
+                                title={copiedStates[`${msg.id}-suggestion`] ? "Copied!" : "Copy code"}
+                              >
+                                {copiedStates[`${msg.id}-suggestion`] ? <Check className="h-3 w-3 text-green-500" /> : <ClipboardCopy className="h-3 w-3" />}
+                              </Button>
+                            </div>
+                            <Button size="xs" variant="outline" className="mt-1" onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode)} disabled={isLoading || !activeFilePath}>
+                                {activeFilePath ? 'Apply to Editor' : 'Apply (No file open)'}
+                            </Button>
+                          </CardContent>
+                        </Card>
                       </div>
                     )}
+                    {msg.type === 'refactorSuggestion' && !msg.suggestion && (
+                         <p className="whitespace-pre-wrap">No specific refactoring suggestion found.</p>
+                    )}
+
 
                     {msg.type === 'codeExamples' && msg.examples && (
                       <div className="space-y-2">
@@ -326,7 +419,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 </Card>
               </div>
             ))}
-             {isLoading && chatHistory.length === 0 && ( // Show loader in main area if history is empty and loading first message
+             {isLoading && chatHistory.length === 0 && ( 
                 <div className="flex justify-center items-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>

@@ -1,6 +1,7 @@
+
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for providing code refactoring suggestions.
+ * @fileOverview This file defines a Genkit flow for providing a single best code refactoring suggestion.
  *
  * - codeRefactoringSuggestions: The main function to trigger the refactoring suggestion flow.
  * - CodeRefactoringSuggestionsInput: The input type for the codeRefactoringSuggestions function.
@@ -16,13 +17,13 @@ const CodeRefactoringSuggestionsInputSchema = z.object({
 });
 export type CodeRefactoringSuggestionsInput = z.infer<typeof CodeRefactoringSuggestionsInputSchema>;
 
+const SingleSuggestionSchema = z.object({
+  description: z.string().describe('A description of the refactoring suggestion.'),
+  proposedCode: z.string().describe('The proposed refactored code, which should be the complete refactored version of the input codeSnippet.'),
+});
+
 const CodeRefactoringSuggestionsOutputSchema = z.object({
-  suggestions: z.array(
-    z.object({
-      description: z.string().describe('A description of the refactoring suggestion.'),
-      proposedCode: z.string().describe('The proposed refactored code.'),
-    })
-  ).describe('A list of refactoring suggestions.'),
+  suggestion: SingleSuggestionSchema.optional().describe('The single best refactoring suggestion. Omit or return null if no significant refactoring is beneficial.'),
 });
 export type CodeRefactoringSuggestionsOutput = z.infer<typeof CodeRefactoringSuggestionsOutputSchema>;
 
@@ -34,16 +35,22 @@ const prompt = ai.definePrompt({
   name: 'codeRefactoringSuggestionsPrompt',
   input: {schema: CodeRefactoringSuggestionsInputSchema},
   output: {schema: CodeRefactoringSuggestionsOutputSchema},
-  prompt: `You are an AI code assistant that suggests refactoring improvements for given code snippets.
+  prompt: `You are an AI code assistant that provides the single best refactoring improvement for a given code snippet.
 
-  Analyze the provided code snippet within its file context and suggest specific, actionable refactoring improvements.
-  Each suggestion should include a clear description of the refactoring and the proposed code.
+  Analyze the provided code snippet within its file context and determine the most impactful refactoring improvement.
+  Your response should be a JSON object containing a 'suggestion' field. This 'suggestion' object should have:
+  - 'description': A clear description of the refactoring.
+  - 'proposedCode': The complete refactored version of the original 'codeSnippet'. This 'proposedCode' should be a valid code snippet that can directly replace the original 'codeSnippet'.
 
   Code Snippet:
+  \`\`\`
   {{codeSnippet}}
+  \`\`\`
 
   File Context:
+  \`\`\`
   {{fileContext}}
+  \`\`\`
 
   Focus on improvements related to:
   - Readability
@@ -52,9 +59,22 @@ const prompt = ai.definePrompt({
   - Security
   - Modernization (e.g., using newer language features)
 
-  Present the suggestions as a JSON array of objects, each with a 'description' and 'proposedCode' field.
-  Ensure the 'proposedCode' is a valid code snippet that can replace the original code.
-  Do not include any explanations or conversational text, only the JSON output.
+  If multiple improvements are possible, synthesize them into one optimal suggestion or pick the most impactful one.
+  If no significant refactoring is beneficial, you can omit the 'suggestion' field in your JSON response or return it as null.
+  Do not include any explanations or conversational text, only the JSON output matching the schema.
+  Example JSON for a suggestion:
+  {
+    "suggestion": {
+      "description": "Improved loop efficiency and clarity.",
+      "proposedCode": "const newArray = oldArray.map(item => item * 2);"
+    }
+  }
+  Example JSON if no suggestion:
+  {
+    "suggestion": null
+  }
+  OR just:
+  {}
   `,config: {
     safetySettings: [
       {
@@ -76,3 +96,4 @@ const codeRefactoringSuggestionsFlow = ai.defineFlow(
     return output!;
   }
 );
+

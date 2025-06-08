@@ -16,11 +16,12 @@ export interface AiSuggestion {
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'generatedCode' | 'refactorSuggestions' | 'codeExamples' | 'error' | 'loading';
+  type: 'text' | 'generatedCode' | 'refactorSuggestion' | 'codeExamples' | 'error' | 'loading' | 'newFileSuggestion';
   content: string; // For text, error messages, or descriptions
-  code?: string; // For generatedCode
-  suggestions?: AiSuggestion[]; // For refactorSuggestions
+  code?: string; // For generatedCode, newFileSuggestion
+  suggestion?: AiSuggestion; // For refactorSuggestion (singular)
   examples?: string[]; // For codeExamples
+  suggestedFileName?: string; // For newFileSuggestion
 }
 
 // Add other shared types here
