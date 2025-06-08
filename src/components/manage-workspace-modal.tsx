@@ -148,9 +148,10 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
     setIsFetchingGitHub(true);
     toast({ title: "Fetching from GitHub...", description: `Downloading from ${targetZipUrl}` });
+    console.log("Attempting to fetch GitHub ZIP from:", targetZipUrl);
     
     try {
-      const response = await fetch(targetZipUrl);
+      const response = await fetch(targetZipUrl); // This is line 153 from the error
       if (!response.ok) {
         let errorDetail = `Failed to fetch ZIP: ${response.status} ${response.statusText}.`;
         if (isTransformedUrl && response.status === 404) {
@@ -166,12 +167,15 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       console.error(`Failed to fetch or process GitHub ZIP from URL: ${targetZipUrl}`, error);
       let descriptionToast = "An unexpected error occurred during GitHub import.";
 
+      // Specifically check for "Failed to fetch" which often indicates CORS or network issues
       if (error instanceof TypeError && error.message.toLowerCase().includes("failed to fetch")) {
-        descriptionToast = `The browser could not fetch the URL: ${targetZipUrl}. This might be due to:
-- Network connectivity issues.
-- The URL being incorrect or inaccessible.
-- Browser security (CORS) preventing the request. If you used a repository URL, the default branch might not be 'main', or the repo could be private.
-Please verify the URL or try a direct '.zip' download link from GitHub.`;
+        descriptionToast = `The browser could not directly fetch the URL: ${targetZipUrl}. This is often due to browser security (CORS policy) preventing cross-origin requests, or network issues. 
+        
+        Recommended Solution:
+        1. Manually download the .zip file from GitHub.
+        2. Use the "Upload ZIP & Replace Workspace" option below.
+        
+        Please verify your network connection and the URL.`;
       } else if (error.message.startsWith("Failed to fetch ZIP:")) { 
         descriptionToast = error.message; 
       } else if (error.message) { 
@@ -182,7 +186,7 @@ Please verify the URL or try a direct '.zip' download link from GitHub.`;
         variant: "destructive", 
         title: "GitHub Import Failed", 
         description: descriptionToast,
-        duration: 12000, 
+        duration: 15000, // Increased duration for longer message
       });
       setIsFetchingGitHub(false);
     }
@@ -265,7 +269,7 @@ Please verify the URL or try a direct '.zip' download link from GitHub.`;
               or a direct <code className="bg-muted px-1 py-0.5 rounded text-xs">.zip</code> download link.
             </p>
              <p className="text-xs text-muted-foreground mb-2">
-              If a repository URL is provided, we'll attempt to download the <code className="bg-muted px-1 py-0.5 rounded text-xs">main</code> branch ZIP.
+              If a repository URL is provided, we'll attempt to download the <code className="bg-muted px-1 py-0.5 rounded text-xs">main</code> branch ZIP. Direct fetch may be blocked by browser security (CORS).
             </p>
             <div className="flex items-center gap-2">
               <Label htmlFor="githubUrl" className="sr-only">GitHub Repository or ZIP URL</Label>
