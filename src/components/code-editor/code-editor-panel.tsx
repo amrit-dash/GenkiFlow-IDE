@@ -158,9 +158,9 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent 
                 value={activeFilePath} 
-                className="flex-1 p-0 m-0 overflow-hidden min-h-0" // flex-1 and min-h-0 are key for growth
+                className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0"
               > 
-                <ScrollArea className="h-full w-full"> {/* h-full to fill TabsContent */}
+                <ScrollArea className="flex-1 w-full min-h-0">
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
@@ -174,8 +174,7 @@ export function CodeEditorPanel() {
         </Tabs>
       )}
        <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center shrink-0">
-          <p>Ln: 1, Col: 1 | Spaces: 2 | UTF-8</p>
-          {/* We can add more info here later, like file type, git branch, etc. */}
+          <p>Ln: 1, Col: 1</p>
        </div>
        <div 
           role="button"
@@ -183,7 +182,7 @@ export function CodeEditorPanel() {
           onClick={handleSave}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
           className={cn(
-            "absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer", // Adjusted bottom to account for status bar
+            "absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer", 
             "bg-primary hover:bg-primary/90",
             "transition-opacity duration-150 ease-in-out",
             (activeFilePath && hasUnsavedChanges && !isSaving) ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -195,7 +194,7 @@ export function CodeEditorPanel() {
           <span className="sr-only">Save File</span>
         </div>
       {isSaving && (
-         <div className="absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary/80"> {/* Adjusted bottom */}
+         <div className="absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary/80">
             <Loader2 className="h-5 w-5 animate-spin text-primary-foreground" />
              <span className="sr-only">Saving...</span>
          </div>
