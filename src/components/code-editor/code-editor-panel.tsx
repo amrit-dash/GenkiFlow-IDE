@@ -99,7 +99,7 @@ export function CodeEditorPanel() {
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex flex-col h-full">
           <div className="border-b border-border">
-            <ScrollArea> {/* Removed orientation and pb-0 class */}
+            <ScrollArea> 
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const isFileUnsavedInThisTab = file.content !== getFileSystemNode(path)?.content;
@@ -107,7 +107,7 @@ export function CodeEditorPanel() {
                     <TabsTrigger 
                       key={path} 
                       value={path} 
-                      className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group" // Changed px-3 to pl-3 pr-8
+                      className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group"
                       title={path}
                     >
                       {file.name}
@@ -116,7 +116,7 @@ export function CodeEditorPanel() {
                         asChild
                         variant="ghost" 
                         size="icon" 
-                        className="ml-2 h-5 w-5 absolute top-1/2 right-2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" // Changed right-1 to right-2, removed hover:bg-muted/50
+                        className="ml-2 h-5 w-5 absolute top-1/2 right-2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" 
                         onClick={(e) => { 
                           e.stopPropagation();
                           if (isFileUnsavedInThisTab) {
@@ -136,13 +136,13 @@ export function CodeEditorPanel() {
                   );
                 })}
               </TabsList>
-              <ScrollBar orientation="horizontal" /> {/* Explicitly added horizontal scrollbar */}
+              <ScrollBar orientation="horizontal" /> 
             </ScrollArea>
           </div>
           
           {activeFilePath && openedFiles.has(activeFilePath) && (
-             <TabsContent value={activeFilePath} className="flex-1 flex flex-col p-0 m-0 h-full overflow-hidden">
-                <ScrollArea className="flex-1 h-full">
+             <TabsContent value={activeFilePath} className="flex-1 flex flex-col p-0 m-0 overflow-hidden">
+                <ScrollArea className="h-full">
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
