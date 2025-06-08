@@ -234,7 +234,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                 <p>
                   The following files in the ZIP are not supported or could not be read and will be excluded if you proceed:
                 </p>
-                <ScrollArea className="max-h-32 mt-2 border rounded-md p-2">
+                <ScrollArea className="h-32 mt-2 border rounded-md p-2">
                   <ul className="list-disc list-inside text-xs">
                     {unsupportedFiles.map(f => <li key={f}>{f}</li>)}
                   </ul>
