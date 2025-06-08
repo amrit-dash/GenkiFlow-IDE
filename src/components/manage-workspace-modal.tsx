@@ -115,7 +115,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   
   const completeWorkspaceReplacement = () => {
     if (processedZipFileSystem) {
-      replaceWorkspace(processedZipFileSystem, null); // Pass null to not auto-open any file
+      replaceWorkspace(processedZipFileSystem, null); 
       toast({ title: "Workspace Imported", description: "The new workspace has been loaded." });
       onClose();
     }
@@ -142,7 +142,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); resetModalFlows(); } }}>
-      <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center">
             <Settings2 className="mr-2 h-5 w-5 text-primary" />
@@ -231,7 +231,9 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
             <AlertDialogTitle className="flex items-center"><FileWarning className="mr-2 h-5 w-5 text-yellow-500" />Unsupported Files Found</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div>
-                The following files in the ZIP are not supported or could not be read and will be excluded if you proceed:
+                <p>
+                  The following files in the ZIP are not supported or could not be read and will be excluded if you proceed:
+                </p>
                 <ScrollArea className="max-h-32 mt-2 border rounded-md p-2">
                   <ul className="list-disc list-inside text-xs">
                     {unsupportedFiles.map(f => <li key={f}>{f}</li>)}
@@ -291,3 +293,4 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
+
