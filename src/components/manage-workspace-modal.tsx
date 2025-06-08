@@ -208,12 +208,14 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           {/* Reset Workspace Section */}
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><RotateCcwIcon className="mr-2 h-4 w-4 text-primary" />Reset Workspace</h3>
-            <p className="text-xs text-muted-foreground mb-2">
-              This will clear all your current files and data, and restore the default example workspace. This action cannot be undone.
-            </p>
-            <Button onClick={handleResetWorkspace} variant="destructive" disabled={isProcessingZip}>
-              Reset to Default
-            </Button>
+            <div className="flex items-center gap-4">
+              <Button onClick={handleResetWorkspace} variant="destructive" disabled={isProcessingZip}>
+                Reset to Default
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                This will clear all your current files and data, and restore the default example workspace. This action cannot be undone.
+              </p>
+            </div>
           </section>
         </div>
         
@@ -285,4 +287,3 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
-
