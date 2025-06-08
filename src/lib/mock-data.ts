@@ -3,21 +3,6 @@ import type { FileSystemNode } from './types';
 
 export const mockFileSystem: FileSystemNode[] = [
   {
-    id: 'public-folder',
-    name: 'public',
-    type: 'folder',
-    path: '/public',
-    children: [
-      {
-        id: 'public-index-js',
-        name: 'index.js',
-        type: 'file',
-        path: '/public/index.js',
-        content: '// This is a placeholder index.js file in the public folder.\n\nconsole.log("Hello from public/index.js!");\n'
-      },
-    ]
-  },
-  {
     id: 'readme-md',
     name: 'README.md',
     type: 'file',
@@ -31,6 +16,15 @@ Welcome! You can start by:
 - Creating new files or folders using the icons in the File Explorer header.
 - Typing commands in the Terminal (e.g., 'mkdir my_project', 'touch app.py').
 - Asking the AI Assistant for help (e.g., 'generate a python script for a simple web server').
+
+---
+
+## About the Developer
+
+This IDE was created by **Amrit Dash**.
+
+- **GitHub**: [amrit-dash](https://github.com/amrit-dash)
+- **Website**: [amritdash.web.app](https://amritdash.web.app)
 `
   }
 ];
