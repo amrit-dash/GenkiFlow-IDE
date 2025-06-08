@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback } from 'react';
@@ -16,13 +15,6 @@ export function CodeEditorPanel() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
-
-  // DEBUG: Added background colors
-  const debugRootClass = "bg-red-500/50";
-  const debugTabsClass = "bg-blue-500/50";
-  const debugTabsContentClass = "bg-green-500/50";
-  const debugScrollAreaClass = "bg-orange-500/50";
-  const debugTextareaWrapperClass = "bg-purple-600/50";
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
@@ -95,16 +87,16 @@ export function CodeEditorPanel() {
 
   if (openedFiles.size === 0) {
     return (
-      <div className={cn("flex-1 flex flex-col items-center justify-center bg-background p-4 h-full", debugRootClass)}>
+      <div className="flex-1 flex flex-col items-center justify-center bg-background p-4 h-full">
         <p className="text-muted-foreground">No files open. Select a file from the explorer.</p>
       </div>
     );
   }
 
   return (
-    <div className={cn("flex flex-col bg-background h-full relative", debugRootClass)}>
+    <div className="flex flex-col bg-background h-full relative">
       {openedFiles.size > 0 && (
-        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className={cn("flex-1 flex flex-col overflow-hidden min-h-0", debugTabsClass)}>
+        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="border-b border-border">
             <ScrollArea className="w-full whitespace-nowrap">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
@@ -165,18 +157,16 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent
                 value={activeFilePath}
-                className={cn("flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0", debugTabsContentClass)}
+                className="flex-1 relative p-0 m-0 overflow-hidden min-h-0"
               >
-                <ScrollArea className={cn("flex-1 w-full min-h-0", debugScrollAreaClass)}>
-                   <div className={cn("flex-1 flex flex-col min-h-0", debugTextareaWrapperClass)}>
-                    <Textarea
-                      value={currentContent}
-                      onChange={handleContentChange}
-                      className={cn("flex-1 w-full min-h-0 p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none")}
-                      placeholder="Select a file to view its content or start typing..."
-                      spellCheck="false"
-                    />
-                  </div>
+                <ScrollArea className="absolute inset-0 w-full h-full">
+                  <Textarea
+                    value={currentContent}
+                    onChange={handleContentChange}
+                    className="flex-1 w-full min-h-0 p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+                    placeholder="Select a file to view its content or start typing..."
+                    spellCheck="false"
+                  />
                 </ScrollArea>
             </TabsContent>
           )}
