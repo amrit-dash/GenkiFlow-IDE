@@ -21,7 +21,7 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 
 const HintCard = ({ icon: Icon, title, description, onActivate }: { icon: React.ElementType, title: string, description: string, onActivate: () => void }) => (
   <Card 
-    className="w-full p-3 hover:bg-accent/80 cursor-pointer transition-colors shadow-sm hover:shadow-md"
+    className="w-full p-3 hover:bg-accent/60 cursor-pointer transition-colors shadow-sm hover:shadow-md"
     onClick={onActivate}
     tabIndex={0}
     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onActivate(); }}
