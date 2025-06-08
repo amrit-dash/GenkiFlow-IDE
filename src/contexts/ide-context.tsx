@@ -146,12 +146,11 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       const contentHistory = fileNode.contentHistory && fileNode.contentHistory.length > 0 ? fileNode.contentHistory : [initialContent];
       const historyIndex = fileNode.historyIndex !== undefined ? fileNode.historyIndex : Math.max(0, contentHistory.length - 1);
       
-      // Ensure the content is the one at the current historyIndex
       const currentContentFromHistory = contentHistory[historyIndex] || initialContent;
 
       setOpenedFilesState(prev => new Map(prev).set(filePath, { 
         ...fileNode, 
-        content: currentContentFromHistory, // Use content from history
+        content: currentContentFromHistory, 
         contentHistory, 
         historyIndex 
       }));
@@ -184,9 +183,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         let history = file.contentHistory ? [...file.contentHistory] : [file.content || ''];
         let index = file.historyIndex !== undefined ? file.historyIndex : Math.max(0, history.length - 1);
 
-        // Only add to history if newContent is different from the current state in history
         if (index < 0 || history[index] !== newContent) {
-            if (index < history.length - 1) { // Forking history
+            if (index < history.length - 1) { 
                 history = history.slice(0, index + 1);
             }
             history.push(newContent);
@@ -209,12 +207,12 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         const updateNodeInFS = (nodes: FileSystemNode[]): FileSystemNode[] => {
             return nodes.map(node => {
                 if (node.path === filePath && node.type === 'file') {
-                    const latestOpenedFile = openedFiles.get(filePath); // Get current history from openedFiles
+                    const latestOpenedFile = openedFiles.get(filePath); 
                     return { 
                         ...node, 
                         content: newContent, 
-                        contentHistory: latestOpenedFile?.contentHistory, // Persist history
-                        historyIndex: latestOpenedFile?.historyIndex     // Persist index
+                        contentHistory: latestOpenedFile?.contentHistory, 
+                        historyIndex: latestOpenedFile?.historyIndex     
                     };
                 }
                 if (node.children) {
@@ -225,7 +223,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         };
         return updateNodeInFS(prevFs);
     });
-  }, [openedFiles]); // openedFiles dependency is important for getting the latest history state for FS update
+  }, [openedFiles]); 
 
   const undoContentChange = useCallback((filePath: string) => {
     setOpenedFilesState(prevMap => {
@@ -236,20 +234,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             const newContent = file.contentHistory[newIndex];
             const updatedFile = { ...file, content: newContent, historyIndex: newIndex };
             newMap.set(filePath, updatedFile);
-
-            // Update fileSystem as well
-            setFileSystemState(prevFs => {
-                const updateNodeInFS = (nodes: FileSystemNode[]): FileSystemNode[] => {
-                    return nodes.map(n => {
-                        if (n.path === filePath && n.type === 'file') {
-                            return { ...n, content: newContent, historyIndex: newIndex, contentHistory: file.contentHistory };
-                        }
-                        if (n.children) return { ...n, children: updateNodeInFS(n.children) };
-                        return n;
-                    });
-                };
-                return updateNodeInFS(prevFs);
-            });
         }
         return newMap;
     });
@@ -264,20 +248,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             const newContent = file.contentHistory[newIndex];
             const updatedFile = { ...file, content: newContent, historyIndex: newIndex };
             newMap.set(filePath, updatedFile);
-
-            // Update fileSystem as well
-            setFileSystemState(prevFs => {
-                const updateNodeInFS = (nodes: FileSystemNode[]): FileSystemNode[] => {
-                    return nodes.map(n => {
-                        if (n.path === filePath && n.type === 'file') {
-                            return { ...n, content: newContent, historyIndex: newIndex, contentHistory: file.contentHistory };
-                        }
-                        if (n.children) return { ...n, children: updateNodeInFS(n.children) };
-                        return n;
-                    });
-                };
-                return updateNodeInFS(prevFs);
-            });
         }
         return newMap;
     });
@@ -410,8 +380,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             const childName = child.path.substring(child.path.lastIndexOf('/') + 1);
             child.path = (newParentPathForChildren === '/' ? '' : newParentPathForChildren) + '/' + childName;
             if (child.path.startsWith('//')) child.path = child.path.substring(1);
-            // History in children also needs path updates if they were ever opened, but FS stores the current state.
-            // For simplicity, we are not deep-updating history paths here, assuming openFile will re-eval.
             updateChildrenPathsRecursive(child, _oldParentPath + '/' + childName, child.path);
           });
         }
@@ -493,7 +461,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
         if (!draggedNode) { console.error("Dragged node not found during move:", draggedNodeId); return prevFs; }
         
-        movedNodeReference = JSON.parse(JSON.stringify(draggedNode)); // Keep a ref before path changes
+        movedNodeReference = JSON.parse(JSON.stringify(draggedNode)); 
         oldPathForDraggedNode = draggedNode.path; 
         draggedNodeType = draggedNode.type;
 
@@ -517,7 +485,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         if (draggedNode.type === 'folder' && targetParentNode) {
             let currentCheckNodePath = targetParentNode.path;
             while (currentCheckNodePath !== '/') {
-                if (currentCheckNodePath === draggedNode.path) { // draggedNode.path is old path here
+                if (currentCheckNodePath === draggedNode.path) { 
                     console.error("Cannot move a folder into itself or one of its descendants.");
                      if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode); else if (!sourceParentNode) newFs.push(draggedNode);
                     return prevFs; 
@@ -526,7 +494,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                 if (parentPathIndex === -1) break; 
                 currentCheckNodePath = parentPathIndex === 0 ? '/' : currentCheckNodePath.substring(0, parentPathIndex);
             }
-             if (currentCheckNodePath === draggedNode.path) { // Final check if target parent itself is the dragged node (should not happen if ID check is there)
+             if (currentCheckNodePath === draggedNode.path) { 
                   console.error("Cannot move a folder into itself.");
                   if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode); else if (!sourceParentNode) newFs.push(draggedNode);
                   return prevFs;
@@ -569,7 +537,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         }
         updatePathsRecursive(draggedNode, newParentPathSegment);
         newPathForDraggedNode = draggedNode.path; 
-        movedNodeReference = JSON.parse(JSON.stringify(draggedNode)); // Update reference to have new path
+        movedNodeReference = JSON.parse(JSON.stringify(draggedNode)); 
 
         if (targetParentNode) {
             if (!targetParentNode.children) targetParentNode.children = [];
@@ -592,7 +560,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                 } else if (draggedNodeType === 'folder' && path.startsWith(oldPathForDraggedNode + '/')) {
                     pathsToClose.push(path);
                 } else {
-                    newOpenedMap.set(path, node); // Keep unaffected files
+                    newOpenedMap.set(path, node); 
                 }
             });
             
