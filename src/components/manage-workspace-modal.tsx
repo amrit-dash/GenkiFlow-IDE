@@ -123,11 +123,12 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
             if (repo.endsWith('.git')) {
               repo = repo.substring(0, repo.length - 4);
             }
+            // Default to 'main' branch. GitHub might redirect if 'main' is not default, or fail.
             targetZipUrl = `https://github.com/${user}/${repo}/archive/refs/heads/main.zip`;
             isTransformedUrl = true;
             toast({ 
               title: "Transforming URL", 
-              description: `Attempting to fetch main branch ZIP for ${user}/${repo}` 
+              description: `Attempting to fetch 'main' branch ZIP for ${user}/${repo}` 
             });
           } else {
             throw new Error("Invalid GitHub repository URL format. Expected format like https://github.com/user/repo.");
@@ -151,7 +152,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     console.log("Attempting to fetch GitHub ZIP from:", targetZipUrl);
     
     try {
-      const response = await fetch(targetZipUrl); // This is line 153 from the error
+      const response = await fetch(targetZipUrl);
       if (!response.ok) {
         let errorDetail = `Failed to fetch ZIP: ${response.status} ${response.statusText}.`;
         if (isTransformedUrl && response.status === 404) {
@@ -159,23 +160,32 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
         } else if (!isTransformedUrl) {
            errorDetail += " Ensure the URL is a direct download link to a .zip file and is publicly accessible.";
         }
+        // Log detailed response info for debugging
+        try {
+            const responseText = await response.text();
+            console.error("GitHub fetch error - Response Text:", responseText.slice(0, 500)); // Log first 500 chars
+        } catch (textErr) {
+            console.error("GitHub fetch error - Could not read response text.");
+        }
+        console.error("GitHub fetch error - Response Headers:", Object.fromEntries(response.headers.entries()));
         throw new Error(errorDetail);
       }
       const zipArrayBuffer = await response.arrayBuffer();
       await processAndReplaceWorkspace(zipArrayBuffer, 'GitHub');
     } catch (error: any) {
-      console.error(`Failed to fetch or process GitHub ZIP from URL: ${targetZipUrl}`, error);
+      console.error(`GitHub Import Fetch/Process Error for URL: ${targetZipUrl}`, error);
       let descriptionToast = "An unexpected error occurred during GitHub import.";
 
-      // Specifically check for "Failed to fetch" which often indicates CORS or network issues
       if (error instanceof TypeError && error.message.toLowerCase().includes("failed to fetch")) {
-        descriptionToast = `The browser could not directly fetch the URL: ${targetZipUrl}. This is often due to browser security (CORS policy) preventing cross-origin requests, or network issues. 
+        descriptionToast = `The browser failed to directly fetch the URL: ${targetZipUrl}. 
         
-        Recommended Solution:
-        1. Manually download the .zip file from GitHub.
-        2. Use the "Upload ZIP & Replace Workspace" option below.
-        
-        Please verify your network connection and the URL.`;
+This is often due to browser security (CORS policy) preventing cross-origin requests, or network issues. While you can download this URL directly in your browser, JavaScript running in the IDE cannot always do the same due to these restrictions.
+
+Recommended Solution:
+1. Manually download the .zip file from GitHub.
+2. Use the "Upload ZIP & Replace Workspace" option below.
+
+Please verify your network connection and that the URL is correct and publicly accessible.`;
       } else if (error.message.startsWith("Failed to fetch ZIP:")) { 
         descriptionToast = error.message; 
       } else if (error.message) { 
@@ -186,7 +196,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
         variant: "destructive", 
         title: "GitHub Import Failed", 
         description: descriptionToast,
-        duration: 15000, // Increased duration for longer message
+        duration: 20000, 
       });
       setIsFetchingGitHub(false);
     }
@@ -269,7 +279,8 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
               or a direct <code className="bg-muted px-1 py-0.5 rounded text-xs">.zip</code> download link.
             </p>
              <p className="text-xs text-muted-foreground mb-2">
-              If a repository URL is provided, we'll attempt to download the <code className="bg-muted px-1 py-0.5 rounded text-xs">main</code> branch ZIP. Direct fetch may be blocked by browser security (CORS).
+              If a repository URL is provided, we'll attempt to download the <code className="bg-muted px-1 py-0.5 rounded text-xs">main</code> branch ZIP.
+              Note: Direct fetching from GitHub via JavaScript can sometimes be blocked by browser security (CORS). If this occurs, please download the ZIP manually and use the "Upload ZIP" option below.
             </p>
             <div className="flex items-center gap-2">
               <Label htmlFor="githubUrl" className="sr-only">GitHub Repository or ZIP URL</Label>
