@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useIde } from '@/contexts/ide-context';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; // Added ScrollBar
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -99,7 +99,7 @@ export function CodeEditorPanel() {
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex flex-col h-full">
           <div className="border-b border-border">
-            <ScrollArea orientation="horizontal" className="pb-0">
+            <ScrollArea> {/* Removed orientation and pb-0 class */}
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const isFileUnsavedInThisTab = file.content !== getFileSystemNode(path)?.content;
@@ -107,7 +107,7 @@ export function CodeEditorPanel() {
                     <TabsTrigger 
                       key={path} 
                       value={path} 
-                      className="px-3 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group"
+                      className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group" // Changed px-3 to pl-3 pr-8
                       title={path}
                     >
                       {file.name}
@@ -116,7 +116,7 @@ export function CodeEditorPanel() {
                         asChild
                         variant="ghost" 
                         size="icon" 
-                        className="ml-2 h-5 w-5 absolute top-1/2 right-1 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 hover:bg-muted/50 data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100"
+                        className="ml-2 h-5 w-5 absolute top-1/2 right-2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" // Changed right-1 to right-2, removed hover:bg-muted/50
                         onClick={(e) => { 
                           e.stopPropagation();
                           if (isFileUnsavedInThisTab) {
@@ -136,6 +136,7 @@ export function CodeEditorPanel() {
                   );
                 })}
               </TabsList>
+              <ScrollBar orientation="horizontal" /> {/* Explicitly added horizontal scrollbar */}
             </ScrollArea>
           </div>
           
