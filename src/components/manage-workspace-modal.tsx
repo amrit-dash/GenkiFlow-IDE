@@ -8,18 +8,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning, Settings2 } from 'lucide-react';
+import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning, Settings2, RotateCcwIcon } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { useToast } from '@/hooks/use-toast';
 import { downloadWorkspaceAsZip, processZipFile } from '@/lib/workspace-utils';
 import type { FileSystemNode } from '@/lib/types';
+import { mockFileSystem } from '@/lib/mock-data';
 
 interface ManageWorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type ProcessingStep = 'idle' | 'confirmUnsupported' | 'confirmOverwrite' | 'processing';
+type ProcessingStep = 'idle' | 'confirmUnsupported' | 'confirmOverwrite' | 'confirmReset';
 
 export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalProps) {
   const { fileSystem, replaceWorkspace } = useIde();
@@ -70,11 +71,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     }
   };
 
-  const processAndReplaceWorkspace = async (zipArrayBuffer: ArrayBuffer, source: 'Upload') => {
+  const processAndPrepareWorkspaceImport = async (zipArrayBuffer: ArrayBuffer, source: 'Upload') => {
     setIsProcessingZip(true); 
 
     try {
-      const { fileSystem: newFs, unsupportedFiles: newUnsupported, singleRootDir } = await processZipFile(zipArrayBuffer);
+      const { fileSystem: newFs, unsupportedFiles: newUnsupported } = await processZipFile(zipArrayBuffer);
       
       setProcessedZipFileSystem(newFs);
       setUnsupportedFiles(newUnsupported);
@@ -109,18 +110,28 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
   const handleProcessZipUpload = async () => {
     if (!selectedZipFile) return;
-    await processAndReplaceWorkspace(await selectedZipFile.arrayBuffer(), 'Upload');
+    await processAndPrepareWorkspaceImport(await selectedZipFile.arrayBuffer(), 'Upload');
   };
   
   const completeWorkspaceReplacement = () => {
     if (processedZipFileSystem) {
-      replaceWorkspace(processedZipFileSystem);
+      replaceWorkspace(processedZipFileSystem, null); // Pass null to not auto-open any file
       toast({ title: "Workspace Imported", description: "The new workspace has been loaded." });
       onClose();
     }
   };
 
-  const resetZipUploadFlow = () => {
+  const handleResetWorkspace = () => {
+    setZipProcessingStep('confirmReset'); // Use same state for confirmation flow
+  };
+
+  const confirmAndExecuteReset = () => {
+    replaceWorkspace(mockFileSystem, null); // Pass null to not auto-open any file
+    toast({title: "Workspace Reset", description: "Workspace has been reset to default."});
+    onClose();
+  };
+
+  const resetModalFlows = () => {
     setSelectedZipFile(null);
     setUnsupportedFiles([]);
     setProcessedZipFileSystem(null);
@@ -130,7 +141,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); resetModalFlows(); } }}>
       <DialogContent className="sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center">
@@ -138,11 +149,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
             Manage Workspace
           </DialogTitle>
           <DialogDescription>
-            Download your current workspace or import a new one by uploading a ZIP file. Importing will replace your current workspace.
+            Download your current workspace, import a new one, or reset to default. Importing or resetting will replace your current workspace.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-6">
+        <div className="flex-1 space-y-6 overflow-y-auto">
           {/* Download Section */}
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><Download className="mr-2 h-4 w-4 text-primary" />Download Current Workspace</h3>
@@ -189,15 +200,28 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
               </Button>
             </div>
           </section>
+
+          <Separator />
+
+          {/* Reset Workspace Section */}
+          <section>
+            <h3 className="text-md font-semibold mb-2 flex items-center"><RotateCcwIcon className="mr-2 h-4 w-4 text-primary" />Reset Workspace</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              This will clear all your current files and data, and restore the default example workspace. This action cannot be undone.
+            </p>
+            <Button onClick={handleResetWorkspace} variant="destructive" disabled={isProcessingZip}>
+              Reset to Default
+            </Button>
+          </section>
         </div>
         
         <DialogFooter className="mt-auto pt-4 border-t">
-          <Button type="button" variant="outline" onClick={onClose}>Close</Button>
+          <Button type="button" variant="outline" onClick={() => { onClose(); resetModalFlows(); }}>Close</Button>
         </DialogFooter>
       </DialogContent>
 
       {/* Alert Dialog for Unsupported Files Confirmation */}
-      <AlertDialog open={zipProcessingStep === 'confirmUnsupported'} onOpenChange={(open) => !open && resetZipUploadFlow()}>
+      <AlertDialog open={zipProcessingStep === 'confirmUnsupported'} onOpenChange={(open) => !open && resetModalFlows()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><FileWarning className="mr-2 h-5 w-5 text-yellow-500" />Unsupported Files Found</AlertDialogTitle>
@@ -212,26 +236,45 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={resetZipUploadFlow}>Cancel Import</AlertDialogCancel>
+            <AlertDialogCancel onClick={resetModalFlows}>Cancel Import</AlertDialogCancel>
             <AlertDialogAction onClick={() => setZipProcessingStep('confirmOverwrite')}>Proceed Excluding Files</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Alert Dialog for Workspace Overwrite Confirmation */}
-      <AlertDialog open={zipProcessingStep === 'confirmOverwrite'} onOpenChange={(open) => !open && resetZipUploadFlow()}>
+      {/* Alert Dialog for Workspace Overwrite Confirmation (from ZIP) */}
+      <AlertDialog open={zipProcessingStep === 'confirmOverwrite'} onOpenChange={(open) => !open && resetModalFlows()}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive" />Confirm Workspace Replacement</AlertDialogTitle>
             <AlertDialogDescription>
-              This will replace your entire current workspace. This action cannot be undone.
+              This will replace your entire current workspace with the contents of the ZIP file. This action cannot be undone.
               Are you sure you want to proceed?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={resetZipUploadFlow}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={resetModalFlows}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={completeWorkspaceReplacement} className="bg-destructive hover:bg-destructive/90">
               Yes, Replace Workspace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Alert Dialog for Reset Workspace Confirmation */}
+      <AlertDialog open={zipProcessingStep === 'confirmReset'} onOpenChange={(open) => !open && resetModalFlows()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive" />Confirm Workspace Reset</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all files and data in your current workspace and restore the default example project. This action cannot be undone.
+              Are you sure you want to reset?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={resetModalFlows}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmAndExecuteReset} className="bg-destructive hover:bg-destructive/90">
+              Yes, Reset Workspace
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

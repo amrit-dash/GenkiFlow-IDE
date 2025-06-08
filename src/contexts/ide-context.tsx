@@ -97,8 +97,11 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     if (isBusy) return; // Don't save while initially loading
     try {
       localStorage.setItem(FS_STORAGE_KEY, JSON.stringify(fileSystem));
-      localStorage.setItem(OPENED_FILES_STORAGE_KEY, JSON.stringify(Array.from(openedFiles.entries())));
-      localStorage.setItem(ACTIVE_FILE_STORAGE_KEY, activeFilePath || "null");
+      // Only save openedFiles and activeFilePath if they are not being cleared by replaceWorkspace
+      if (openedFiles.size > 0 || activeFilePath !== null) {
+        localStorage.setItem(OPENED_FILES_STORAGE_KEY, JSON.stringify(Array.from(openedFiles.entries())));
+        localStorage.setItem(ACTIVE_FILE_STORAGE_KEY, activeFilePath || "null");
+      }
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
@@ -109,7 +112,16 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     setFileSystemState(newNodes);
     setOpenedFilesState(new Map()); // Clear all opened files
     setActiveFilePathState(newActiveFilePath); // Optionally set a new active file, or null
-    // localStorage will be updated by the useEffect above
+    
+    // Explicitly clear localStorage for opened/active files to prevent old state bleed-through
+    // This ensures that after a reset or import, no old tabs/active file reappear on refresh.
+    try {
+      localStorage.setItem(OPENED_FILES_STORAGE_KEY, JSON.stringify([])); // Empty map
+      localStorage.setItem(ACTIVE_FILE_STORAGE_KEY, "null");
+    } catch (error) {
+      console.error("Error clearing workspace state from localStorage:", error);
+    }
+    // The main FS (newNodes) will be saved by the other useEffect when fileSystem state updates.
   }, []);
 
 
@@ -259,8 +271,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         }
         return newMap;
     });
-    // Note: We do NOT call setFileSystemState here. Undo/Redo only affects editor state.
-    // The file becomes "unsaved" until an explicit save action.
   }, []);
 
   const redoContentChange = useCallback((filePath: string) => {
@@ -275,7 +285,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         }
         return newMap;
     });
-    // Note: We do NOT call setFileSystemState here.
   }, []);
 
 
@@ -307,7 +316,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
           }
       }
 
-      let baseName = name; const defaultExtension = ".txt"; let extension = "";
+      let baseName = name; let extension = "";
       if (type === 'file') { 
         const lastDotIndex = baseName.lastIndexOf('.');
         if (lastDotIndex > 0) { 
@@ -461,7 +470,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
   const moveNode = useCallback((draggedNodeId: string, targetParentFolderId: string | null) => {
     let oldPathForDraggedNode = '';
     let newPathForDraggedNode = '';
-    let draggedNodeType: 'file' | 'folder' | undefined;
     let movedNodeReference: FileSystemNode | null = null;
 
     setFileSystemState(prevFs => {
@@ -490,7 +498,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         
         movedNodeReference = JSON.parse(JSON.stringify(draggedNode)); 
         oldPathForDraggedNode = draggedNode.path; 
-        draggedNodeType = draggedNode.type;
+        // draggedNodeType = draggedNode.type; // This was here, but not used later, can be removed if still not needed
 
         let targetParentNode: FileSystemNode | null = null;
         if (targetParentFolderId) {
@@ -634,4 +642,3 @@ export function useIde() {
   if (context === undefined) throw new Error('useIde must be used within an IdeProvider');
   return context;
 }
-
