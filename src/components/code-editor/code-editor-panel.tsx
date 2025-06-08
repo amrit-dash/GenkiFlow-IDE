@@ -145,7 +145,7 @@ export function CodeEditorPanel() {
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
-                    className="w-full h-full min-h-[calc(100vh-150px)] p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+                    className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
                     placeholder="Select a file to view its content or start typing..."
                     spellCheck="false"
                   />
@@ -154,16 +154,21 @@ export function CodeEditorPanel() {
           )}
         </Tabs>
       )}
-       {activeFilePath && hasUnsavedChanges && (
+       {activeFilePath && hasUnsavedChanges && !isSaving && (
         <Button
           onClick={handleSave}
           className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
-          disabled={isSaving}
           title="Save File (Ctrl+S)"
         >
-          {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+          <Save className="h-5 w-5" />
           <span className="sr-only">Save File</span>
         </Button>
+      )}
+      {isSaving && (
+         <div className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary/80">
+            <Loader2 className="h-5 w-5 animate-spin text-primary-foreground" />
+             <span className="sr-only">Saving...</span>
+         </div>
       )}
     </div>
   );
