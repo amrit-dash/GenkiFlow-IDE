@@ -35,6 +35,7 @@ export function CodeEditorPanel() {
   const { toast } = useToast();
 
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [isRefactoringContextMenu, setIsRefactoringContextMenu] = useState(false);
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null); 
 
@@ -46,23 +47,24 @@ export function CodeEditorPanel() {
       const fileNode = openedFiles.get(activeFilePath);
       setCurrentContent(fileNode?.content || "");
     } else if (!activeFilePath && openedFiles.size > 0) {
+      // If no active file path but files are open, set the first one as active
       const firstKey = Array.from(openedFiles.keys())[0];
       setActiveFilePath(firstKey);
       // Content will be set by the above block once activeFilePath updates
     } else if (openedFiles.size === 0) {
-      setCurrentContent("");
+      setCurrentContent(""); // Clear content if no files are open
     }
   }, [activeFilePath, openedFiles, setActiveFilePath]);
 
   useEffect(() => {
     let currentActiveUnsaved = false;
     if (activeFilePath && openedFiles.has(activeFilePath)) {
-      const activeFileNode = openedFiles.get(activeFilePath); // Check against openedFiles for real-time editor content
-      const persistedNode = getFileSystemNode(activeFilePath); // Check against fileSystem for "saved" state
-      const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      const activeFileNodeInEditor = openedFiles.get(activeFilePath); // Reflects live editor state
+      const persistedNode = getFileSystemNode(activeFilePath); // Reflects "saved" state from fileSystem
+      const persistedContent = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
       
-      // Unsaved if editor content (currentContent) differs from "saved" content in fileSystem
-      if (currentContent !== persistedContent) {
+      // Unsaved if editor content (currentContent from activeFileNodeInEditor) differs from "saved" content in fileSystem
+      if (activeFileNodeInEditor && activeFileNodeInEditor.content !== persistedContent) {
         currentActiveUnsaved = true;
       }
     }
@@ -70,38 +72,52 @@ export function CodeEditorPanel() {
 
     let count = 0;
     openedFiles.forEach((tabFileNode, path) => {
-      const contentToCheck = (path === activeFilePath) ? currentContent : tabFileNode.content;
+      // For the active file, its content on the openedFiles map is the source of truth for unsaved status calculation
+      const contentToCheck = tabFileNode.content; 
       const persistedNode = getFileSystemNode(path);
-      const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
       if (contentToCheck !== persistedContentOfNode) {
         count++;
       }
     });
     setUnsavedFilesCount(count);
-  }, [currentContent, activeFilePath, openedFiles, getFileSystemNode]);
+  }, [activeFilePath, openedFiles, getFileSystemNode]);
 
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
-    setCurrentContent(newText);
-    // To make live edits reflect immediately in the tab's "unsaved" state without waiting for save
+    setCurrentContent(newText); // Update local state for immediate textarea reflection
     if (activeFilePath) {
-        const activeFile = openedFiles.get(activeFilePath);
-        if (activeFile) {
-            openedFiles.set(activeFilePath, {...activeFile, content: newText });
-            // This direct mutation of openedFiles might need a state setter if it doesn't trigger re-renders for unsaved count
-        }
+      // Update content in openedFiles map but DO NOT trigger save/history yet
+      // This is for live unsaved status calculation. Saving/history is handled by updateFileContent.
+      const file = openedFiles.get(activeFilePath);
+      if (file) {
+        openedFiles.set(activeFilePath, { ...file, content: newText });
+        // Trigger a re-check of unsaved status without creating a new map instance if not necessary
+        // The dependency on 'openedFiles' in the unsaved check useEffect should handle this if 'openedFiles' itself changes.
+        // To be safe, force a recalculation (or rely on the useEffect for openedFiles)
+        setActiveFileHasUnsavedChanges(newText !== (getFileSystemNode(activeFilePath) as any)?.content);
+        let count = 0;
+        openedFiles.forEach((tabFileNode, path) => {
+          const contentToEval = path === activeFilePath ? newText : tabFileNode.content;
+          const persistedNode = getFileSystemNode(path);
+          const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
+          if (contentToEval !== persistedContentOfNode) count++;
+        });
+        setUnsavedFilesCount(count);
+      }
     }
   };
 
   const handleSave = useCallback(async () => {
     if (activeFilePath && activeFileHasUnsavedChanges) {
       setIsSaving(true);
-      // currentContent already reflects the latest editor state.
-      // updateFileContent will handle history.
+      // currentContent from local state IS the latest.
+      // updateFileContent also updates the 'content' on the openedFiles map entry.
       await updateFileContent(activeFilePath, currentContent); 
       setTimeout(() => {
         setIsSaving(false);
+        // No toast for single save
       }, 300);
     }
   }, [activeFilePath, currentContent, activeFileHasUnsavedChanges, updateFileContent]);
@@ -113,9 +129,10 @@ export function CodeEditorPanel() {
     const savePromises: Promise<void>[] = [];
 
     openedFiles.forEach((tabFileNode, path) => {
-      const contentToSave = (path === activeFilePath) ? currentContent : tabFileNode.content;
+      // Use the content from the tabFileNode as it's the most up-to-date for each tab
+      const contentToSave = tabFileNode.content; 
       const persistedNode = getFileSystemNode(path);
-      const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
       
       if (contentToSave !== persistedContentOfNode && contentToSave !== undefined) {
         savePromises.push(updateFileContent(path, contentToSave));
@@ -126,8 +143,9 @@ export function CodeEditorPanel() {
 
     setTimeout(() => {
       setIsSaving(false);
+      // No toast for save all
     }, 300); 
-  }, [activeFilePath, currentContent, openedFiles, getFileSystemNode, updateFileContent, unsavedFilesCount]);
+  }, [openedFiles, getFileSystemNode, updateFileContent, unsavedFilesCount]);
 
 
   useEffect(() => {
@@ -135,15 +153,16 @@ export function CodeEditorPanel() {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const saveKeyPressed = (isMac && event.metaKey && event.key === 's') || (!isMac && event.ctrlKey && event.key === 's');
       const undoKeyPressed = (isMac && event.metaKey && event.key === 'z' && !event.shiftKey) || (!isMac && event.ctrlKey && event.key === 'z' && !event.shiftKey);
-      const redoKeyPressed = (isMac && event.metaKey && event.key === 'z' && event.shiftKey) || (!isMac && event.ctrlKey && event.key === 'y') || (!isMac && event.ctrlKey && event.key === 'z' && event.shiftKey); // Cmd+Shift+Z or Ctrl+Shift+Z for redo on some systems
+      const redoKeyPressed = (isMac && event.metaKey && event.key === 'z' && event.shiftKey) || (!isMac && event.ctrlKey && event.key === 'y') || (!isMac && event.ctrlKey && event.key === 'z' && event.shiftKey);
 
       if (saveKeyPressed) {
         event.preventDefault();
         if (activeFileHasUnsavedChanges) {
           handleSave();
-        } else if (unsavedFilesCount > 0) {
-           // Optionally save all if active is saved but others aren't
-           // handleSaveAll();
+        } else if (unsavedFilesCount > 0 && !activeFileHasUnsavedChanges) {
+           // If active is saved but others aren't, Ctrl+S could trigger Save All.
+           // Or prioritize active file only. Current: only saves active IF unsaved.
+           // For now, let Save All button handle this scenario explicitly.
         }
       } else if (activeFilePath && undoKeyPressed) {
         event.preventDefault();
@@ -161,9 +180,10 @@ export function CodeEditorPanel() {
 
   const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
     event.preventDefault();
-    if (dropdownTriggerRef.current) {
-      setContextMenuOpen(true);
-    }
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+    // The DropdownMenuTrigger is not directly used to open, so we toggle manually.
+    // However, it's better to control DropdownMenu's open prop directly.
+    setContextMenuOpen(true); 
   };
 
   const handleContextMenuRefactor = async () => {
@@ -177,14 +197,12 @@ export function CodeEditorPanel() {
       const fileNameForContext = (activeNode && !Array.isArray(activeNode)) ? activeNode.name : activeFilePath;
 
       const result = await refactorCodeServer({
-        codeSnippet: currentContent, // Send current editor content
+        codeSnippet: currentContent, 
         fileContext: `File: ${fileNameForContext}`,
       });
 
       if (result.suggestion && result.suggestion.proposedCode) {
-        // Directly update content using updateFileContent for history management
         await updateFileContent(activeFilePath, result.suggestion.proposedCode);
-        // currentContent will update via useEffect listening to openedFiles
         toast({
           title: "Refactor Applied",
           description: "Code refactored and applied to the editor.",
@@ -225,6 +243,10 @@ export function CodeEditorPanel() {
     statusDisplay = "Saved";
   }
 
+  const showSaveButton = activeFileHasUnsavedChanges && !isSaving && unsavedFilesCount > 1;
+  const showSaveAllButton = unsavedFilesCount > 0 && !isSaving;
+
+
   return (
     <div className="flex flex-col bg-background h-full">
       {openedFiles.size > 0 && (
@@ -234,7 +256,7 @@ export function CodeEditorPanel() {
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const persistedNode = getFileSystemNode(path);
-                  const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                  const persistedContent = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
                   const isFileUnsavedInThisTab = file.content !== persistedContent;
                   return (
                     <TabsTrigger
@@ -258,8 +280,10 @@ export function CodeEditorPanel() {
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                           e.stopPropagation();
-                          const contentForThisTab = path === activeFilePath ? currentContent : file.content;
-                          const persistedContentForThisTab = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                          const contentForThisTab = openedFiles.get(path)?.content; // Use content from openedFiles map
+                          const persistedNodeForThisTab = getFileSystemNode(path);
+                          const persistedContentForThisTab = (persistedNodeForThisTab && !Array.isArray(persistedNodeForThisTab) && persistedNodeForThisTab.type === 'file') ? persistedNodeForThisTab.content : undefined;
+                          
                           if (contentForThisTab !== persistedContentForThisTab) {
                             if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                               return;
@@ -270,8 +294,9 @@ export function CodeEditorPanel() {
                         onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                            if (e.key === 'Enter' || e.key === ' ') {
                              e.stopPropagation();
-                             const contentForThisTab = path === activeFilePath ? currentContent : file.content;
-                             const persistedContentForThisTab = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                             const contentForThisTab = openedFiles.get(path)?.content;
+                             const persistedNodeForThisTab = getFileSystemNode(path);
+                             const persistedContentForThisTab = (persistedNodeForThisTab && !Array.isArray(persistedNodeForThisTab) && persistedNodeForThisTab.type === 'file') ? persistedNodeForThisTab.content : undefined;
                              if (contentForThisTab !== persistedContentForThisTab) {
                                if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                                  return;
@@ -294,11 +319,14 @@ export function CodeEditorPanel() {
             
           <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
             <DropdownMenuTrigger ref={dropdownTriggerRef} asChild>
-                <button className="fixed opacity-0 pointer-events-none" style={{top:0, left:0, width:0, height:0}} />
+                 {/* Invisible trigger, positioned by onContextMenu handler */}
+                <button className="fixed opacity-0 pointer-events-none" style={{top:contextMenuPosition.y, left:contextMenuPosition.x, width:0, height:0}} />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               className="w-56"
               onCloseAutoFocus={(e) => e.preventDefault()} 
+              // Position manually if needed, though Radix usually handles it well if trigger is visible
+              // style={{ position: 'fixed', top: contextMenuPosition.y, left: contextMenuPosition.x }}
             >
               <DropdownMenuItem
                 onClick={handleContextMenuRefactor}
@@ -338,23 +366,23 @@ export function CodeEditorPanel() {
             {statusDisplay}
           </div>
           <div className="flex items-center gap-2">
-            {activeFileHasUnsavedChanges && !isSaving && (
+            {showSaveButton && (
               <Button 
                 variant="ghost"
                 size="sm" 
                 onClick={handleSave} 
-                className="h-auto px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+                className="h-auto px-2 py-0.5 text-xs text-muted-foreground hover:bg-transparent hover:text-primary"
                 title="Save Current File (Ctrl+S)"
               >
                 <Save className="h-3 w-3 mr-1" /> Save
               </Button>
             )}
-            {unsavedFilesCount > 0 && !isSaving && ( // Show Save All if any file (even non-active) is unsaved
+            {showSaveAllButton && (
                <Button 
                 variant="ghost"
                 size="sm" 
                 onClick={handleSaveAll} 
-                className="h-auto px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+                className="h-auto px-2 py-0.5 text-xs text-muted-foreground hover:bg-transparent hover:text-primary"
                 title="Save All Pending Files"
               >
                 <Save className="h-3 w-3 mr-1" /> Save All
