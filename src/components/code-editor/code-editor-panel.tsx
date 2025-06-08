@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -8,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { XIcon, Loader2, Save, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +19,16 @@ import {
 import { refactorCodeServer } from '@/app/(ide)/actions';
 
 export function CodeEditorPanel() {
-  const { activeFilePath, openedFiles, setActiveFilePath, closeFile, updateFileContent, getFileSystemNode } = useIde();
+  const { 
+    activeFilePath, 
+    openedFiles, 
+    setActiveFilePath, 
+    closeFile, 
+    updateFileContent, 
+    getFileSystemNode 
+  } = useIde();
+  
   const [currentContent, setCurrentContent] = useState<string>("");
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -27,67 +36,114 @@ export function CodeEditorPanel() {
   const [isRefactoringContextMenu, setIsRefactoringContextMenu] = useState(false);
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null); 
 
-  useEffect(() => {
-    if (activeFilePath && openedFiles.has(activeFilePath)) {
-      const fileNode = openedFiles.get(activeFilePath);
-      if (fileNode?.content !== currentContent) {
-        setCurrentContent(fileNode?.content || "");
-      }
-      const persistedNode = getFileSystemNode(activeFilePath);
-      const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
-      setHasUnsavedChanges(fileNode?.content !== persistedContent);
-    } else if (!activeFilePath && openedFiles.size > 0) {
-      setActiveFilePath(Array.from(openedFiles.keys())[0]);
-    } else if (openedFiles.size === 0) {
-      setCurrentContent("");
-      setHasUnsavedChanges(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilePath, openedFiles]); 
+  const [activeFileHasUnsavedChanges, setActiveFileHasUnsavedChanges] = useState(false);
+  const [unsavedFilesCount, setUnsavedFilesCount] = useState(0);
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
-        const fileInTab = openedFiles.get(activeFilePath);
-        const persistedFileNode = getFileSystemNode(activeFilePath);
-        const persistedContent = (persistedFileNode && !Array.isArray(persistedFileNode)) ? persistedFileNode.content : undefined;
-        setHasUnsavedChanges(fileInTab?.content !== persistedContent);
+      const fileNode = openedFiles.get(activeFilePath);
+      // Only update currentContent if it's different from the tab's content
+      // or if the active file path changes to prevent unnecessary re-renders/cursor jumps.
+      if (fileNode?.content !== currentContent || !currentContent) {
+         setCurrentContent(fileNode?.content || "");
+      }
+    } else if (!activeFilePath && openedFiles.size > 0) {
+      const firstKey = Array.from(openedFiles.keys())[0];
+      setActiveFilePath(firstKey);
+      setCurrentContent(openedFiles.get(firstKey)?.content || "");
+    } else if (openedFiles.size === 0) {
+      setCurrentContent("");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openedFiles.get(activeFilePath)?.content, activeFilePath, getFileSystemNode]); 
+  }, [activeFilePath, openedFiles]); // Rely on activeFilePath and openedFiles map itself changing
+
+  useEffect(() => {
+    let currentActiveUnsaved = false;
+    if (activeFilePath && openedFiles.has(activeFilePath)) {
+      const persistedNode = getFileSystemNode(activeFilePath);
+      const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      if (currentContent !== persistedContent) {
+        currentActiveUnsaved = true;
+      }
+    }
+    setActiveFileHasUnsavedChanges(currentActiveUnsaved);
+
+    let count = 0;
+    openedFiles.forEach((tabFileNode, path) => {
+      // For the active file, compare editor's currentContent. For others, compare tab's content.
+      const contentToCheck = (path === activeFilePath) ? currentContent : tabFileNode.content;
+      const persistedNode = getFileSystemNode(path);
+      const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      if (contentToCheck !== persistedContentOfNode) {
+        count++;
+      }
+    });
+    setUnsavedFilesCount(count);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentContent, activeFilePath, openedFiles, getFileSystemNode]);
 
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
     setCurrentContent(newText);
-    if (activeFilePath) {
-      const persistedNode = getFileSystemNode(activeFilePath);
-      const originalPersistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
-      setHasUnsavedChanges(newText !== originalPersistedContent);
-    }
+    // activeFileHasUnsavedChanges and unsavedFilesCount will update via useEffect
   };
 
-  const handleSave = useCallback(() => {
-    if (activeFilePath && hasUnsavedChanges) {
+  const handleSave = useCallback(async () => {
+    if (activeFilePath && activeFileHasUnsavedChanges) {
       setIsSaving(true);
-      updateFileContent(activeFilePath, currentContent);
+      await updateFileContent(activeFilePath, currentContent); // updateFileContent is now potentially async
+      // No toast here as per user request
       setTimeout(() => {
         setIsSaving(false);
+        // States for unsaved changes will be recalculated by useEffect
       }, 300);
     }
-  }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent]);
+  }, [activeFilePath, currentContent, activeFileHasUnsavedChanges, updateFileContent]);
+
+  const handleSaveAll = useCallback(async () => {
+    if (unsavedFilesCount === 0) return;
+    setIsSaving(true);
+
+    const savePromises: Promise<void>[] = [];
+
+    openedFiles.forEach((tabFileNode, path) => {
+      const contentToSave = (path === activeFilePath) ? currentContent : tabFileNode.content;
+      const persistedNode = getFileSystemNode(path);
+      const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+      
+      if (contentToSave !== persistedContentOfNode && contentToSave !== undefined) {
+        savePromises.push(updateFileContent(path, contentToSave));
+      }
+    });
+    
+    await Promise.all(savePromises);
+
+    setTimeout(() => {
+      setIsSaving(false);
+      // States for unsaved changes will be recalculated by useEffect
+    }, 300); 
+  }, [activeFilePath, currentContent, openedFiles, getFileSystemNode, updateFileContent, unsavedFilesCount]);
+
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 's') {
         event.preventDefault();
-        handleSave();
+        if (activeFileHasUnsavedChanges) {
+          handleSave();
+        } else if (unsavedFilesCount > 0) {
+          // Optionally, make Ctrl+S save all if active file is saved but others are not.
+          // For now, it only saves the active file if it's unsaved.
+          // handleSaveAll(); 
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleSave]);
+  }, [handleSave, activeFileHasUnsavedChanges, unsavedFilesCount]);
 
   const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
     event.preventDefault();
@@ -112,8 +168,10 @@ export function CodeEditorPanel() {
       });
 
       if (result.suggestion && result.suggestion.proposedCode) {
-        setCurrentContent(result.suggestion.proposedCode); 
-        updateFileContent(activeFilePath, result.suggestion.proposedCode);
+        // Directly update currentContent for the Textarea
+        setCurrentContent(result.suggestion.proposedCode);
+        // Persist change (this will also update openedFiles map via context's updateFileContent)
+        await updateFileContent(activeFilePath, result.suggestion.proposedCode);
         toast({
           title: "Refactor Applied",
           description: "Code refactored and applied to the editor.",
@@ -145,6 +203,15 @@ export function CodeEditorPanel() {
     );
   }
 
+  let statusDisplay;
+  if (isSaving) {
+    statusDisplay = <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving...</>;
+  } else if (unsavedFilesCount > 0) {
+    statusDisplay = `${unsavedFilesCount} file${unsavedFilesCount > 1 ? 's' : ''} pending save`;
+  } else {
+    statusDisplay = "Saved";
+  }
+
   return (
     <div className="flex flex-col bg-background h-full">
       {openedFiles.size > 0 && (
@@ -155,6 +222,7 @@ export function CodeEditorPanel() {
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const persistedNode = getFileSystemNode(path);
                   const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                  // For tab dot, compare tab content with persisted content
                   const isFileUnsavedInThisTab = file.content !== persistedContent;
                   return (
                     <TabsTrigger
@@ -178,7 +246,9 @@ export function CodeEditorPanel() {
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                           e.stopPropagation();
-                          if (isFileUnsavedInThisTab) {
+                          const contentForThisTab = path === activeFilePath ? currentContent : file.content;
+                          const persistedContentForThisTab = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                          if (contentForThisTab !== persistedContentForThisTab) {
                             if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                               return;
                             }
@@ -188,7 +258,9 @@ export function CodeEditorPanel() {
                         onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                            if (e.key === 'Enter' || e.key === ' ') {
                              e.stopPropagation();
-                             if (isFileUnsavedInThisTab) {
+                             const contentForThisTab = path === activeFilePath ? currentContent : file.content;
+                             const persistedContentForThisTab = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
+                             if (contentForThisTab !== persistedContentForThisTab) {
                                if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                                  return;
                                }
@@ -249,23 +321,34 @@ export function CodeEditorPanel() {
           )}
         </Tabs>
       )}
-       <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center shrink-0">
-          <p>Ln: 1, Col: 1</p> 
-          {activeFilePath && hasUnsavedChanges && !isSaving && (
-            <button 
-              onClick={handleSave} 
-              className="ml-auto px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 flex items-center gap-1"
-              title="Save File (Ctrl+S)"
-            >
-              <Save className="h-3 w-3" /> Save
-            </button>
-          )}
-          {isSaving && (
-            <span className="ml-auto text-xs flex items-center"><Loader2 className="h-3 w-3 animate-spin mr-1" />Saving...</span>
-          )}
-          {!hasUnsavedChanges && activeFilePath && !isSaving && (
-            <span className="ml-auto text-xs text-muted-foreground/70">Saved</span>
-          )}
+       <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center justify-between shrink-0">
+          <div className="flex items-center">
+            {statusDisplay}
+          </div>
+          <div className="flex items-center gap-2">
+            {activeFileHasUnsavedChanges && !isSaving && (
+              <Button 
+                variant="ghost"
+                size="sm" 
+                onClick={handleSave} 
+                className="h-auto px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+                title="Save Current File (Ctrl+S)"
+              >
+                <Save className="h-3 w-3 mr-1" /> Save
+              </Button>
+            )}
+            {unsavedFilesCount > 0 && !isSaving && (
+               <Button 
+                variant="ghost"
+                size="sm" 
+                onClick={handleSaveAll} 
+                className="h-auto px-2 py-0.5 text-xs hover:bg-accent hover:text-accent-foreground"
+                title="Save All Pending Files"
+              >
+                <Save className="h-3 w-3 mr-1" /> Save All
+              </Button>
+            )}
+          </div>
        </div>
     </div>
   );
