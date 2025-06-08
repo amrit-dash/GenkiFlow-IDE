@@ -49,7 +49,7 @@ export default function IdePage() {
           <ResizableHandle withHandle />
           
           {/* Bottom Panel: Terminal */}
-          <ResizablePanel defaultSize={30} minSize={10} maxSize={70} className="min-h-[100px]">
+          <ResizablePanel defaultSize={30} minSize={10} maxSize={70}>
             <TerminalPanel />
           </ResizablePanel>
         </ResizablePanelGroup>
