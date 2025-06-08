@@ -112,17 +112,15 @@ export function CodeEditorPanel() {
                     >
                       {file.name}
                       {isFileUnsavedInThisTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
-                      <div 
+                      <div
                         role="button"
                         tabIndex={0}
                         className={cn(
                           "inline-flex items-center justify-center transition-colors", 
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", 
-                          "hover:bg-transparent hover:text-accent", 
+                          "text-foreground hover:bg-transparent hover:text-accent", 
                           "p-0.5 h-auto w-auto", 
-                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2", 
-                          "opacity-0 group-hover:opacity-100 focus-within:opacity-100", 
-                          "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" 
+                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2"
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
                           e.stopPropagation();
@@ -172,16 +170,16 @@ export function CodeEditorPanel() {
         </Tabs>
       )}
        <div 
+          role="button"
+          tabIndex={(activeFilePath && hasUnsavedChanges && !isSaving) ? 0 : -1}
           onClick={handleSave}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
           className={cn(
             "absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer",
             "bg-primary hover:bg-primary/90",
             "transition-opacity duration-150 ease-in-out",
             (activeFilePath && hasUnsavedChanges && !isSaving) ? "opacity-100" : "opacity-0 pointer-events-none"
           )}
-          role="button"
-          tabIndex={(activeFilePath && hasUnsavedChanges && !isSaving) ? 0 : -1}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
           title="Save File (Ctrl+S)"
           aria-hidden={!(activeFilePath && hasUnsavedChanges && !isSaving)}
         >
