@@ -243,7 +243,7 @@ export function CodeEditorPanel() {
     statusDisplay = "Saved";
   }
 
-  const showSaveButton = activeFileHasUnsavedChanges && !isSaving && unsavedFilesCount > 1;
+  const showSaveButton = activeFileHasUnsavedChanges && unsavedFilesCount > 1;
   const showSaveAllButton = unsavedFilesCount > 0 && !isSaving;
 
 
@@ -262,11 +262,13 @@ export function CodeEditorPanel() {
                     <TabsTrigger
                       key={path}
                       value={path}
-                      className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group"
+                      className="pl-3 pr-8 py-2.5 text-sm relative data-[state=active]:bg-card data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none group justify-start"
                       title={path}
                     >
-                      {(file && file.name) ? file.name : path.substring(path.lastIndexOf('/') + 1)}
-                      {isFileUnsavedInThisTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
+                      {isFileUnsavedInThisTab && <span className="mr-1.5 text-amber-500 text-xs shrink-0">•</span>}
+                      <span className="truncate">
+                        {(file && file.name) ? file.name : path.substring(path.lastIndexOf('/') + 1)}
+                      </span>
                       <div
                         role="button"
                         tabIndex={0}
@@ -393,3 +395,4 @@ export function CodeEditorPanel() {
     </div>
   );
 }
+
