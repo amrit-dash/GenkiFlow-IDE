@@ -95,7 +95,7 @@ export function CodeEditorPanel() {
   }
   
   return (
-    <div className="flex-1 flex flex-col bg-background h-full relative">
+    <div className="flex flex-col bg-background h-full relative">
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="border-b border-border">
@@ -196,4 +196,3 @@ export function CodeEditorPanel() {
     </div>
   );
 }
-
