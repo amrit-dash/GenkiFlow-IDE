@@ -165,9 +165,9 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent
                 value={activeFilePath}
-                className={cn("flex-1 p-0 m-0 overflow-auto min-h-0", debugTabsContentClass)}
+                className={cn("flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0", debugTabsContentClass)}
               >
-                <ScrollArea className={cn("h-full w-full", debugScrollAreaClass)}>
+                <ScrollArea className={cn("flex-1 w-full min-h-0", debugScrollAreaClass)}>
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
