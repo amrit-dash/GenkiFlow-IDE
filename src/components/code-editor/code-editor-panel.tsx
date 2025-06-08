@@ -22,7 +22,7 @@ export function CodeEditorPanel() {
   const debugTabsClass = "bg-blue-500/50";
   const debugTabsContentClass = "bg-green-500/50";
   const debugScrollAreaClass = "bg-orange-500/50";
-  const debugTextareaClass = "bg-purple-600/50";
+  const debugTextareaWrapperClass = "bg-purple-600/50"; // Moved here
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
@@ -168,13 +168,15 @@ export function CodeEditorPanel() {
                 className={cn("flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0", debugTabsContentClass)}
               >
                 <ScrollArea className={cn("flex-1 w-full min-h-0", debugScrollAreaClass)}>
-                  <Textarea
-                    value={currentContent}
-                    onChange={handleContentChange}
-                    className={cn("flex-1 w-full min-h-0 p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none", debugTextareaClass)}
-                    placeholder="Select a file to view its content or start typing..."
-                    spellCheck="false"
-                  />
+                   <div className={cn("flex-1 min-h-0", debugTextareaWrapperClass)}>
+                    <Textarea
+                      value={currentContent}
+                      onChange={handleContentChange}
+                      className={cn("w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none")}
+                      placeholder="Select a file to view its content or start typing..."
+                      spellCheck="false"
+                    />
+                  </div>
                 </ScrollArea>
             </TabsContent>
           )}
