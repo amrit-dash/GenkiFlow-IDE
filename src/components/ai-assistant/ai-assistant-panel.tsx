@@ -7,18 +7,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Sparkles, Wand2, TextQuote, SearchCode, Replace, Send, Loader2 } from 'lucide-react';
+import { Sparkles, Wand2, TextQuote, SearchCode, Replace, Send, Loader2, PanelLeftOpen } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
 import type { AiSuggestion } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
-export function AiAssistantPanel() {
+interface AiAssistantPanelProps {
+  isVisible: boolean; // Parent controls visibility
+  onToggleVisibility: () => void;
+}
+
+export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantPanelProps) {
   const { activeFilePath, openedFiles, updateFileContent } = useIde();
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<string | undefined>(undefined);
 
-  // State for each AI feature's output
   const [summary, setSummary] = useState<string | null>(null);
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [refactorSuggestions, setRefactorSuggestions] = useState<AiSuggestion[] | null>(null);
@@ -102,13 +107,12 @@ export function AiAssistantPanel() {
   const handleApplySuggestion = (suggestedCode: string) => {
     if (activeFilePath) {
       updateFileContent(activeFilePath, suggestedCode);
-      // Maybe add a toast notification
     }
   };
 
   const FeatureCard: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; action?: () => void; actionLabel?: string; requiresCode?: boolean }> = 
     ({ title, icon: Icon, children, action, actionLabel, requiresCode = false }) => (
-    <Card className="bg-card/50 w-full"> {/* Ensure card takes full width of trigger */}
+    <Card className="bg-card/50 w-full">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -116,38 +120,35 @@ export function AiAssistantPanel() {
             <CardTitle className="text-base font-semibold">{title}</CardTitle>
           </div>
           {action && actionLabel && (
-            <Button
-              asChild
-              size="sm"
-              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                // Prevent the click from toggling the accordion
-                e.stopPropagation();
-                if (action) {
-                  action();
-                }
-              }}
-              disabled={isLoading || (requiresCode && !currentCode)}
-            >
-              <div
+             <div
                 role="button"
                 tabIndex={isLoading || (requiresCode && !currentCode) ? -1 : 0}
+                onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                    e.stopPropagation(); 
+                    if (!(isLoading || (requiresCode && !currentCode))) {
+                        if(action) action();
+                    }
+                }}
                 onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                   if (!(isLoading || (requiresCode && !currentCode))) {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (action) {
-                        action();
-                      }
+                      if(action) action();
                     }
                   }
                 }}
                 aria-disabled={isLoading || (requiresCode && !currentCode)}
+                className={cn(
+                    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+                    "bg-primary text-primary-foreground hover:bg-primary/90",
+                    "h-9 px-3", 
+                    (isLoading || (requiresCode && !currentCode)) && "opacity-50 cursor-not-allowed"
+                )}
               >
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                {isLoading && actionLabel === "Summarize" || isLoading && actionLabel === "Suggest" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                 {actionLabel}
               </div>
-            </Button>
           )}
         </div>
       </CardHeader>
@@ -157,13 +158,21 @@ export function AiAssistantPanel() {
     </Card>
   );
 
+  // Panel is controlled by parent's isVisible prop
+  // if (!isVisible) return null; // This will be handled by the parent not rendering this component
+
   return (
     <div className="w-full border-l border-border bg-sidebar flex flex-col h-full">
-      <div className="p-4 border-b border-sidebar-border">
+      <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="w-6 h-6 text-primary" />
           <h2 className="text-lg font-headline font-semibold">AI Assistant</h2>
         </div>
+        {/* Toggle button is now global in IdePage.tsx, can be removed from here if preferred */}
+        {/* <Button variant="ghost" size="icon" onClick={onToggleVisibility} className="h-7 w-7" data-action-button>
+          <PanelLeftOpen className="h-5 w-5" />
+          <span className="sr-only">{isVisible ? "Hide AI Assistant" : "Show AI Assistant"}</span>
+        </Button> */}
       </div>
       
       <ScrollArea className="flex-1 p-1">
@@ -172,10 +181,11 @@ export function AiAssistantPanel() {
         
         <Accordion type="single" collapsible value={activeAccordion} onValueChange={setActiveAccordion}>
           <AccordionItem value="summarize">
-            <AccordionTrigger className="p-0 hover:no-underline flex"> {/* Added flex to allow card to fill width */}
+            <AccordionTrigger className="p-0 hover:no-underline flex">
               <FeatureCard title="Summarize Code" icon={TextQuote} action={handleSummarize} actionLabel="Summarize" requiresCode>
                 {summary && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{summary}</p>}
                 {!summary && !isLoading && <p className="text-sm text-muted-foreground">Summarize the code in the active editor tab.</p>}
+                {isLoading && actionLabel === "Summarize" && <p className="text-sm text-muted-foreground">Summarizing...</p>}
               </FeatureCard>
             </AccordionTrigger>
             <AccordionContent className="p-2">
@@ -205,6 +215,7 @@ export function AiAssistantPanel() {
               <FeatureCard title="Refactor Code" icon={Replace} action={handleRefactor} actionLabel="Suggest" requiresCode>
                 {!refactorSuggestions && <p className="text-sm text-muted-foreground">Get refactoring suggestions for the active code.</p>}
                 {refactorSuggestions && <p className="text-sm text-muted-foreground">{refactorSuggestions.length} suggestion(s) found. Displayed below.</p>}
+                 {isLoading && actionLabel === "Suggest" && <p className="text-sm text-muted-foreground">Getting suggestions...</p>}
               </FeatureCard>
             </AccordionTrigger>
             <AccordionContent className="p-2 space-y-3">
@@ -253,7 +264,6 @@ export function AiAssistantPanel() {
                 else if (prompt.toLowerCase().includes("find") || prompt.toLowerCase().includes("example")) handleFindExamples();
                 else if (prompt.toLowerCase().includes("summarize")) handleSummarize();
                 else if (prompt.toLowerCase().includes("refactor")) handleRefactor();
-                // else generic prompt to AI?
               }
             }}
           />
@@ -263,10 +273,9 @@ export function AiAssistantPanel() {
             className="absolute right-3 top-1/2 -translate-y-1/2" 
             disabled={isLoading || !prompt}
             onClick={() => {
-              // Heuristic for action based on prompt
               if (prompt.toLowerCase().includes("generate") || prompt.toLowerCase().includes("create")) handleGenerateCode();
               else if (prompt.toLowerCase().includes("find") || prompt.toLowerCase().includes("example")) handleFindExamples();
-              else handleGenerateCode(); // Default to generate if unsure
+              else handleGenerateCode(); 
             }}
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -276,3 +285,5 @@ export function AiAssistantPanel() {
     </div>
   );
 }
+
+    

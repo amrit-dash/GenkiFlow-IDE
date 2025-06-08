@@ -8,15 +8,22 @@ import { CodeEditorPanel } from "@/components/code-editor/code-editor-panel";
 import { AiAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useIde } from '@/contexts/ide-context';
+import { Button } from '@/components/ui/button';
+import { PanelRightOpen, Bot, TerminalSquare, PanelLeftOpen } from 'lucide-react';
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(true); // AI visible by default
+  const [showTerminalPanel, setShowTerminalPanel] = useState(false); // Terminal hidden by default
+  const { isBusy: isIdeBusy } = useIde();
+
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  if (!isClient) {
+  if (!isClient || isIdeBusy) {
     return (
         <div className="flex h-screen w-screen items-center justify-center bg-background">
             <p className="text-muted-foreground">Loading IDE...</p>
@@ -24,8 +31,19 @@ export default function IdePage() {
     );
   }
 
+  const toggleAiPanel = () => setShowAiPanel(prev => !prev);
+  const toggleTerminalPanel = () => setShowTerminalPanel(prev => !prev);
+
+  // Calculate default sizes for panels based on visibility
+  const editorPanelSize = showAiPanel ? 65 : 100;
+  const aiPanelSize = showAiPanel ? 35 : 0;
+  
+  const topSectionSize = showTerminalPanel ? 70 : 100;
+  const terminalPanelSize = showTerminalPanel ? 30 : 0;
+
+
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full relative">
       <Sidebar collapsible="icon" side="left" variant="sidebar" className="min-w-[250px] max-w-[400px] data-[collapsible=icon]:min-w-[var(--sidebar-width-icon)] data-[collapsible=icon]:max-w-[var(--sidebar-width-icon)]">
         <FileExplorer />
       </Sidebar>
@@ -33,27 +51,55 @@ export default function IdePage() {
       
       <SidebarInset className="flex-1 overflow-hidden p-0 m-0 data-[variant=inset]:min-h-full">
         <ResizablePanelGroup direction="vertical" className="h-full w-full">
-          {/* Top Panel: Editor and AI Assistant */}
-          <ResizablePanel defaultSize={70} minSize={30}>
+          <ResizablePanel defaultSize={topSectionSize} minSize={showTerminalPanel ? 30 : 100}>
             <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-              <ResizablePanel defaultSize={65} minSize={30}>
+              <ResizablePanel defaultSize={editorPanelSize} minSize={showAiPanel ? 30 : 100}>
                 <CodeEditorPanel />
               </ResizablePanel>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize={35} minSize={20} maxSize={60} className="min-w-[280px]">
-                <AiAssistantPanel />
-              </ResizablePanel>
+              {showAiPanel && <ResizableHandle withHandle />}
+              {showAiPanel && (
+                <ResizablePanel defaultSize={aiPanelSize} minSize={20} maxSize={60} className="min-w-[280px]">
+                  <AiAssistantPanel isVisible={showAiPanel} onToggleVisibility={toggleAiPanel} />
+                </ResizablePanel>
+              )}
             </ResizablePanelGroup>
           </ResizablePanel>
           
-          <ResizableHandle withHandle />
+          {showTerminalPanel && <ResizableHandle withHandle />}
           
-          {/* Bottom Panel: Terminal */}
-          <ResizablePanel defaultSize={30} minSize={10} maxSize={70}>
-            <TerminalPanel />
-          </ResizablePanel>
+          {showTerminalPanel && (
+            <ResizablePanel defaultSize={terminalPanelSize} minSize={10} maxSize={70}>
+              <TerminalPanel isVisible={showTerminalPanel} onToggleVisibility={toggleTerminalPanel} />
+            </ResizablePanel>
+          )}
         </ResizablePanelGroup>
       </SidebarInset>
+      
+      {/* Global toggle buttons in top right corner */}
+      <div className="absolute top-2 right-2 z-50 flex gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleAiPanel}
+          title={showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}
+          className="bg-background/80 hover:bg-accent"
+        >
+          {showAiPanel ? <PanelLeftOpen className="h-5 w-5"/> : <Bot className="h-5 w-5"/>}
+           <span className="sr-only">{showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}</span>
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleTerminalPanel}
+          title={showTerminalPanel ? "Hide Terminal" : "Show Terminal"}
+          className="bg-background/80 hover:bg-accent"
+        >
+          <TerminalSquare className="h-5 w-5"/>
+          <span className="sr-only">{showTerminalPanel ? "Hide Terminal" : "Show Terminal"}</span>
+        </Button>
+      </div>
     </div>
   );
 }
+
+    
