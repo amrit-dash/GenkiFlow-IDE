@@ -7,9 +7,12 @@ import { useIde } from '@/contexts/ide-context';
 import { FileTreeItem } from './file-tree-item';
 import { Workflow, PlusCircle, FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { cn } from "@/lib/utils";
 
 export function FileExplorer() {
-  const { fileSystem, addNode, setNodeToAutoRenameId } = useIde();
+  const { fileSystem, addNode, setNodeToAutoRenameId, moveNode } = useIde();
+  const [isDraggingOverRoot, setIsDraggingOverRoot] = useState(false);
 
   const handleAddRootFile = (e: React.MouseEvent) => {
     e.stopPropagation(); 
@@ -24,6 +27,34 @@ export function FileExplorer() {
     const newNode = addNode(null, "NewFolder", 'folder', '/');
     if (newNode) {
       setNodeToAutoRenameId(newNode.id);
+    }
+  };
+
+  const sortedFileSystem = [...fileSystem].sort((a, b) => {
+    if (a.type === 'folder' && b.type === 'file') return -1;
+    if (a.type === 'file' && b.type === 'folder') return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const handleRootDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOverRoot(true);
+  };
+
+  const handleRootDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOverRoot(false);
+  };
+
+  const handleRootDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOverRoot(false);
+    const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
+    if (draggedNodeId) {
+      moveNode(draggedNodeId, null); // null for root
     }
   };
 
@@ -57,20 +88,25 @@ export function FileExplorer() {
            </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent 
+        className={cn("transition-colors", isDraggingOverRoot && "bg-sidebar-accent/30")}
+        onDragOver={handleRootDragOver}
+        onDragLeave={handleRootDragLeave}
+        onDrop={handleRootDrop}
+      >
         <ScrollArea className="h-full">
-          {fileSystem.length > 0 ? (
+          {sortedFileSystem.length > 0 ? (
             <SidebarMenu className="p-2">
-              {fileSystem.map((node) => (
+              {sortedFileSystem.map((node) => (
                 <SidebarMenuItem key={node.id} className="p-0">
                   <FileTreeItem node={node} />
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
           ) : (
-            <div className="p-4 pt-6 text-center text-sm text-muted-foreground">
+            <div className="p-4 pt-6 text-center text-sm text-muted-foreground min-h-[50px]"> {/* Min height for drop target */}
               <p>File explorer is empty.</p>
-              <p className="mt-2">Click <PlusCircle className="inline h-3.5 w-3.5 align-middle"/> or <FolderPlus className="inline h-3.5 w-3.5 align-middle"/> above to add items.</p>
+              <p className="mt-2">Click <PlusCircle className="inline h-3.5 w-3.5 align-middle"/> or <FolderPlus className="inline h-3.5 w-3.5 align-middle"/> above or drag items here.</p>
             </div>
           )}
         </ScrollArea>
@@ -78,4 +114,3 @@ export function FileExplorer() {
     </>
   );
 }
-    

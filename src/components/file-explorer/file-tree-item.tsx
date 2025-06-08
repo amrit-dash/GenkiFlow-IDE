@@ -31,7 +31,9 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const [renameValue, setRenameValue] = useState(node.name);
   const [showActions, setShowActions] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const { openFile, activeFilePath, addNode, deleteNode, renameNode, nodeToAutoRenameId, setNodeToAutoRenameId } = useIde();
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const { openFile, activeFilePath, addNode, deleteNode, renameNode, nodeToAutoRenameId, setNodeToAutoRenameId, moveNode } = useIde();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isFolder = node.type === 'folder';
@@ -48,8 +50,8 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   useEffect(() => {
     if (nodeToAutoRenameId === node.id && !isRenaming) {
       setIsRenaming(true);
-      setRenameValue(node.name); // node.name will be the default unique name
-      setNodeToAutoRenameId(null); // Consume the signal
+      setRenameValue(node.name);
+      setNodeToAutoRenameId(null);
     }
   }, [nodeToAutoRenameId, node.id, node.name, setNodeToAutoRenameId, isRenaming]);
 
@@ -62,62 +64,77 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     if (isFolder) {
       setIsOpen(!isOpen);
     } else {
-      openFile(node.path, node); // Pass the node object
+      openFile(node.path, node);
     }
   };
 
-  const handleAddFile = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newNode = addNode(node.id, "UntitledFile", 'file');
-    if (newNode) {
-      if (!isOpen) setIsOpen(true);
-      setNodeToAutoRenameId(newNode.id);
-    }
-  };
-
-  const handleAddFolder = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newNode = addNode(node.id, "NewFolder", 'folder');
-    if (newNode) {
-      if (!isOpen) setIsOpen(true);
-      setNodeToAutoRenameId(newNode.id);
-    }
-  };
-
-  const handleDeleteInitiate = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteDialog(true);
-  };
-
-  const confirmDelete = () => {
-    deleteNode(node.id);
-    setShowDeleteDialog(false);
-  };
-
-  const handleRenameStart = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setRenameValue(node.name);
-    setIsRenaming(true);
-  };
+  const handleAddFile = (e: React.MouseEvent) => { e.stopPropagation(); const newNode = addNode(node.id, "UntitledFile", 'file'); if (newNode) { if (!isOpen) setIsOpen(true); setNodeToAutoRenameId(newNode.id); } };
+  const handleAddFolder = (e: React.MouseEvent) => { e.stopPropagation(); const newNode = addNode(node.id, "NewFolder", 'folder'); if (newNode) { if (!isOpen) setIsOpen(true); setNodeToAutoRenameId(newNode.id); } };
+  const handleDeleteInitiate = (e: React.MouseEvent) => { e.stopPropagation(); setShowDeleteDialog(true); };
+  const confirmDelete = () => { deleteNode(node.id); setShowDeleteDialog(false); };
+  const handleRenameStart = (e: React.MouseEvent) => { e.stopPropagation(); setRenameValue(node.name); setIsRenaming(true); };
 
   const handleRenameConfirm = () => {
     if (renameValue.trim() !== "" && renameValue.trim() !== node.name) {
       const success = renameNode(node.id, renameValue.trim());
-      if (!success) {
-         setRenameValue(node.name); 
-         // TODO: Consider using a toast notification for rename failure
-         console.error(`Failed to rename. A file or folder with the name "${renameValue.trim()}" might already exist in this directory, or the name is invalid.`);
-      }
+      if (!success) { setRenameValue(node.name); console.error(`Failed to rename. A file or folder with the name "${renameValue.trim()}" might already exist in this directory, or the name is invalid.`); }
     }
     setIsRenaming(false);
   };
   
-  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleRenameConfirm();
-    } else if (e.key === 'Escape') {
-      setIsRenaming(false);
-      setRenameValue(node.name); 
+  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleRenameConfirm(); else if (e.key === 'Escape') { setIsRenaming(false); setRenameValue(node.name); } };
+
+  const sortedChildren = node.children ? [...node.children].sort((a, b) => {
+    if (a.type === 'folder' && b.type === 'file') return -1;
+    if (a.type === 'file' && b.type === 'folder') return 1;
+    return a.name.localeCompare(b.name);
+  }) : [];
+
+  // Drag and Drop handlers
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData("application/genkiflow-node-id", node.id);
+    e.dataTransfer.effectAllowed = "move";
+    e.stopPropagation(); // Prevent parent from handling, useful if nested drag targets
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (isFolder) {
+      e.preventDefault(); // Allow drop on folders
+      e.stopPropagation();
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    if (isFolder) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(true);
+    }
+  };
+  
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (isFolder) {
+      e.preventDefault();
+      e.stopPropagation();
+      // Check if leaving to a child element; if so, don't remove highlight yet
+      const relatedTarget = e.relatedTarget as Node;
+      if (e.currentTarget.contains(relatedTarget)) {
+        return;
+      }
+      setIsDraggingOver(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (isFolder) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(false);
+      const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
+      if (draggedNodeId && draggedNodeId !== node.id) { // Prevent dropping node on itself
+        moveNode(draggedNodeId, node.id);
+      }
     }
   };
 
@@ -127,11 +144,14 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       className="text-sm group/fileitem relative"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
+      draggable={!isRenaming} // Only allow drag if not renaming
+      onDragStart={handleDragStart}
     >
       <div
         className={cn(
           "flex items-center py-1.5 px-2 rounded-md cursor-pointer hover:bg-sidebar-accent",
-          !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+          !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+          isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary" // Visual feedback for drop target
         )}
         style={{ paddingLeft: `${level * 1.25 + (isFolder ? 0 : 1.25) + (isRenaming ? 0.1 : 0.5)}rem` }}
         onClick={handleToggle}
@@ -142,6 +162,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
         title={node.path}
+        onDragOver={handleDragOver} // For folder drop targets
+        onDragEnter={handleDragEnter} // For folder drop targets
+        onDragLeave={handleDragLeave} // For folder drop targets
+        onDrop={handleDrop}         // For folder drop targets
       >
         {isFolder && (
           <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
@@ -161,7 +185,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           />
         ) : (
           <>
-            <span className="truncate flex-grow">{node.name}</span>
+            <span className="truncate flex-grow pointer-events-none">{node.name}</span> {/* pointer-events-none for better drag */}
             
             {showActions && !isRenaming && (
               <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150">
@@ -188,7 +212,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       </div>
       {isFolder && isOpen && !isRenaming && node.children && (
         <div>
-          {node.children.length > 0 ? node.children.sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).map((child) => (
+          {sortedChildren.length > 0 ? sortedChildren.map((child) => (
             <FileTreeItem key={child.id} node={child} level={level + 1} />
           )) : (
              <div 
@@ -220,5 +244,3 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
-    
-    
