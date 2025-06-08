@@ -116,13 +116,13 @@ export function CodeEditorPanel() {
                         role="button"
                         tabIndex={0}
                         className={cn(
-                          "inline-flex items-center justify-center transition-colors", // Core flex and transition
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", // Focus styling
-                          "hover:bg-transparent hover:text-accent", // Transparent bg, accent icon color on hover
-                          "p-0.5 h-auto w-auto", // Compact icon button sizing
-                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2", // Positioning
-                          "opacity-0 group-hover:opacity-100 focus-within:opacity-100", // Visibility on parent hover/focus
-                          "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" // Active tab styling
+                          "inline-flex items-center justify-center transition-colors", 
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", 
+                          "hover:bg-transparent hover:text-accent", 
+                          "p-0.5 h-auto w-auto", 
+                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2", 
+                          "opacity-0 group-hover:opacity-100 focus-within:opacity-100", 
+                          "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" 
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
                           e.stopPropagation();
@@ -158,7 +158,7 @@ export function CodeEditorPanel() {
           
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent value={activeFilePath} className="flex-1 flex flex-col p-0 m-0 overflow-hidden">
-                <ScrollArea className="h-full">
+                <ScrollArea className="flex-1 min-h-0">
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
@@ -171,7 +171,7 @@ export function CodeEditorPanel() {
           )}
         </Tabs>
       )}
-       <div // Changed from Button to div to act as a simple container for the icon button
+       <div 
           onClick={handleSave}
           className={cn(
             "absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer",
