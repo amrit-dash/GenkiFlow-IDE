@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, PackagePlus, Wand2, SearchCode, MessageSquare } from 'lucide-react';
+import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2 } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
 import type { AiSuggestion, ChatMessage } from '@/lib/types';
@@ -219,10 +219,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               onActivate={() => { setPrompt("Summarize the code in the current file."); textareaRef.current?.focus(); }}
             />
             <HintCard 
-              icon={PackagePlus} 
-              title="Generate Component" 
-              description="Describe a React component and I'll generate the code for it."
-              onActivate={() => { setPrompt("Generate a React functional component that displays a user profile card with an avatar, name, and bio."); textareaRef.current?.focus(); }}
+              icon={Code2} 
+              title="Generate Code" 
+              description="Describe any code you need (e.g., a function, a component, a script), and I'll generate it."
+              onActivate={() => { setPrompt("Generate a Python function that takes a list of numbers and returns their sum."); textareaRef.current?.focus(); }}
             />
             <HintCard 
               icon={Wand2} 
