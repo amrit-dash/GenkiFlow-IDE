@@ -95,9 +95,9 @@ export function CodeEditorPanel() {
   }
 
   return (
-    <div className="flex flex-col bg-background h-full relative bg-red-500/30">
+    <div className="flex flex-col bg-background h-full">
       {openedFiles.size > 0 && (
-        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col min-h-0 overflow-hidden bg-blue-500/30">
+        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="border-b border-border">
             <ScrollArea className="w-full whitespace-nowrap">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
@@ -158,13 +158,13 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent
                 value={activeFilePath}
-                className="flex-1 flex flex-col p-0 m-0 min-h-0 overflow-hidden bg-green-500/30"
+                className="flex-1 p-0 m-0 min-h-0 overflow-hidden"
               >
-                <ScrollArea className="flex-1 min-h-0 w-full bg-orange-500/30">
+                <ScrollArea className="h-full w-full">
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
-                    className="flex-1 w-full min-h-0 p-4 font-code text-sm bg-purple-500/30 border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+                    className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
                     placeholder="Select a file to view its content or start typing..."
                     spellCheck="false"
                   />
