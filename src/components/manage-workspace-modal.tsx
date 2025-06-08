@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Added import
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Download, Github, UploadCloud, Loader2, AlertTriangle, FileWarning } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { useToast } from '@/hooks/use-toast';
@@ -77,8 +77,8 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   };
 
   const processAndReplaceWorkspace = async (zipArrayBuffer: ArrayBuffer, source: 'GitHub' | 'Upload') => {
-    setIsProcessingZip(true); // General processing state for both upload and github
-    setIsFetchingGitHub(source === 'GitHub'); // Specific for github fetch spinner
+    setIsProcessingZip(true); 
+    setIsFetchingGitHub(source === 'GitHub'); 
 
     try {
       const { fileSystem: newFs, unsupportedFiles: newUnsupported, singleRootDir } = await processZipFile(zipArrayBuffer);
@@ -111,13 +111,23 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     try {
       const response = await fetch(githubZipUrl.trim());
       if (!response.ok) {
-        throw new Error(`Failed to fetch ZIP: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch ZIP: ${response.status} ${response.statusText}. Ensure the URL is a direct download link to a .zip file and is publicly accessible.`);
       }
       const zipArrayBuffer = await response.arrayBuffer();
       await processAndReplaceWorkspace(zipArrayBuffer, 'GitHub');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch or process GitHub ZIP:", error);
-      toast({ variant: "destructive", title: "GitHub Import Failed", description: (error as Error).message });
+      let description = "Could not fetch or process the repository ZIP. Please check the URL and your network connection.";
+      if (error.message.includes("Failed to fetch")) {
+        description = "Failed to fetch the ZIP. This might be due to network issues, an incorrect URL, or CORS restrictions. Ensure you're using a direct .zip download link from a public repository.";
+      } else if (error.message) {
+        description = error.message;
+      }
+      toast({ 
+        variant: "destructive", 
+        title: "GitHub Import Failed", 
+        description: description
+      });
       setIsFetchingGitHub(false);
     }
   };
@@ -126,14 +136,14 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     const file = event.target.files?.[0];
     if (file && file.type === "application/zip") {
       setSelectedZipFile(file);
-      setZipProcessingStep('idle'); // Reset steps if a new file is selected
+      setZipProcessingStep('idle'); 
       setUnsupportedFiles([]);
       setProcessedZipFileSystem(null);
     } else if (file) {
       toast({ variant: "destructive", title: "Invalid File", description: "Please select a .zip file." });
       setSelectedZipFile(null);
     }
-    event.target.value = ''; // Allow re-selecting the same file
+    event.target.value = ''; 
   };
 
   const handleProcessZipUpload = async () => {
@@ -194,8 +204,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           {/* GitHub Import Section */}
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><Github className="mr-2 h-4 w-4 text-primary" />Import from GitHub</h3>
+             <p className="text-xs text-muted-foreground mb-1">
+              Paste the direct <code className="bg-muted px-1 py-0.5 rounded text-xs">.zip</code> download URL from a GitHub repository.
+            </p>
              <p className="text-xs text-muted-foreground mb-2">
-              Paste the direct .zip download URL from a GitHub repository (e.g., .../archive/refs/heads/main.zip).
+              Example: <code className="bg-muted px-1 py-0.5 rounded text-xs">https://github.com/&lt;user&gt;/&lt;repo&gt;/archive/refs/heads/main.zip</code>
             </p>
             <div className="flex items-center gap-2">
               <Label htmlFor="githubUrl" className="sr-only">GitHub ZIP URL</Label>
@@ -204,7 +217,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                 value={githubZipUrl}
                 onChange={(e) => setGithubZipUrl(e.target.value)}
                 className="flex-grow"
-                placeholder="https://github.com/user/repo/archive/refs/heads/main.zip"
+                placeholder="Direct .zip download URL from GitHub"
                 disabled={isFetchingGitHub || isProcessingZip}
               />
               <Button onClick={handleGitHubImport} disabled={!githubZipUrl.trim() || isFetchingGitHub || isProcessingZip}>
