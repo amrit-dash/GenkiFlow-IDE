@@ -73,17 +73,17 @@ export function CodeEditorPanel() {
       setIsSaving(true);
       updateFileContent(activeFilePath, currentContent);
       // updateFileContent handles persistence, so hasUnsavedChanges is derived from comparison
-      // No need to explicitly setHasUnsavedChanges(false) here, as it's reactive
       setTimeout(() => {
         setIsSaving(false);
-        toast({
-          title: "File Saved",
-          description: `${getFileSystemNode(activeFilePath)?.name || 'File'} saved successfully.`,
-          variant: "default",
-        });
+        // Removed toast notification as per user request
+        // toast({
+        //   title: "File Saved",
+        //   description: `${getFileSystemNode(activeFilePath)?.name || 'File'} saved successfully.`,
+        //   variant: "default",
+        // });
       }, 300);
     }
-  }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent, toast, getFileSystemNode]);
+  }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent, getFileSystemNode]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -254,7 +254,7 @@ export function CodeEditorPanel() {
         </Tabs>
       )}
        <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center shrink-0">
-          <p>Ln: 1, Col: 1</p>
+          <p>Ln: 1, Col: 1</p> {/* This is a placeholder, actual line/col count is more complex */}
           {activeFilePath && hasUnsavedChanges && !isSaving && (
             <button 
               onClick={handleSave} 

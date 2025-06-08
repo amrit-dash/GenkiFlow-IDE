@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit } from 'lucide-react';
+import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
 import type { AiSuggestion, ChatMessage } from '@/lib/types';
@@ -68,22 +68,23 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setActionAppliedStates(prev => ({ ...prev, [key]: true }));
   };
 
-  const handleApplyToEditor = (codeToApply: string, messageId: string, targetPath?: string) => {
+  const handleApplyToEditor = (codeToApply: string, messageId: string, buttonKey: string, targetPath?: string) => {
     const path = targetPath || activeFilePath;
-    const buttonKey = `${messageId}-apply-editor`;
 
     if (path) {
       updateFileContent(path, codeToApply);
       toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name || 'the editor'}.`});
-      setButtonAppliedState(buttonKey);
+      if (!actionAppliedStates[buttonKey]) { // Only set if not already applied (for re-apply)
+        setButtonAppliedState(buttonKey);
+      }
     } else {
       toast({ variant: "destructive", title: "Error", description: "No active file selected to apply code."});
     }
   };
 
-  const handleCreateFileAndInsert = async (suggestedFileName: string, code: string, messageId: string) => {
+  const handleCreateFileAndInsert = async (suggestedFileName: string, code: string, messageId: string, buttonKey: string) => {
     setIsLoading(true);
-    const buttonKey = `${messageId}-create-file`;
+    
     let parentDirNode = activeFilePath ? getFileSystemNode(activeFilePath) : null;
     let parentIdForNewNode: string | null = null;
     let baseDirForNewNode = "/";
@@ -111,7 +112,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       openFile(newNode.path);
       updateFileContent(newNode.path, code);
       toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
-      setButtonAppliedState(buttonKey);
+      if (!actionAppliedStates[buttonKey]) { // Only set if not already applied (for re-apply)
+        setButtonAppliedState(buttonKey);
+      }
     } else {
       toast({ variant: "destructive", title: "Error", description: `Could not create file "${suggestedFileName}". It might already exist or the name is invalid.`});
     }
@@ -134,6 +137,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const handleNewChat = () => {
     setChatHistory([]);
     setPrompt("");
+    setActionAppliedStates({}); // Reset applied states for new chat
     textareaRef.current?.focus();
   };
 
@@ -238,12 +242,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
-      console.error("AI Assistant Error:", error); // Log the full error to console
+      console.error("AI Assistant Error:", error); 
       setChatHistory(prev => prev.filter(msg => msg.id !== loadingMessageId).concat({
         id: generateId(),
         role: 'assistant',
         type: 'error',
-        content: "Sorry, I ran into an issue. Please try again or check the server console for details."
+        content: `Sorry, I ran into an issue: ${errorMessage}`
       }));
     }
     setIsLoading(false);
@@ -304,6 +308,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             {chatHistory.map((msg) => {
               const applyEditorKey = `${msg.id}-apply-editor`;
               const createFileKey = `${msg.id}-create-file`;
+              const applyGeneratedCodeKey = `${msg.id}-apply-generated`;
 
               return (
                 <div key={msg.id} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
@@ -336,32 +341,60 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             </Button>
                           </div>
                           {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id)} 
-                              disabled={isLoading || actionAppliedStates[createFileKey]}
-                            >
-                              {actionAppliedStates[createFileKey] ? (
-                                <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
-                              ) : (
-                                <><FilePlus2 className="mr-1.5 h-4 w-4" /> Create File & Insert</>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)} 
+                                disabled={isLoading || actionAppliedStates[createFileKey]}
+                              >
+                                {actionAppliedStates[createFileKey] ? (
+                                  <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
+                                ) : (
+                                  <><FilePlus2 className="mr-1.5 h-4 w-4" /> Create File & Insert</>
+                                )}
+                              </Button>
+                              {actionAppliedStates[createFileKey] && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)}
+                                  disabled={isLoading}
+                                  title="Re-apply: Create File & Insert"
+                                  className="h-7 w-7"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </Button>
                               )}
-                            </Button>
+                            </div>
                           )}
                           {msg.type === 'generatedCode' && (
-                             <Button 
-                               size="sm" 
-                               variant="outline" 
-                               onClick={() => handleApplyToEditor(msg.code!, msg.id)} 
-                               disabled={isLoading || !activeFilePath || actionAppliedStates[applyEditorKey]}
-                             >
-                               {actionAppliedStates[applyEditorKey] ? (
-                                 <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
-                               ) : (
-                                 <><Edit className="mr-1.5 h-4 w-4" /> {activeFilePath ? `Insert into ${currentFileName || 'Editor'}` : 'Insert (No file open)'}</>
+                             <div className="flex items-center gap-2">
+                               <Button 
+                                 size="sm" 
+                                 variant="outline" 
+                                 onClick={() => handleApplyToEditor(msg.code!, msg.id, applyGeneratedCodeKey)} 
+                                 disabled={isLoading || !activeFilePath || actionAppliedStates[applyGeneratedCodeKey]}
+                               >
+                                 {actionAppliedStates[applyGeneratedCodeKey] ? (
+                                   <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
+                                 ) : (
+                                   <><Edit className="mr-1.5 h-4 w-4" /> {activeFilePath ? `Insert into ${currentFileName || 'Editor'}` : 'Insert (No file open)'}</>
+                                 )}
+                               </Button>
+                               {actionAppliedStates[applyGeneratedCodeKey] && activeFilePath && (
+                                 <Button
+                                   size="icon"
+                                   variant="ghost"
+                                   onClick={() => handleApplyToEditor(msg.code!, msg.id, applyGeneratedCodeKey)}
+                                   disabled={isLoading}
+                                   title="Re-apply: Insert into Editor"
+                                   className="h-7 w-7"
+                                 >
+                                   <RotateCcw className="h-4 w-4" />
+                                 </Button>
                                )}
-                             </Button>
+                             </div>
                           )}
                         </div>
                       )}
@@ -386,19 +419,33 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   {copiedStates[`${msg.id}-suggestion`] ? <Check className="h-3 w-3 text-green-500" /> : <ClipboardCopy className="h-3 w-3" />}
                                 </Button>
                               </div>
-                              <Button 
-                                size="xs" 
-                                variant="outline" 
-                                className="mt-1" 
-                                onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode, msg.id)} 
-                                disabled={isLoading || !activeFilePath || actionAppliedStates[applyEditorKey]}
-                              >
-                                {actionAppliedStates[applyEditorKey] ? (
-                                  <><Check className="mr-1.5 h-3 w-3 text-green-500" /> Applied</>
-                                ) : (
-                                  <>{activeFilePath ? 'Apply to Editor' : 'Apply (No file open)'}</>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  size="xs" 
+                                  variant="outline" 
+                                  className="mt-1" 
+                                  onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode, msg.id, applyEditorKey)} 
+                                  disabled={isLoading || !activeFilePath || actionAppliedStates[applyEditorKey]}
+                                >
+                                  {actionAppliedStates[applyEditorKey] ? (
+                                    <><Check className="mr-1.5 h-3 w-3 text-green-500" /> Applied</>
+                                  ) : (
+                                    <>{activeFilePath ? 'Apply to Editor' : 'Apply (No file open)'}</>
+                                  )}
+                                </Button>
+                                {actionAppliedStates[applyEditorKey] && activeFilePath && (
+                                   <Button
+                                     size="icon"
+                                     variant="ghost"
+                                     onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode, msg.id, applyEditorKey)}
+                                     disabled={isLoading}
+                                     title="Re-apply: Apply to Editor"
+                                     className="h-6 w-6 mt-1"
+                                   >
+                                     <RotateCcw className="h-3.5 w-3.5" />
+                                   </Button>
                                 )}
-                              </Button>
+                              </div>
                             </CardContent>
                           </Card>
                         </div>
