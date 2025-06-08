@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarHeader, SidebarContent, SidebarMenu, SidebarMenuItem } from "@/components/ui/sidebar";
 import { useIde } from '@/contexts/ide-context';
 import { FileTreeItem } from './file-tree-item';
-import { Workflow, Settings } from 'lucide-react'; // Example icons
+import { Workflow } from 'lucide-react'; // Removed Settings import
 
 export function FileExplorer() {
   const { fileSystem } = useIde();
@@ -18,7 +18,7 @@ export function FileExplorer() {
             <Workflow className="w-6 h-6 text-primary" />
             <h2 className="text-lg font-headline font-semibold">GenkiFlow IDE</h2>
            </div>
-           <Settings className="w-5 h-5 text-sidebar-foreground hover:text-primary cursor-pointer" />
+           {/* Settings icon removed from here */}
         </div>
       </SidebarHeader>
       <SidebarContent>
