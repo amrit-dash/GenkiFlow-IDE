@@ -39,50 +39,33 @@ function logDetailedError(actionName: string, error: any) {
     } else if (error.cause) {
       // Check if cause is a function (older Genkit style) or an object
       const cause = typeof (error as any).cause === 'function' ? (error as any).cause() : (error as any).cause;
-      console.error("Error Cause:", JSON.stringify(cause, Object.getOwnPropertyNames(cause), 2));
+      try {
+        // Attempt to stringify, handling potential circular references or non-stringifiable properties
+        console.error("Error Cause:", JSON.stringify(cause, Object.getOwnPropertyNames(cause), 2));
+      } catch (e) {
+        // Fallback if stringify fails
+        console.error("Error Cause (could not stringify):", cause);
+      }
     }
     if ((error as any).details) { 
         console.error("Error Details (Genkit?):", JSON.stringify((error as any).details, null, 2));
     }
   } else if (typeof error === 'object' && error !== null) {
-    console.error("Error (object form):", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    try {
+        console.error("Error (object form):", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    } catch (e) {
+        console.error("Error (object form, could not stringify):", error);
+    }
   } else {
     console.error("Error (primitive form):", error);
   }
   console.error(`--- END OF DETAILED SERVER ERROR in ${actionName} at ${timestamp} ---`);
 }
 
+// Updated to return only the base message for the client
 function formatErrorForClient(baseMessage: string, error: any): string {
-  let detailedMessage = "Unknown error occurred.";
-  if (error instanceof Error) {
-    detailedMessage = error.message;
-    if ((error as any).details) {
-        detailedMessage += `\nDetails: ${JSON.stringify((error as any).details, null, 2)}`;
-    }
-    if ((error as any).rootCause) {
-        detailedMessage += `\nRoot Cause: ${JSON.stringify((error as any).rootCause, null, 2)}`;
-    } else if (error.cause && !(error as any).rootCause) {
-        const cause = typeof (error as any).cause === 'function' ? (error as any).cause() : (error as any).cause;
-        try {
-            detailedMessage += `\nCause: ${JSON.stringify(cause, Object.getOwnPropertyNames(cause), 2)}`;
-        } catch (e) {
-            detailedMessage += `\nCause: ${cause}`;
-        }
-    }
-    // Optionally add stack for client debugging if needed, but can be very verbose
-    // if (error.stack) {
-    //   detailedMessage += `\nStack: ${error.stack}`;
-    // }
-  } else if (typeof error === 'object' && error !== null) {
-    try {
-        detailedMessage = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-    } catch (e) {
-        detailedMessage = String(error);
-    }
-  } else if (error) {
-    detailedMessage = String(error);
-  }
-  return `${baseMessage}\n\nError Details:\n${detailedMessage}`;
+  // The detailed logging is now handled by logDetailedError
+  return baseMessage;
 }
 
 export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInput): Promise<SummarizeCodeSnippetOutput> {
