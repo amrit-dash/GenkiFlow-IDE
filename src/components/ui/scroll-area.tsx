@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -11,10 +12,10 @@ const ScrollArea = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
-    className={cn("relative overflow-hidden", className)}
+    className={cn("relative overflow-hidden flex flex-col", className)} // Added flex flex-col
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+    <ScrollAreaPrimitive.Viewport className="flex-1 w-full rounded-[inherit] min-h-0"> {/* Changed h-full to flex-1 min-h-0 */}
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
