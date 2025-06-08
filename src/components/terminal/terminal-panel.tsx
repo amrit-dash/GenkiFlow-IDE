@@ -24,7 +24,7 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
   const { addNode, deleteNode, getFileSystemNode } = useIde();
   const [inputCommand, setInputCommand] = useState('');
   const [outputLines, setOutputLines] = useState<OutputLine[]>([
-    { id: 'welcome', type: 'info', text: 'Terminal. Type "help" for commands.'} // Updated welcome message
+    { id: 'welcome', type: 'info', text: 'Terminal. Type "help" for commands.'}
   ]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -38,7 +38,10 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
   };
 
   const resolvePath = (targetPath: string): string => {
-    if (targetPath.startsWith('/')) return targetPath === "" ? "/" : targetPath; // Absolute path
+    if (targetPath.startsWith('/')) {
+      const normalizedPath = '/' + targetPath.split('/').filter(p => p).join('/');
+      return normalizedPath === "/" && targetPath !== "/" ? "/" : (normalizedPath || "/");
+    }
 
     const currentParts = currentPath === '/' ? [] : currentPath.split('/').filter(p => p);
     const targetParts = targetPath.split('/').filter(p => p);
@@ -51,7 +54,7 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
       }
     }
     const newPath = '/' + currentParts.join('/');
-    return newPath === "/" && currentParts.length > 0 ? newPath + '/' : (newPath || '/'); // ensure trailing slash for non-root
+    return newPath === "/" && currentParts.length > 0 && !targetPath.endsWith('/') && targetPath !== '.' && targetPath !== '..' ? newPath : (newPath || '/');
   };
 
 
@@ -80,7 +83,7 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         const dirPart = parts.join('/');
         operationPath = resolvePath(dirPart);
     } else {
-        nameForOperation = targetName;
+        nameForOperation = targetName; // targetName is just the name, path is currentPath
     }
 
 
@@ -100,9 +103,9 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         addOutputLine('  ls [path]           - Lists files/folders');
         addOutputLine('  cd <path>           - Changes directory');
         addOutputLine('  pwd                 - Prints working directory');
-        addOutputLine('  mkdir <dirname>     - Creates a directory');
-        addOutputLine('  touch <filename>    - Creates a file');
-        addOutputLine('  rm <name>           - Deletes a file or folder');
+        addOutputLine('  mkdir <name>        - Creates a directory in current or specified path');
+        addOutputLine('  touch <name>        - Creates a file in current or specified path');
+        addOutputLine('  rm <name>           - Deletes a file or folder from current or specified path');
         break;
       case 'date':
         addOutputLine(new Date().toLocaleString());
@@ -119,7 +122,25 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
                 }
             } else if (node && node.type === 'file') {
                 addOutputLine(node.name);
-            } else {
+            } else if (pathToLs === '/') { // Listing root
+                const rootNodes = getFileSystemNode('/'); // This should conceptually get root children
+                if (Array.isArray(rootNodes) && rootNodes.length > 0) {
+                     rootNodes.slice().sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
+                } else if (Array.isArray(rootNodes) && rootNodes.length === 0) {
+                    addOutputLine('(empty root directory)');
+                }
+                 else {
+                     // If getFileSystemNode('/') doesn't return an array for root, handle it or log error
+                     const fs = getFileSystemNode('///get_all_root_nodes///'); // Special marker, context handles it
+                     if (Array.isArray(fs)) {
+                        if (fs.length === 0) addOutputLine('(empty root directory)');
+                        else fs.slice().sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
+                     } else {
+                        addOutputLine(`ls: cannot access '${args[0] || pathToLs}': No such file or directory`, 'error');
+                     }
+                }
+            }
+            else {
                 addOutputLine(`ls: cannot access '${args[0] || pathToLs}': No such file or directory`, 'error');
             }
         }
@@ -133,10 +154,14 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
             break;
         }
         const newResolvedPath = resolvePath(args[0]);
-        const node = getFileSystemNode(newResolvedPath);
-        if (node && node.type === 'folder') {
+        if (newResolvedPath === '/') {
+            setCurrentPath('/');
+            break;
+        }
+        const nodeToCd = getFileSystemNode(newResolvedPath);
+        if (nodeToCd && nodeToCd.type === 'folder') {
             setCurrentPath(newResolvedPath);
-        } else if (node && node.type === 'file') {
+        } else if (nodeToCd && nodeToCd.type === 'file') {
             addOutputLine(`cd: ${args[0]}: Not a directory`, 'error');
         } else {
             addOutputLine(`cd: ${args[0]}: No such file or directory`, 'error');
@@ -144,38 +169,62 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         break;
       case 'mkdir':
         if (!nameForOperation) { addOutputLine('mkdir: missing operand', 'error'); break; }
-        const parentDirForMkdir = getFileSystemNode(operationPath);
-        if (parentDirForMkdir && parentDirForMkdir.type === 'folder') {
-            const createdDir = addNode(parentDirForMkdir.id, nameForOperation, 'folder', operationPath);
-            if (createdDir) addOutputLine(`mkdir: created directory '${nameForOperation}' in ${operationPath}`);
-            else addOutputLine(`mkdir: cannot create directory '${nameForOperation}': Already exists or invalid name/path`, 'error');
+        
+        if (operationPath === '/') {
+            const createdDir = addNode(null, nameForOperation, 'folder', '/');
+            if (createdDir) {
+                addOutputLine(`mkdir: created directory '${nameForOperation}' in /`);
+            } else {
+                addOutputLine(`mkdir: cannot create directory '${nameForOperation}' at root: Already exists or invalid name`, 'error');
+            }
         } else {
-            addOutputLine(`mkdir: cannot create directory in '${operationPath}': Not a valid folder path.`, 'error');
+            const parentDirNode = getFileSystemNode(operationPath);
+            if (parentDirNode && parentDirNode.type === 'folder') {
+                const createdDir = addNode(parentDirNode.id, nameForOperation, 'folder', operationPath);
+                if (createdDir) {
+                    addOutputLine(`mkdir: created directory '${nameForOperation}' in ${operationPath}`);
+                } else {
+                    addOutputLine(`mkdir: cannot create directory '${nameForOperation}' in ${operationPath}: Already exists or invalid name`, 'error');
+                }
+            } else {
+                addOutputLine(`mkdir: cannot create directory in '${operationPath}': No such directory or not a folder`, 'error');
+            }
         }
         break;
       case 'touch':
         if (!nameForOperation) { addOutputLine('touch: missing operand', 'error'); break; }
-        const parentDirForTouch = getFileSystemNode(operationPath);
-         if (parentDirForTouch && parentDirForTouch.type === 'folder') {
-            const createdFile = addNode(parentDirForTouch.id, nameForOperation, 'file', operationPath);
-            if (createdFile) addOutputLine(`touch: created file '${nameForOperation}' in ${operationPath}`);
-            else addOutputLine(`touch: cannot create file '${nameForOperation}': Already exists or invalid name/path`, 'error');
+
+        if (operationPath === '/') {
+            const createdFile = addNode(null, nameForOperation, 'file', '/');
+            if (createdFile) {
+                addOutputLine(`touch: created file '${nameForOperation}' in /`);
+            } else {
+                addOutputLine(`touch: cannot create file '${nameForOperation}' at root: Already exists or invalid name`, 'error');
+            }
         } else {
-            addOutputLine(`touch: cannot create file in '${operationPath}': Not a valid folder path.`, 'error');
+            const parentDirNode = getFileSystemNode(operationPath);
+            if (parentDirNode && parentDirNode.type === 'folder') {
+                const createdFile = addNode(parentDirNode.id, nameForOperation, 'file', operationPath);
+                if (createdFile) {
+                    addOutputLine(`touch: created file '${nameForOperation}' in ${operationPath}`);
+                } else {
+                    addOutputLine(`touch: cannot create file '${nameForOperation}' in ${operationPath}: Already exists or invalid name`, 'error');
+                }
+            } else {
+                addOutputLine(`touch: cannot create file in '${operationPath}': No such directory or not a folder`, 'error');
+            }
         }
         break;
       case 'rm':
         if (!nameForOperation) { addOutputLine('rm: missing operand', 'error'); break; }
-        const fullPathToDelete = (operationPath === '/' ? '' : operationPath) + '/' + nameForOperation;
+        const fullPathToDelete = (operationPath === '/' && !nameForOperation.startsWith('/') ? '/' : (operationPath === '/' ? '' : operationPath + '/')) + nameForOperation;
         const nodeToDelete = getFileSystemNode(fullPathToDelete); 
         if (nodeToDelete) {
-            // Confirmation for non-empty folders could be added here if desired
-            // For now, deleteNode will handle recursive deletion if implemented that way for folders
-            const success = deleteNode(nodeToDelete.id); // deleteNode uses ID
-            if (success) addOutputLine(`rm: removed '${fullPathToDelete}'`);
-            else addOutputLine(`rm: cannot remove '${fullPathToDelete}': Deletion failed or item not found by ID.`, 'error');
+            const success = deleteNode(nodeToDelete.id); 
+            if (success) addOutputLine(`rm: removed '${nameForOperation}' from ${operationPath}`);
+            else addOutputLine(`rm: cannot remove '${nameForOperation}': Deletion failed.`, 'error');
         } else {
-            addOutputLine(`rm: cannot remove '${fullPathToDelete}': No such file or directory`, 'error');
+            addOutputLine(`rm: cannot remove '${nameForOperation}': No such file or directory in ${operationPath}`, 'error');
         }
         break;
       default:
@@ -220,7 +269,6 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
       }
     } else if (e.key === 'Tab') {
         e.preventDefault();
-        // Basic tab completion (can be expanded)
         const commonCommands = ['clear', 'echo', 'help', 'date', 'ls', 'cd', 'pwd', 'mkdir', 'touch', 'rm'];
         const currentInput = inputCommand.toLowerCase();
         const matches = commonCommands.filter(cmd => cmd.startsWith(currentInput));
@@ -231,9 +279,6 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         }
     }
   };
-
-  // Do not render if not visible
-  // if (!isVisible) return null; // This is handled by parent component in IdePage
 
   return (
     <div 
@@ -285,5 +330,6 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
     </div>
   );
 }
+    
 
     

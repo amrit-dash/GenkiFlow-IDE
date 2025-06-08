@@ -21,11 +21,11 @@ interface IdeState {
   openFile: (filePath: string) => void;
   closeFile: (filePath: string) => void;
   updateFileContent: (filePath: string, newContent: string) => void;
-  getFileSystemNode: (path: string) => FileSystemNode | undefined;
+  getFileSystemNode: (pathOrId: string) => FileSystemNode | FileSystemNode[] | undefined; // Can return array for root listing
   addNode: (parentId: string | null, name: string, type: 'file' | 'folder', currentDirectoryPath?: string) => FileSystemNode | null;
   deleteNode: (nodeIdOrPath: string) => boolean;
   renameNode: (nodeId: string, newName: string) => boolean;
-  isBusy: boolean; // To indicate background activity like loading from localStorage
+  isBusy: boolean; 
   nodeToAutoRenameId: string | null;
   setNodeToAutoRenameId: (id: string | null) => void;
 }
@@ -33,21 +33,25 @@ interface IdeState {
 const IdeContext = createContext<IdeState | undefined>(undefined);
 
 export function IdeProvider({ children }: { children: React.ReactNode }) {
-  const [fileSystem, setFileSystemState] = useState<FileSystemNode[]>(mockFileSystem);
+  const [fileSystem, setFileSystemState] = useState<FileSystemNode[]>([]); // Start empty, load from mock/LS
   const [openedFiles, setOpenedFilesState] = useState<Map<string, FileSystemNode>>(new Map());
   const [activeFilePath, setActiveFilePathState] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(true);
   const [nodeToAutoRenameId, setNodeToAutoRenameIdState] = useState<string | null>(null);
 
-  // Load from localStorage on initial mount
   useEffect(() => {
     setIsBusy(true);
     try {
       const storedFs = localStorage.getItem(FS_STORAGE_KEY);
       if (storedFs) {
-        setFileSystemState(JSON.parse(storedFs));
+        const parsedFs = JSON.parse(storedFs);
+        if (Array.isArray(parsedFs) && parsedFs.length > 0) {
+            setFileSystemState(parsedFs);
+        } else {
+             setFileSystemState(mockFileSystem); 
+        }
       } else {
-        setFileSystemState(mockFileSystem); // Initialize with mock if nothing stored
+        setFileSystemState(mockFileSystem);
       }
 
       const storedOpenedFiles = localStorage.getItem(OPENED_FILES_STORAGE_KEY);
@@ -58,20 +62,33 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
       const storedActiveFile = localStorage.getItem(ACTIVE_FILE_STORAGE_KEY);
       if (storedActiveFile && storedActiveFile !== "null") {
-        setActiveFilePathState(storedActiveFile);
+         const fileExists = (fs: FileSystemNode[], path: string): boolean => {
+            for (const node of fs) {
+                if (node.path === path && node.type === 'file') return true;
+                if (node.children && fileExists(node.children, path)) return true;
+            }
+            return false;
+         }
+         const currentFs = storedFs ? JSON.parse(storedFs) : mockFileSystem;
+         if (fileExists(currentFs, storedActiveFile)) {
+            setActiveFilePathState(storedActiveFile);
+         } else {
+            setActiveFilePathState(null);
+         }
+      } else {
+        setActiveFilePathState(null);
       }
     } catch (error) {
       console.error("Error loading from localStorage:", error);
-      setFileSystemState(mockFileSystem); // Fallback to mock data on error
+      setFileSystemState(mockFileSystem); 
       setOpenedFilesState(new Map());
       setActiveFilePathState(null);
     }
     setIsBusy(false);
   }, []);
 
-  // Save to localStorage whenever relevant state changes
   useEffect(() => {
-    if (isBusy) return; // Don't save while initially loading
+    if (isBusy) return; 
     try {
       localStorage.setItem(FS_STORAGE_KEY, JSON.stringify(fileSystem));
       localStorage.setItem(OPENED_FILES_STORAGE_KEY, JSON.stringify(Array.from(openedFiles.entries())));
@@ -85,7 +102,10 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     setNodeToAutoRenameIdState(id);
   }, []);
 
-  const getFileSystemNode = useCallback((pathOrId: string): FileSystemNode | undefined => {
+  const getFileSystemNode = useCallback((pathOrId: string): FileSystemNode | FileSystemNode[] | undefined => {
+    if (pathOrId === '///get_all_root_nodes///' || pathOrId === '/') { // Special case for listing root from terminal
+        return fileSystem;
+    }
     const findNode = (nodes: FileSystemNode[], targetPathOrId: string): FileSystemNode | undefined => {
       for (const node of nodes) {
         if (node.path === targetPathOrId || node.id === targetPathOrId) {
@@ -107,8 +127,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const node = getFileSystemNode(filePath);
-    if (node && node.type === 'file') {
-      setOpenedFilesState(prev => new Map(prev).set(filePath, { ...node }));
+    if (node && typeof node === 'object' && !Array.isArray(node) && node.type === 'file') {
+      setOpenedFilesState(prev => new Map(prev).set(filePath, { ...(node as FileSystemNode) }));
       setActiveFilePathState(filePath);
     }
   }, [getFileSystemNode, openedFiles]);
@@ -181,72 +201,42 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
           };
           parentNode = findParentById(newFs, parentId);
           if (!parentNode || parentNode.type !== 'folder') {
-              console.error("Parent not found or is not a folder for ID:", parentId);
               parentNode = undefined; 
-              parentPathForNewNode = ''; 
+              parentPathForNewNode = currentDirectoryPath === '/' ? '' : currentDirectoryPath;
           } else {
               parentPathForNewNode = parentNode.path;
           }
       } else { 
-          if (currentDirectoryPath && currentDirectoryPath !== '/') {
-            const findParentByPath = (nodes: FileSystemNode[], path: string): FileSystemNode | undefined => {
-              for (const n of nodes) {
-                  if (n.path === path && n.type === 'folder') return n;
-                  if (n.children) {
-                      const found = findParentByPath(n.children, path);
-                      if (found) return found;
-                  }
-              }
-              return undefined;
-            };
-            parentNode = findParentByPath(newFs, currentDirectoryPath);
-            if (!parentNode) {
-                console.error("Specified current directory path for addNode not found:", currentDirectoryPath);
-                parentPathForNewNode = ''; 
-            } else {
-                parentPathForNewNode = parentNode.path;
-            }
-          } else { 
-            parentPathForNewNode = ''; 
-            parentNode = undefined; 
-          }
+          parentPathForNewNode = currentDirectoryPath === '/' ? '' : currentDirectoryPath;
+          parentNode = undefined;
       }
       
-      // Generate unique default name
-      let baseName = name; // Use the provided name as base (e.g., "UntitledFile", "NewFolder")
-      const extension = type === 'file' && baseName.includes('.') ? baseName.substring(baseName.lastIndexOf('.')) : (type === 'file' ? ".tsx" : "");
-      if (type === 'file' && !baseName.endsWith(extension) && extension) {
-         baseName = baseName.replace(extension, "") + extension;
-      } else if (type === 'file' && !baseName.includes('.')) {
-         baseName += ".tsx"; // Default extension if none provided
+      let baseName = name;
+      const defaultExtension = ".tsx";
+      let extension = "";
+
+      if (type === 'file') {
+        if (baseName.includes('.')) {
+            extension = baseName.substring(baseName.lastIndexOf('.'));
+            baseName = baseName.substring(0, baseName.lastIndexOf('.'));
+        } else {
+            extension = defaultExtension;
+        }
       }
 
-
-      let finalName = baseName;
+      let finalName = type === 'file' ? baseName + extension : baseName;
       let counter = 1;
       const targetChildrenArray = parentNode ? parentNode.children || [] : newFs;
 
-      // Adjust for files that might not have an extension in baseName initially
-      const nameToCheck = (n: string) => n;
+      const nameExists = (nameToCheck: string) => targetChildrenArray.some(child => child.name === nameToCheck);
 
-      while (targetChildrenArray.some(child => child.name === nameToCheck(finalName) )) {
-          if (type === 'file') {
-            const nameWithoutExt = baseName.substring(0, baseName.lastIndexOf(extension) > -1 ? baseName.lastIndexOf(extension) : baseName.length);
-            finalName = `${nameWithoutExt}(${counter})${extension}`;
-          } else {
-            finalName = `${baseName}(${counter})`;
-          }
+      while (nameExists(finalName)) {
+          finalName = type === 'file' ? `${baseName}(${counter})${extension}` : `${baseName}(${counter})`;
           counter++;
       }
 
       const newPath = (parentPathForNewNode === '' || parentPathForNewNode === '/' ? '' : parentPathForNewNode) + '/' + finalName;
       
-      if (targetChildrenArray.some(child => child.name === finalName && child.id !== parentId)) { // check for existing name again (mainly for root)
-          console.error(`Node with name "${finalName}" already exists in "${parentPathForNewNode || '/'}".`);
-          addedNodeInstance = null; 
-          return prevFileSystem; 
-      }
-
       const newNodeId = generateId();
       addedNodeInstance = {
         id: newNodeId,
@@ -277,11 +267,12 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
   const deleteNode = useCallback((nodeIdOrPath: string): boolean => {
     let success = false;
-    let nodeToDeleteRef: FileSystemNode | undefined; // To hold reference for closing files
+    let nodeToDeleteRefForClosing: FileSystemNode | undefined;
 
     setFileSystemState(prevFs => {
-        const newFsDeepClone = JSON.parse(JSON.stringify(prevFs)); // Deep clone at the start
+        const newFsDeepClone = JSON.parse(JSON.stringify(prevFs));
         let parentOfDeletedNode: FileSystemNode | null = null;
+        let nodeToDeleteInClone: FileSystemNode | undefined;
         let newFsStructure: FileSystemNode[];
 
         const findNodeAndParentRecursive = (
@@ -301,10 +292,25 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             return { node: undefined, parent: null };
         };
         
-        const { node: foundNode, parent: foundParent } = findNodeAndParentRecursive(newFsDeepClone, nodeIdOrPath, null);
-        nodeToDeleteRef = getFileSystemNode(nodeIdOrPath); // Get original node for path info before modification
-        let nodeToDeleteInClone = foundNode; // This is the node from the cloned structure
-        parentOfDeletedNode = foundParent;
+        const { node: foundNodeFromClone, parent: foundParentFromClone } = findNodeAndParentRecursive(newFsDeepClone, nodeIdOrPath, null);
+        nodeToDeleteInClone = foundNodeFromClone;
+        parentOfDeletedNode = foundParentFromClone;
+        
+        // Fetch original node ref for path information BEFORE potential modification/deletion
+        // This requires getFileSystemNode to access the 'prevFs' or an equivalent snapshot if we are to avoid race conditions.
+        // For simplicity in this callback, we'll assume getFileSystemNode called OUTSIDE gives us the correct ref,
+        // or we re-find it in prevFs for path info for closing tabs.
+        const findOriginalNode = (nodes: FileSystemNode[], targetIdOrPath: string): FileSystemNode | undefined => {
+             for (const node of nodes) {
+                if (node.id === targetIdOrPath || node.path === targetIdOrPath) return node;
+                if (node.children) {
+                    const found = findOriginalNode(node.children, targetIdOrPath);
+                    if (found) return found;
+                }
+            }
+            return undefined;
+        }
+        nodeToDeleteRefForClosing = findOriginalNode(prevFs, nodeIdOrPath);
 
 
         if (!nodeToDeleteInClone) {
@@ -323,17 +329,17 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         return newFsStructure;
     });
 
-    if (success && nodeToDeleteRef) {
+    if (success && nodeToDeleteRefForClosing) {
         const pathsToClose: string[] = [];
         const collectPathsRecursive = (n: FileSystemNode) => {
             if (n.type === 'file') pathsToClose.push(n.path);
             if (n.children) n.children.forEach(collectPathsRecursive);
         };
 
-        if (nodeToDeleteRef.type === 'file') {
-            pathsToClose.push(nodeToDeleteRef.path);
-        } else if (nodeToDeleteRef.type === 'folder' && nodeToDeleteRef.children) {
-            collectPathsRecursive(nodeToDeleteRef);
+        if (nodeToDeleteRefForClosing.type === 'file') {
+            pathsToClose.push(nodeToDeleteRefForClosing.path);
+        } else if (nodeToDeleteRefForClosing.type === 'folder' && nodeToDeleteRefForClosing.children) {
+            collectPathsRecursive(nodeToDeleteRefForClosing);
         }
         
         if (pathsToClose.length > 0) {
@@ -349,22 +355,22 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                 if (newActivePath === null && newOpened.size > 0) { 
                     newActivePath = Array.from(newOpened.keys())[0];
                 }
-                if (newActivePath !== activeFilePath) {
+                if (newActivePath !== activeFilePath) { // only update if changed
                     setActiveFilePathState(newActivePath);
                 }
                 return newOpened;
             });
-        } else if (nodeToDeleteRef.type === 'folder' && activeFilePath && activeFilePath.startsWith(nodeToDeleteRef.path + '/')) {
-             const currentOpenedFiles = Array.from(openedFiles.keys());
-             const remainingKeys = currentOpenedFiles.filter(k => !k.startsWith(nodeToDeleteRef!.path + '/'));
+        } else if (nodeToDeleteRefForClosing.type === 'folder' && activeFilePath && activeFilePath.startsWith(nodeToDeleteRefForClosing.path + '/')) {
+             const currentOpenedKeys = Array.from(openedFiles.keys()); // Use current openedFiles from outer scope
+             const remainingKeys = currentOpenedKeys.filter(k => !k.startsWith(nodeToDeleteRefForClosing!.path + '/'));
              const newActivePath = remainingKeys.length > 0 ? remainingKeys[0] : null;
-             if (newActivePath !== activeFilePath) {
+             if (newActivePath !== activeFilePath) { // only update if changed
                 setActiveFilePathState(newActivePath);
              }
         }
     }
     return success;
-  }, [activeFilePath, openedFiles, getFileSystemNode]); 
+  }, [activeFilePath, openedFiles]); 
   
   const renameNode = useCallback((nodeId: string, newName: string): boolean => {
     let oldPath = "";
@@ -372,20 +378,22 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     let nodeType: 'file' | 'folder' | undefined = undefined;
     let success = false;
 
-    const cleanNewName = newName.replace(/[\\/:\*\?"<>\|]/g, '_').trim();
+    const cleanNewName = newName.replace(/[\\/:\*\?"<>\|\s]/g, '_').trim(); // Also replace spaces
     if (!cleanNewName) {
-        console.error("Invalid new name provided.");
+        console.error("Invalid new name provided (empty or only invalid chars).");
         return false;
     }
 
     setFileSystemState(prevFs => {
       const newFs = JSON.parse(JSON.stringify(prevFs)); 
       
-      const updateChildrenPathsRecursive = (parentNode: FileSystemNode) => {
+      const updateChildrenPathsRecursive = (parentNode: FileSystemNode, oldParentPath: string, newParentPath: string) => {
         if (parentNode.type === 'folder' && parentNode.children) {
           parentNode.children.forEach(child => {
-            child.path = parentNode.path + '/' + child.name;
-            updateChildrenPathsRecursive(child); 
+            const relativePath = child.path.substring(oldParentPath.length +1); // +1 for the '/'
+            child.path = newParentPath + '/' + relativePath;
+            //child.path = newParentPath + '/' + child.name; // Simpler if names don't change, but relative is safer
+            updateChildrenPathsRecursive(child, oldParentPath + '/' + child.name, newParentPath + '/' + child.name); 
           });
         }
       };
@@ -404,12 +412,17 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             }
 
             oldPath = node.path;
+            const oldNodeName = node.name;
             nodeType = node.type;
             node.name = cleanNewName;
             node.path = (parentPathSegment === '' || parentPathSegment === '/' ? '' : parentPathSegment) + '/' + cleanNewName;
             newPath = node.path;
             
-            updateChildrenPathsRecursive(node);
+            // If it's a folder, update paths of all its children
+            if (node.type === 'folder' && node.children) {
+                const oldChildrenBasePath = (parentPathSegment === '' || parentPathSegment === '/' ? '' : parentPathSegment) + '/' + oldNodeName;
+                updateChildrenPathsRecursive(node, oldChildrenBasePath, newPath);
+            }
             success = true;
             return true;
           }
