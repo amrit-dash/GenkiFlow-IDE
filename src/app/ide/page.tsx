@@ -10,14 +10,19 @@ import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
-import { Bot, TerminalSquare } from 'lucide-react';
+import { Bot, TerminalSquare, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DownloadProjectModal } from '@/components/download-project-modal';
+import { downloadWorkspaceAsZip } from '@/lib/workspace-utils';
+import { useToast } from '@/hooks/use-toast';
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
-  const [showAiPanel, setShowAiPanel] = useState(true); // AI visible by default
-  const [showTerminalPanel, setShowTerminalPanel] = useState(false); // Terminal hidden by default
-  const { isBusy: isIdeBusy } = useIde();
+  const [showAiPanel, setShowAiPanel] = useState(true); 
+  const [showTerminalPanel, setShowTerminalPanel] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const { fileSystem, isBusy: isIdeBusy } = useIde();
+  const { toast } = useToast();
 
 
   useEffect(() => {
@@ -34,6 +39,27 @@ export default function IdePage() {
 
   const toggleAiPanel = () => setShowAiPanel(prev => !prev);
   const toggleTerminalPanel = () => setShowTerminalPanel(prev => !prev);
+
+  const handleProjectDownload = async (projectName: string) => {
+    if (!projectName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Project name cannot be empty.",
+      });
+      return;
+    }
+    setShowDownloadModal(false);
+    toast({ title: "Preparing download...", description: "Your project is being zipped and will download shortly." });
+    try {
+      await downloadWorkspaceAsZip(fileSystem, projectName.trim());
+      toast({ title: "Download Started!", description: `${projectName.trim()}.zip is downloading.` });
+    } catch (error) {
+      console.error("Failed to download workspace:", error);
+      const errorMessage = error instanceof Error ? error.message : "Could not create the zip file.";
+      toast({ variant: "destructive", title: "Download Failed", description: errorMessage });
+    }
+  };
 
   // Calculate default sizes for panels based on visibility
   const editorPanelSize = showAiPanel ? 65 : 100;
@@ -106,9 +132,26 @@ export default function IdePage() {
           <TerminalSquare className="h-5 w-5"/>
           <span className="sr-only">{showTerminalPanel ? "Hide Terminal" : "Show Terminal"}</span>
         </Button>
+        <Button
+          size="icon"
+          onClick={() => setShowDownloadModal(true)}
+          title="Download Workspace"
+          className={cn(
+            "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
+            "bg-card text-card-foreground hover:bg-muted border border-border"
+          )}
+        >
+          <Download className="h-5 w-5"/>
+          <span className="sr-only">Download Workspace</span>
+        </Button>
       </div>
+      {showDownloadModal && (
+        <DownloadProjectModal
+          isOpen={showDownloadModal}
+          onClose={() => setShowDownloadModal(false)}
+          onSubmitProjectName={handleProjectDownload}
+        />
+      )}
     </div>
   );
 }
-
-    

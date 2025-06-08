@@ -11,8 +11,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['Poppins', 'sans-serif'],
-        headline: ['Poppins', 'sans-serif'],
+        body: ['Century Gothic', 'sans-serif'],
+        headline: ['Century Gothic', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {
