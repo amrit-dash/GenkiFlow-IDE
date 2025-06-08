@@ -1,11 +1,12 @@
 
-"use client"; // This page uses client-side hooks from useSidebar and custom context
+"use client"; 
 
-import { useEffect, useState } from 'react'; // Added useEffect, useState
+import { useEffect, useState } from 'react';
 import { Sidebar, SidebarInset, SidebarRail } from "@/components/ui/sidebar";
 import { FileExplorer } from "@/components/file-explorer/file-explorer";
 import { CodeEditorPanel } from "@/components/code-editor/code-editor-panel";
 import { AiAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
+import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 export default function IdePage() {
@@ -16,10 +17,11 @@ export default function IdePage() {
   }, []);
 
   if (!isClient) {
-    // You can return a loading skeleton here if you prefer.
-    // Returning null means this part won't be in the initial server-rendered HTML.
-    // Example: return <div className="flex h-screen w-screen items-center justify-center"><p>Loading IDE...</p></div>;
-    return null;
+    return (
+        <div className="flex h-screen w-screen items-center justify-center bg-background">
+            <p className="text-muted-foreground">Loading IDE...</p>
+        </div>
+    );
   }
 
   return (
@@ -30,13 +32,25 @@ export default function IdePage() {
       <SidebarRail /> 
       
       <SidebarInset className="flex-1 overflow-hidden p-0 m-0 data-[variant=inset]:min-h-full">
-        <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-          <ResizablePanel defaultSize={65} minSize={30}>
-            <CodeEditorPanel />
+        <ResizablePanelGroup direction="vertical" className="h-full w-full">
+          {/* Top Panel: Editor and AI Assistant */}
+          <ResizablePanel defaultSize={70} minSize={30}>
+            <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+              <ResizablePanel defaultSize={65} minSize={30}>
+                <CodeEditorPanel />
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={35} minSize={20} maxSize={60} className="min-w-[280px]">
+                <AiAssistantPanel />
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </ResizablePanel>
+          
           <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={35} minSize={25} maxSize={50} className="min-w-[300px]">
-            <AiAssistantPanel />
+          
+          {/* Bottom Panel: Terminal */}
+          <ResizablePanel defaultSize={30} minSize={10} maxSize={70} className="min-h-[100px]">
+            <TerminalPanel />
           </ResizablePanel>
         </ResizablePanelGroup>
       </SidebarInset>
