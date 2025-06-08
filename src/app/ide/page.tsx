@@ -10,19 +10,17 @@ import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
-import { Bot, TerminalSquare, Download } from 'lucide-react';
+import { Bot, TerminalSquare, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { DownloadProjectModal } from '@/components/download-project-modal';
-import { downloadWorkspaceAsZip } from '@/lib/workspace-utils';
+import { ManageWorkspaceModal } from '@/components/manage-workspace-modal'; // Updated import
 import { useToast } from '@/hooks/use-toast';
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(true); 
   const [showTerminalPanel, setShowTerminalPanel] = useState(false);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const { fileSystem, isBusy: isIdeBusy } = useIde();
-  const { toast } = useToast();
+  const [showManageWorkspaceModal, setShowManageWorkspaceModal] = useState(false); // Updated state
+  const { isBusy: isIdeBusy } = useIde();
 
 
   useEffect(() => {
@@ -39,27 +37,6 @@ export default function IdePage() {
 
   const toggleAiPanel = () => setShowAiPanel(prev => !prev);
   const toggleTerminalPanel = () => setShowTerminalPanel(prev => !prev);
-
-  const handleProjectDownload = async (projectName: string) => {
-    if (!projectName.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Project name cannot be empty.",
-      });
-      return;
-    }
-    setShowDownloadModal(false);
-    toast({ title: "Preparing download...", description: "Your project is being zipped and will download shortly." });
-    try {
-      await downloadWorkspaceAsZip(fileSystem, projectName.trim());
-      toast({ title: "Download Started!", description: `${projectName.trim()}.zip is downloading.` });
-    } catch (error) {
-      console.error("Failed to download workspace:", error);
-      const errorMessage = error instanceof Error ? error.message : "Could not create the zip file.";
-      toast({ variant: "destructive", title: "Download Failed", description: errorMessage });
-    }
-  };
 
   // Calculate default sizes for panels based on visibility
   const editorPanelSize = showAiPanel ? 65 : 100;
@@ -134,22 +111,21 @@ export default function IdePage() {
         </Button>
         <Button
           size="icon"
-          onClick={() => setShowDownloadModal(true)}
-          title="Download Workspace"
+          onClick={() => setShowManageWorkspaceModal(true)} // Updated onClick
+          title="Manage Workspace" // Updated title
           className={cn(
             "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
             "bg-card text-card-foreground border border-border hover:bg-accent hover:text-accent-foreground"
           )}
         >
-          <Download className="h-5 w-5"/>
-          <span className="sr-only">Download Workspace</span>
+          <Settings2 className="h-5 w-5"/> {/* Updated Icon */}
+          <span className="sr-only">Manage Workspace</span>
         </Button>
       </div>
-      {showDownloadModal && (
-        <DownloadProjectModal
-          isOpen={showDownloadModal}
-          onClose={() => setShowDownloadModal(false)}
-          onSubmitProjectName={handleProjectDownload}
+      {showManageWorkspaceModal && (
+        <ManageWorkspaceModal
+          isOpen={showManageWorkspaceModal}
+          onClose={() => setShowManageWorkspaceModal(false)}
         />
       )}
     </div>

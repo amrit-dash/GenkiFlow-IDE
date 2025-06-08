@@ -33,12 +33,13 @@ export interface IdeState {
   setActiveFilePath: (path: string | null) => void;
   openFile: (filePath: string, nodeToOpen?: FileSystemNode) => void;
   closeFile: (filePath: string) => void;
-  updateFileContent: (filePath: string, newContent: string) => void; // Removed options, simplifying
+  updateFileContent: (filePath: string, newContent: string) => void;
   getFileSystemNode: (pathOrId: string) => FileSystemNode | FileSystemNode[] | undefined;
   addNode: (parentId: string | null, name: string, type: 'file' | 'folder', currentDirectoryPath?: string) => FileSystemNode | null;
   deleteNode: (nodeIdOrPath: string) => boolean;
   renameNode: (nodeId: string, newName: string) => boolean;
   moveNode: (draggedNodeId: string, targetParentFolderId: string | null) => void;
+  replaceWorkspace: (newNodes: FileSystemNode[], newActiveFilePath?: string | null) => void;
   isBusy: boolean;
   nodeToAutoRenameId: string | null;
   setNodeToAutoRenameId: (id: string | null) => void;
@@ -47,3 +48,4 @@ export interface IdeState {
 }
 
 // Add other shared types here
+
