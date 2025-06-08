@@ -122,11 +122,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   };
 
   const handleResetWorkspace = () => {
-    setZipProcessingStep('confirmReset'); // Use same state for confirmation flow
+    setZipProcessingStep('confirmReset'); 
   };
 
   const confirmAndExecuteReset = () => {
-    replaceWorkspace(mockFileSystem, null); // Pass null to not auto-open any file
+    replaceWorkspace(mockFileSystem, null); 
     toast({title: "Workspace Reset", description: "Workspace has been reset to default."});
     onClose();
   };
@@ -229,14 +229,18 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><FileWarning className="mr-2 h-5 w-5 text-yellow-500" />Unsupported Files Found</AlertDialogTitle>
-            <AlertDialogDescription>
-              The following files in the ZIP are not supported or could not be read and will be excluded if you proceed:
-              <ScrollArea className="max-h-32 mt-2 border rounded-md p-2">
-                <ul className="list-disc list-inside text-xs">
-                  {unsupportedFiles.map(f => <li key={f}>{f}</li>)}
-                </ul>
-              </ScrollArea>
-              Do you want to import the workspace excluding these files?
+            <AlertDialogDescription asChild>
+              <div>
+                The following files in the ZIP are not supported or could not be read and will be excluded if you proceed:
+                <ScrollArea className="max-h-32 mt-2 border rounded-md p-2">
+                  <ul className="list-disc list-inside text-xs">
+                    {unsupportedFiles.map(f => <li key={f}>{f}</li>)}
+                  </ul>
+                </ScrollArea>
+                <p className="mt-2">
+                  Do you want to import the workspace excluding these files?
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
