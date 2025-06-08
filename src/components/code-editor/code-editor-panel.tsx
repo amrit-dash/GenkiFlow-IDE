@@ -6,7 +6,7 @@ import { useIde } from '@/contexts/ide-context';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { XIcon, Save, Loader2 } from 'lucide-react';
+import { XIcon, Loader2 } from 'lucide-react'; // Removed Save icon for now
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -95,9 +95,9 @@ export function CodeEditorPanel() {
   }
 
   return (
-    <div className="flex flex-col bg-background h-full relative bg-red-500/30">
+    <div className="flex flex-col bg-background h-full">
       {openedFiles.size > 0 && (
-        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden min-h-0 bg-blue-500/30">
+        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="border-b border-border">
             <ScrollArea className="w-full whitespace-nowrap">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
@@ -158,13 +158,13 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent
                 value={activeFilePath}
-                className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0 bg-green-500/30"
+                className="flex-1 p-0 m-0 overflow-hidden min-h-0"
               >
-                <ScrollArea className="flex-1 w-full min-h-0 bg-orange-500/30">
+                <ScrollArea className="h-full w-full overflow-auto"> {/* ScrollArea instance uses h-full and overflow-auto */}
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
-                    className="flex-1 w-full min-h-0 p-4 font-code text-sm bg-purple-500/30 border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+                    className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
                     placeholder="Select a file to view its content or start typing..."
                     spellCheck="false"
                   />
@@ -175,30 +175,14 @@ export function CodeEditorPanel() {
       )}
        <div className="h-8 px-3 py-1.5 border-t border-border text-xs text-muted-foreground flex items-center shrink-0">
           <p>Ln: 1, Col: 1</p>
-       </div>
-       <div
-          role="button"
-          tabIndex={(activeFilePath && hasUnsavedChanges && !isSaving) ? 0 : -1}
-          onClick={handleSave}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
-          className={cn(
-            "absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer",
-            "bg-primary hover:bg-primary/90",
-            "transition-opacity duration-150 ease-in-out",
-            (activeFilePath && hasUnsavedChanges && !isSaving) ? "opacity-100" : "opacity-0 pointer-events-none"
+          {/* Save button could be placed here if needed, or re-added as floating later */}
+          {activeFilePath && hasUnsavedChanges && !isSaving && (
+            <button onClick={handleSave} className="ml-auto px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90">Save (Ctrl+S)</button>
           )}
-          title="Save File (Ctrl+S)"
-          aria-hidden={!(activeFilePath && hasUnsavedChanges && !isSaving)}
-        >
-          <Save className="h-5 w-5 text-primary-foreground" />
-          <span className="sr-only">Save File</span>
-        </div>
-      {isSaving && (
-         <div className="absolute bottom-10 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary/80">
-            <Loader2 className="h-5 w-5 animate-spin text-primary-foreground" />
-             <span className="sr-only">Saving...</span>
-         </div>
-      )}
+          {isSaving && (
+            <span className="ml-auto text-xs flex items-center"><Loader2 className="h-3 w-3 animate-spin mr-1" />Saving...</span>
+          )}
+       </div>
     </div>
   );
 }
