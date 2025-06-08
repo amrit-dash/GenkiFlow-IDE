@@ -12,7 +12,7 @@ export function FileExplorer() {
   const { fileSystem, addNode, setNodeToAutoRenameId } = useIde();
 
   const handleAddRootFile = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event bubbling that might trigger other UI elements
+    e.stopPropagation(); 
     const newNode = addNode(null, "UntitledFile", 'file', '/');
     if (newNode) {
       setNodeToAutoRenameId(newNode.id);
@@ -35,11 +35,23 @@ export function FileExplorer() {
             <Workflow className="w-6 h-6 text-primary" />
             <h2 className="text-lg font-headline font-semibold">GenkiFlow IDE</h2>
            </div>
-           <div className="flex items-center gap-0.5"> {/* Container for buttons */}
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddRootFile} title="Add File to Root">
+           <div className="flex items-center gap-0"> {/* Reduced gap from 0.5 to 0 */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sidebar-foreground hover:text-primary" 
+              onClick={handleAddRootFile} 
+              title="Add File to Root"
+            >
               <PlusCircle className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleAddRootFolder} title="Add Folder to Root">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sidebar-foreground hover:text-primary" 
+              onClick={handleAddRootFolder} 
+              title="Add Folder to Root"
+            >
               <FolderPlus className="h-4 w-4" />
             </Button>
            </div>
@@ -66,5 +78,4 @@ export function FileExplorer() {
     </>
   );
 }
-
     
