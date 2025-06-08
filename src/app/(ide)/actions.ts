@@ -24,33 +24,32 @@ import {
 
 function logDetailedError(actionName: string, error: any) {
   const timestamp = new Date().toISOString();
-  console.error(`--- Error in ${actionName} at ${timestamp} ---`);
-  console.error("Message:", error?.message);
-  if (error?.stack) {
-    console.error("Stack:", error.stack);
+  console.error(`--- DETAILED SERVER ERROR in ${actionName} at ${timestamp} ---`);
+  console.error("Raw Error Object:", error); // Log the raw error object first
+
+  if (error instanceof Error) {
+    console.error("Error Message:", error.message);
+    if (error.stack) {
+      console.error("Error Stack:", error.stack);
+    }
+    if (error.cause) {
+      const cause = typeof (error as any).cause === 'function' ? (error as any).cause() : (error as any).cause;
+      console.error("Error Cause:", cause);
+    }
+  } else if (typeof error === 'object' && error !== null) {
+    console.error("Error (object form):", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+  } else {
+    console.error("Error (primitive form):", error);
   }
-  if (error?.cause) {
-    // Handle if error.cause is a function (seen in some error patterns)
-    const cause = typeof error.cause === 'function' ? error.cause() : error.cause;
-    console.error("Cause:", cause);
+
+  // Genkit specific error details
+  if (error?.details) { 
+      console.error("Error Details (Genkit?):", error.details);
   }
-  if (error?.details) { // Genkit specific or other structured errors
-      console.error("Details:", error.details);
+  if (error?.rootCause) {
+      console.error("Error Root Cause (Genkit?):", error.rootCause);
   }
-  console.error("Full error object (raw):", error);
-  try {
-    // Attempt to stringify common/useful properties for a cleaner log
-    console.error("Error JSON (selective properties):", JSON.stringify({
-      message: error?.message,
-      name: error?.name,
-      stackSummary: error?.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
-      cause: typeof error?.cause === 'function' ? error.cause() : error?.cause,
-      details: error?.details,
-    }, null, 2));
-  } catch (e_stringify) {
-    console.error("Could not stringify parts of the error object for detailed logging:", e_stringify);
-  }
-  console.error(`--- End of Error in ${actionName} at ${timestamp} ---`);
+   console.error(`--- END OF DETAILED SERVER ERROR in ${actionName} at ${timestamp} ---`);
 }
 
 export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInput): Promise<SummarizeCodeSnippetOutput> {
