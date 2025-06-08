@@ -211,7 +211,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <p className="text-xs text-muted-foreground max-w-xs">
             Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below:
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-md pt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full max-w-md pt-3">
             <HintCard 
               icon={FileText} 
               title="Summarize Code" 

@@ -58,7 +58,7 @@ export default function IdePage() {
               </ResizablePanel>
               {showAiPanel && <ResizableHandle withHandle />}
               {showAiPanel && (
-                <ResizablePanel defaultSize={aiPanelSize} minSize={20} maxSize={60} className="min-w-[280px]">
+                <ResizablePanel defaultSize={aiPanelSize} minSize={25} maxSize={50} className="min-w-[300px]">
                   <AiAssistantPanel isVisible={showAiPanel} onToggleVisibility={toggleAiPanel} />
                 </ResizablePanel>
               )}
