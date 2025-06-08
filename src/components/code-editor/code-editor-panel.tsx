@@ -118,10 +118,9 @@ export function CodeEditorPanel() {
                         className={cn(
                           "inline-flex items-center justify-center transition-colors", 
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", 
-                          "text-foreground hover:bg-transparent hover:text-accent", 
+                          "text-foreground hover:text-accent", 
                           "p-0.5 h-auto w-auto", 
-                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2",
-                          "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" 
+                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2"
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
                           e.stopPropagation();
@@ -158,9 +157,9 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent 
                 value={activeFilePath} 
-                className="flex-1 p-0 m-0 overflow-hidden min-h-0 relative"
-              > {/* Added relative here */}
-                <ScrollArea className="absolute inset-0 w-full h-full"> {/* Changed to absolute positioning */}
+                className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0"
+              > 
+                <ScrollArea className="flex-1 w-full min-h-0">
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
