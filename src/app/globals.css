@@ -90,9 +90,7 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  /* Removed: * { @apply border-border; } */
   body {
     @apply bg-background text-foreground;
     /* Font family is set in tailwind.config.ts and applied via className in layout.tsx */
