@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { XIcon, Save, Loader2, CheckCircle } from 'lucide-react';
+import { XIcon, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function CodeEditorPanel() {
@@ -23,7 +23,6 @@ export function CodeEditorPanel() {
       if (fileNode?.content !== currentContent) {
         setCurrentContent(fileNode?.content || "");
       }
-      // Check against persisted FS content for unsaved changes status
       const persistedNode = getFileSystemNode(activeFilePath);
       setHasUnsavedChanges(fileNode?.content !== persistedNode?.content);
     } else if (!activeFilePath && openedFiles.size > 0) {
@@ -35,11 +34,10 @@ export function CodeEditorPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilePath, openedFiles]); 
 
-  // Effect to update currentContent and hasUnsavedChanges when file content changes from context (e.g., AI suggestion applied)
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
         const fileInTab = openedFiles.get(activeFilePath);
-        const persistedFile = getFileSystemNode(activeFilePath); // Get the "true" saved state
+        const persistedFile = getFileSystemNode(activeFilePath); 
         if (fileInTab?.content !== currentContent) {
             setCurrentContent(fileInTab?.content || "");
         }
@@ -61,8 +59,8 @@ export function CodeEditorPanel() {
   const handleSave = useCallback(() => {
     if (activeFilePath && hasUnsavedChanges) {
       setIsSaving(true);
-      updateFileContent(activeFilePath, currentContent); // This updates IdeContext and triggers localStorage save
-      setHasUnsavedChanges(false); // Mark as saved in UI immediately
+      updateFileContent(activeFilePath, currentContent); 
+      setHasUnsavedChanges(false); 
       setTimeout(() => {
         setIsSaving(false);
         toast({
@@ -87,12 +85,6 @@ export function CodeEditorPanel() {
     };
   }, [handleSave]);
 
-  // Determine if the file is truly saved by comparing current editor content with what's in the (simulated) persisted file system
-  const isFileActuallySaved = activeFilePath && 
-                              !hasUnsavedChanges && 
-                              !isSaving && 
-                              openedFiles.get(activeFilePath)?.content === getFileSystemNode(activeFilePath)?.content;
-
 
   if (openedFiles.size === 0) {
     return (
@@ -103,7 +95,7 @@ export function CodeEditorPanel() {
   }
   
   return (
-    <div className="flex-1 flex flex-col bg-background h-full relative"> {/* This 'relative' is important for absolute positioning of children */}
+    <div className="flex-1 flex flex-col bg-background h-full relative">
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex flex-col h-full">
           <div className="border-b border-border">
@@ -165,24 +157,14 @@ export function CodeEditorPanel() {
        {activeFilePath && hasUnsavedChanges && (
         <Button
           onClick={handleSave}
-          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-12 w-12 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
+          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
           disabled={isSaving}
           title="Save File (Ctrl+S)"
         >
-          {isSaving ? <Loader2 className="h-6 w-6 animate-spin" /> : <Save className="h-6 w-6" />}
+          {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
           <span className="sr-only">Save File</span>
         </Button>
-      )}
-      {activeFilePath && isFileActuallySaved && !isSaving && (
-         <div
-          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-12 w-12 p-0 bg-primary text-primary-foreground flex items-center justify-center"
-          title="File Saved"
-        >
-          <CheckCircle className="h-6 w-6" />
-          <span className="sr-only">File Saved</span>
-        </div>
       )}
     </div>
   );
 }
-
