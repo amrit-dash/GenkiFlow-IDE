@@ -18,11 +18,11 @@ export function CodeEditorPanel() {
   const { toast } = useToast();
 
   // DEBUG: Added background colors
-  const debugRootClass = "bg-red-500/30";
-  const debugTabsClass = "bg-blue-500/30";
-  const debugTabsContentClass = "bg-green-500/30";
-  const debugScrollAreaClass = "bg-yellow-500/30";
-  const debugTextareaClass = "bg-purple-500/30";
+  const debugRootClass = "bg-red-500/50";
+  const debugTabsClass = "bg-blue-500/50";
+  const debugTabsContentClass = "bg-green-500/50";
+  const debugScrollAreaClass = "bg-orange-500/50";
+  const debugTextareaClass = "bg-purple-600/50";
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
@@ -171,7 +171,7 @@ export function CodeEditorPanel() {
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
-                    className={cn("w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none", debugTextareaClass)}
+                    className={cn("flex-1 w-full min-h-0 p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none", debugTextareaClass)}
                     placeholder="Select a file to view its content or start typing..."
                     spellCheck="false"
                   />
@@ -209,3 +209,4 @@ export function CodeEditorPanel() {
     </div>
   );
 }
+
