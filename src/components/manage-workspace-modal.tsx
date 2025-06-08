@@ -8,7 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Download, Github, UploadCloud, Loader2, AlertTriangle, FileWarning } from 'lucide-react';
+import { Download, UploadCloud, Loader2, AlertTriangle, FileWarning } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { useToast } from '@/hooks/use-toast';
 import { downloadWorkspaceAsZip, processZipFile } from '@/lib/workspace-utils';
@@ -29,10 +29,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   const [downloadProjectName, setDownloadProjectName] = useState("MyGenkiFlowProject");
   const downloadInputRef = useRef<HTMLInputElement>(null);
 
-  // GitHub Import state
-  const [githubUrlInput, setGithubUrlInput] = useState("");
-  const [isFetchingGitHub, setIsFetchingGitHub] = useState(false);
-
   // ZIP Upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedZipFile, setSelectedZipFile] = useState<File | null>(null);
@@ -45,13 +41,11 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     if (isOpen) {
       // Reset states when modal opens
       setDownloadProjectName("MyGenkiFlowProject");
-      setGithubUrlInput("");
       setSelectedZipFile(null);
       setIsProcessingZip(false);
       setUnsupportedFiles([]);
       setProcessedZipFileSystem(null);
       setZipProcessingStep('idle');
-      setIsFetchingGitHub(false);
 
       setTimeout(() => {
         downloadInputRef.current?.focus();
@@ -76,9 +70,8 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     }
   };
 
-  const processAndReplaceWorkspace = async (zipArrayBuffer: ArrayBuffer, source: 'GitHub' | 'Upload') => {
+  const processAndReplaceWorkspace = async (zipArrayBuffer: ArrayBuffer, source: 'Upload') => {
     setIsProcessingZip(true); 
-    if (source === 'GitHub') setIsFetchingGitHub(true); 
 
     try {
       const { fileSystem: newFs, unsupportedFiles: newUnsupported, singleRootDir } = await processZipFile(zipArrayBuffer);
@@ -97,108 +90,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       setZipProcessingStep('idle');
     } finally {
       setIsProcessingZip(false);
-      if (source === 'GitHub') setIsFetchingGitHub(false);
-    }
-  };
-
-  const handleGitHubImport = async () => {
-    const rawUrl = githubUrlInput.trim();
-    if (!rawUrl) {
-      toast({ variant: "destructive", title: "Error", description: "GitHub URL cannot be empty." });
-      return;
-    }
-
-    let targetZipUrl = rawUrl;
-    let isTransformedUrl = false;
-
-    if (!rawUrl.endsWith('.zip')) {
-      try {
-        const parsedUrl = new URL(rawUrl); 
-        if (parsedUrl.hostname === 'github.com') {
-          const pathSegments = parsedUrl.pathname.split('/').filter(Boolean); 
-          if (pathSegments.length >= 2) {
-            const user = pathSegments[0];
-            let repo = pathSegments[1];
-            
-            if (repo.endsWith('.git')) {
-              repo = repo.substring(0, repo.length - 4);
-            }
-            // Default to 'main' branch. GitHub might redirect if 'main' is not default, or fail.
-            targetZipUrl = `https://github.com/${user}/${repo}/archive/refs/heads/main.zip`;
-            isTransformedUrl = true;
-            toast({ 
-              title: "Transforming URL", 
-              description: `Attempting to fetch 'main' branch ZIP for ${user}/${repo}` 
-            });
-          } else {
-            throw new Error("Invalid GitHub repository URL format. Expected format like https://github.com/user/repo.");
-          }
-        } else {
-          throw new Error("URL is not a direct .zip link or a standard github.com repository URL.");
-        }
-      } catch (e: any) {
-        toast({ 
-          variant: "destructive", 
-          title: "Invalid URL", 
-          description: e.message || "Could not parse the GitHub URL. Please provide a direct .zip link or a standard GitHub repository URL." 
-        });
-        setIsFetchingGitHub(false);
-        return;
-      }
-    }
-
-    setIsFetchingGitHub(true);
-    toast({ title: "Fetching from GitHub...", description: `Downloading from ${targetZipUrl}` });
-    console.log("Attempting to fetch GitHub ZIP from:", targetZipUrl);
-    
-    try {
-      const response = await fetch(targetZipUrl);
-      if (!response.ok) {
-        let errorDetail = `Failed to fetch ZIP: ${response.status} ${response.statusText}.`;
-        if (isTransformedUrl && response.status === 404) {
-          errorDetail += " This might mean the 'main' branch doesn't exist or the repository is private/incorrect. Try a direct .zip link for a specific branch or ensure the repository is public and 'main' is the default branch.";
-        } else if (!isTransformedUrl) {
-           errorDetail += " Ensure the URL is a direct download link to a .zip file and is publicly accessible.";
-        }
-        // Log detailed response info for debugging
-        try {
-            const responseText = await response.text();
-            console.error("GitHub fetch error - Response Text:", responseText.slice(0, 500)); // Log first 500 chars
-        } catch (textErr) {
-            console.error("GitHub fetch error - Could not read response text.");
-        }
-        console.error("GitHub fetch error - Response Headers:", Object.fromEntries(response.headers.entries()));
-        throw new Error(errorDetail);
-      }
-      const zipArrayBuffer = await response.arrayBuffer();
-      await processAndReplaceWorkspace(zipArrayBuffer, 'GitHub');
-    } catch (error: any) {
-      console.error(`GitHub Import Fetch/Process Error for URL: ${targetZipUrl}`, error);
-      let descriptionToast = "An unexpected error occurred during GitHub import.";
-
-      if (error instanceof TypeError && error.message.toLowerCase().includes("failed to fetch")) {
-        descriptionToast = `The browser failed to directly fetch the URL: ${targetZipUrl}. 
-        
-This is often due to browser security (CORS policy) preventing cross-origin requests, or network issues. While you can download this URL directly in your browser, JavaScript running in the IDE cannot always do the same due to these restrictions.
-
-Recommended Solution:
-1. Manually download the .zip file from GitHub.
-2. Use the "Upload ZIP & Replace Workspace" option below.
-
-Please verify your network connection and that the URL is correct and publicly accessible.`;
-      } else if (error.message.startsWith("Failed to fetch ZIP:")) { 
-        descriptionToast = error.message; 
-      } else if (error.message) { 
-        descriptionToast = `Error processing the data: ${error.message}`;
-      }
-      
-      toast({ 
-        variant: "destructive", 
-        title: "GitHub Import Failed", 
-        description: descriptionToast,
-        duration: 20000, 
-      });
-      setIsFetchingGitHub(false);
     }
   };
 
@@ -244,7 +135,7 @@ Please verify your network connection and that the URL is correct and publicly a
         <DialogHeader>
           <DialogTitle className="text-xl">Manage Workspace</DialogTitle>
           <DialogDescription>
-            Download your current workspace or import a new one. Importing will replace your current workspace.
+            Download your current workspace or import a new one by uploading a ZIP file. Importing will replace your current workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -270,42 +161,15 @@ Please verify your network connection and that the URL is correct and publicly a
           </section>
 
           <Separator />
-
-          {/* GitHub Import Section */}
-          <section>
-            <h3 className="text-md font-semibold mb-2 flex items-center"><Github className="mr-2 h-4 w-4 text-primary" />Import from GitHub</h3>
-             <p className="text-xs text-muted-foreground mb-1">
-              Enter a GitHub repository URL (e.g., <code className="bg-muted px-1 py-0.5 rounded text-xs">https://github.com/user/repo</code>) 
-              or a direct <code className="bg-muted px-1 py-0.5 rounded text-xs">.zip</code> download link.
-            </p>
-             <p className="text-xs text-muted-foreground mb-2">
-              If a repository URL is provided, we'll attempt to download the <code className="bg-muted px-1 py-0.5 rounded text-xs">main</code> branch ZIP.
-              Note: Direct fetching from GitHub via JavaScript can sometimes be blocked by browser security (CORS). If this occurs, please download the ZIP manually and use the "Upload ZIP" option below.
-            </p>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="githubUrl" className="sr-only">GitHub Repository or ZIP URL</Label>
-              <Input
-                id="githubUrl"
-                value={githubUrlInput}
-                onChange={(e) => setGithubUrlInput(e.target.value)}
-                className="flex-grow"
-                placeholder="GitHub Repo URL or direct .zip link"
-                disabled={isFetchingGitHub || isProcessingZip}
-              />
-              <Button onClick={handleGitHubImport} disabled={!githubUrlInput.trim() || isFetchingGitHub || isProcessingZip}>
-                {isFetchingGitHub ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Fetch & Process
-              </Button>
-            </div>
-          </section>
           
-          <Separator />
-
           {/* ZIP Upload Section */}
           <section>
             <h3 className="text-md font-semibold mb-2 flex items-center"><UploadCloud className="mr-2 h-4 w-4 text-primary" />Upload ZIP & Replace Workspace</h3>
+            <p className="text-xs text-muted-foreground mb-2">
+              Select a .zip file containing your project. Unsupported file types (e.g., images, PDFs, executables) will be excluded.
+            </p>
             <div className="flex items-center gap-2">
-              <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="flex-shrink-0" disabled={isProcessingZip || isFetchingGitHub}>
+              <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="flex-shrink-0" disabled={isProcessingZip}>
                 {selectedZipFile ? `Selected: ${selectedZipFile.name}` : "Select .zip File"}
               </Button>
               <input
@@ -314,10 +178,10 @@ Please verify your network connection and that the URL is correct and publicly a
                 accept=".zip"
                 onChange={handleZipFileSelect}
                 className="hidden"
-                disabled={isProcessingZip || isFetchingGitHub}
+                disabled={isProcessingZip}
               />
-              <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip || isFetchingGitHub}>
-                {isProcessingZip && zipProcessingStep === 'idle' && !isFetchingGitHub ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              <Button onClick={handleProcessZipUpload} disabled={!selectedZipFile || isProcessingZip}>
+                {isProcessingZip && zipProcessingStep === 'idle' ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Process ZIP
               </Button>
             </div>
@@ -373,4 +237,3 @@ Please verify your network connection and that the URL is correct and publicly a
     </Dialog>
   );
 }
-
