@@ -46,7 +46,8 @@ const UNSUPPORTED_EXTENSIONS = [
   '.psd', '.ai', '.fig', '.sketch', // Design files
   '.o', '.obj', '.class', '.pyc', // Compiled object files
   // Potentially large image files - can be adjusted if needed
-  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.heif' 
+  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.heif',
+  '.ico' // Added .ico
 ];
 
 export function isFileSupported(fileName: string): boolean {
@@ -58,6 +59,46 @@ export function isFileSupported(fileName: string): boolean {
   return !UNSUPPORTED_EXTENSIONS.some(ext => lowerFileName.endsWith(ext));
 }
 
+// Helper function to determine if a folder is effectively empty
+function isEffectivelyEmpty(node: FileSystemNode): boolean {
+  if (node.type === 'file') {
+    return false; // Files are never considered empty for pruning
+  }
+  if (node.type === 'folder') {
+    if (!node.children || node.children.length === 0) {
+      return true; // No children, definitely empty
+    }
+    // A folder is effectively empty if all its children are effectively empty
+    return node.children.every(child => isEffectivelyEmpty(child));
+  }
+  return true; // Should not happen for valid FileSystemNode
+}
+
+// Recursive function to prune empty folders from a list of nodes
+function pruneEmptyFoldersRecursive(nodes: FileSystemNode[]): FileSystemNode[] {
+  if (!nodes) return [];
+
+  // First, recursively prune children of all folders in the current list
+  const processedNodes = nodes.map(node => {
+    if (node.type === 'folder' && node.children) {
+      const prunedChildren = pruneEmptyFoldersRecursive(node.children);
+      return { ...node, children: prunedChildren };
+    }
+    return node; // Files or folders without children (or children already processed for this node)
+  });
+
+  // Then, filter out nodes that are effectively empty from the current list
+  return processedNodes.filter(node => {
+    if (node.type === 'file') {
+      return true; // Always keep files
+    }
+    if (node.type === 'folder') {
+      return !isEffectivelyEmpty(node); // Keep folder only if it's not effectively empty
+    }
+    return false; // Should not happen
+  });
+}
+
 
 export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem: FileSystemNode[], unsupportedFiles: string[], singleRootDir: string | null }> {
   const zip = await JSZip.loadAsync(zipData);
@@ -67,6 +108,16 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
   const promises: Promise<void>[] = [];
 
   zip.forEach((relativePath, zipEntry) => {
+    // Skip Mac OS X metadata folders/files
+    if (relativePath.startsWith('__MACOSX/')) {
+      return;
+    }
+    // Skip .DS_Store files
+    if (zipEntry.name.endsWith('.DS_Store')) {
+        unsupportedFiles.push(relativePath); // Technically unsupported by not processing
+        return;
+    }
+
     if (zipEntry.dir) {
       files[relativePath] = { type: 'folder', name: zipEntry.name.split('/').filter(Boolean).pop()! };
     } else {
@@ -76,7 +127,7 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
           zipEntry.async('string').then(content => {
             files[relativePath] = { type: 'file', content, name: fileName };
           }).catch(err => {
-            console.warn(`Could not read content for ${relativePath}, possibly binary. Excluding. Error: ${err.message}`);
+            console.warn(`Could not read content for ${relativePath} as string, likely binary or unsupported encoding. Excluding. Error: ${err.message}`);
             unsupportedFiles.push(relativePath);
           })
         );
@@ -90,13 +141,13 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
 
   // Reconstruct FileSystemNode structure
   const pathMap: Map<string, FileSystemNode> = new Map();
-  const rootNodes: FileSystemNode[] = [];
+  let rootNodes: FileSystemNode[] = [];
 
   const sortedPaths = Object.keys(files).sort((a, b) => a.localeCompare(b));
 
   for (const path of sortedPaths) {
     const entry = files[path];
-    if (!entry) continue; // Skip if entry was skipped due to being unsupported and not added to files
+    if (!entry) continue; 
 
     const parts = path.split('/').filter(p => p);
     const name = parts.pop()!;
@@ -111,41 +162,39 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
       type: entry.type,
       path: fullPath,
       content: entry.type === 'file' ? entry.content : undefined,
-      children: entry.type === 'folder' ? [] : undefined,
+      children: entry.type === 'folder' ? [] : undefined, // Initialize children for folders
     };
     if (node.type === 'file') {
         node.contentHistory = [node.content || ''];
         node.historyIndex = 0;
     }
 
-
     pathMap.set(path, node);
 
     if (!parentPath) {
       rootNodes.push(node);
     } else {
-      const parentNode = pathMap.get(parentPath + '/'); // JSZip paths for dirs end with /
+      const parentNode = pathMap.get(parentPath + '/'); 
       if (parentNode && parentNode.type === 'folder') {
         parentNode.children = parentNode.children || [];
         parentNode.children.push(node);
       } else {
-        // This case might happen if a file is listed before its parent folder,
-        // or if parent folder itself was unsupported.
-        // For simplicity, we'll add it to root, though this might not be ideal.
-        // A more robust solution would be multiple passes or ensuring folders are processed first.
         console.warn(`Parent for ${path} not found or not a folder. Adding to root.`);
         rootNodes.push(node);
       }
     }
   }
   
-  // Detect if there's a single root directory in the zip
-  let singleRootDirName: string | null = null;
-  let processedFileSystem = rootNodes;
+  // Prune empty folders from the constructed tree
+  rootNodes = pruneEmptyFoldersRecursive(rootNodes);
 
-  if (rootNodes.length === 1 && rootNodes[0].type === 'folder') {
-    singleRootDirName = rootNodes[0].name;
-    processedFileSystem = rootNodes[0].children || [];
+  // Detect if there's a single root directory in the zip after pruning
+  let singleRootDirName: string | null = null;
+  let finalFileSystem = rootNodes;
+
+  if (finalFileSystem.length === 1 && finalFileSystem[0].type === 'folder') {
+    singleRootDirName = finalFileSystem[0].name;
+    finalFileSystem = finalFileSystem[0].children || [];
     // Re-path children if we are "unwrapping" a single root directory
     const rePathChildren = (nodes: FileSystemNode[], parentPathPrefix: string) => {
         nodes.forEach(n => {
@@ -156,9 +205,8 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
             }
         });
     };
-    rePathChildren(processedFileSystem, '/');
+    rePathChildren(finalFileSystem, '/');
   }
 
-
-  return { fileSystem: processedFileSystem, unsupportedFiles, singleRootDir: singleRootDirName };
+  return { fileSystem: finalFileSystem, unsupportedFiles, singleRootDir: singleRootDirName };
 }
