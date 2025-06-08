@@ -58,7 +58,7 @@ export function FileExplorer() {
           ) : (
             <div className="p-4 pt-6 text-center text-sm text-muted-foreground">
               <p>File explorer is empty.</p>
-              <p className="mt-1">Click <PlusCircle className="inline h-3.5 w-3.5 align-text-bottom"/> or <FolderPlus className="inline h-3.5 w-3.5 align-text-bottom"/> above to add items.</p>
+              <p className="mt-2">Click <PlusCircle className="inline h-3.5 w-3.5 align-text-bottom"/> or <FolderPlus className="inline h-3.5 w-3.5 align-text-bottom"/> above to add items.</p>
             </div>
           )}
         </ScrollArea>
