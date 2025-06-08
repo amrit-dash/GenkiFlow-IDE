@@ -3,12 +3,13 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useIde } from '@/contexts/ide-context';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; // Added ScrollBar
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { XIcon, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export function CodeEditorPanel() {
   const { activeFilePath, openedFiles, setActiveFilePath, closeFile, updateFileContent, getFileSystemNode } = useIde();
@@ -99,8 +100,8 @@ export function CodeEditorPanel() {
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex flex-col h-full">
           <div className="border-b border-border">
-            <ScrollArea> 
-              <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none">
+            <ScrollArea className="w-full whitespace-nowrap"> 
+              <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const isFileUnsavedInThisTab = file.content !== getFileSystemNode(path)?.content;
                   return (
@@ -113,10 +114,13 @@ export function CodeEditorPanel() {
                       {file.name}
                       {isFileUnsavedInThisTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
                       <Button 
-                        asChild
                         variant="ghost" 
-                        size="icon" 
-                        className="ml-2 h-5 w-5 absolute top-1/2 right-2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" 
+                        className={cn(
+                          "p-0.5 h-auto w-auto rounded-full", // Core style changes
+                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2", // Positioning
+                          "opacity-0 group-hover:opacity-100 focus-within:opacity-100", // Visibility
+                          "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" // Active tab styling
+                        )}
                         onClick={(e) => { 
                           e.stopPropagation();
                           if (isFileUnsavedInThisTab) {
@@ -128,9 +132,7 @@ export function CodeEditorPanel() {
                         }}
                         aria-label={`Close tab ${file.name}`}
                       >
-                        <span>
-                          <XIcon className="h-3.5 w-3.5" />
-                        </span>
+                        <XIcon className="h-3.5 w-3.5" />
                       </Button>
                     </TabsTrigger>
                   );
