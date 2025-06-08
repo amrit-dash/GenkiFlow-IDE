@@ -10,7 +10,8 @@ import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
-import { PanelRightOpen, Bot, TerminalSquare, PanelLeftOpen } from 'lucide-react';
+import { Bot, TerminalSquare } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
@@ -75,24 +76,32 @@ export default function IdePage() {
         </ResizablePanelGroup>
       </SidebarInset>
       
-      {/* Global toggle buttons in top right corner */}
-      <div className="absolute top-2 right-2 z-50 flex gap-2">
+      {/* Global toggle buttons in bottom left corner */}
+      <div className="absolute bottom-4 left-4 z-50 flex flex-col gap-2">
         <Button
-          variant="outline"
           size="icon"
           onClick={toggleAiPanel}
           title={showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}
-          className="bg-background/80 hover:bg-accent"
+          className={cn(
+            "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
+            showAiPanel
+              ? "bg-accent text-accent-foreground hover:bg-accent/90" 
+              : "bg-card text-card-foreground hover:bg-muted border border-border" 
+          )}
         >
-          {showAiPanel ? <PanelLeftOpen className="h-5 w-5"/> : <Bot className="h-5 w-5"/>}
+          <Bot className="h-5 w-5"/>
            <span className="sr-only">{showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}</span>
         </Button>
         <Button
-          variant="outline"
           size="icon"
           onClick={toggleTerminalPanel}
           title={showTerminalPanel ? "Hide Terminal" : "Show Terminal"}
-          className="bg-background/80 hover:bg-accent"
+          className={cn(
+            "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
+            showTerminalPanel
+              ? "bg-accent text-accent-foreground hover:bg-accent/90"
+              : "bg-card text-card-foreground hover:bg-muted border border-border"
+          )}
         >
           <TerminalSquare className="h-5 w-5"/>
           <span className="sr-only">{showTerminalPanel ? "Hide Terminal" : "Show Terminal"}</span>
@@ -101,5 +110,3 @@ export default function IdePage() {
     </div>
   );
 }
-
-    
