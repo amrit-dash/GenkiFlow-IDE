@@ -225,7 +225,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       </DialogContent>
 
       {/* Alert Dialog for Unsupported Files Confirmation */}
-      <AlertDialog open={zipProcessingStep === 'confirmUnsupported'} onOpenChange={(open) => !open && resetModalFlows()}>
+      <AlertDialog open={zipProcessingStep === 'confirmUnsupported'}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><FileWarning className="mr-2 h-5 w-5 text-yellow-500" />Unsupported Files Found</AlertDialogTitle>
@@ -253,7 +253,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       </AlertDialog>
 
       {/* Alert Dialog for Workspace Overwrite Confirmation (from ZIP) */}
-      <AlertDialog open={zipProcessingStep === 'confirmOverwrite'} onOpenChange={(open) => !open && resetModalFlows()}>
+      <AlertDialog open={zipProcessingStep === 'confirmOverwrite'}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive" />Confirm Workspace Replacement</AlertDialogTitle>
@@ -272,7 +272,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       </AlertDialog>
 
       {/* Alert Dialog for Reset Workspace Confirmation */}
-      <AlertDialog open={zipProcessingStep === 'confirmReset'} onOpenChange={(open) => !open && resetModalFlows()}>
+      <AlertDialog open={zipProcessingStep === 'confirmReset'}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-destructive" />Confirm Workspace Reset</AlertDialogTitle>
@@ -294,3 +294,4 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   );
 }
 
+    
