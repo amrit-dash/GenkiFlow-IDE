@@ -48,6 +48,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+  const [actionAppliedStates, setActionAppliedStates] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
 
@@ -63,42 +64,41 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     }
   }, [chatHistory]);
 
-  const handleApplyToEditor = (codeToApply: string, targetPath?: string) => {
+  const setTemporaryButtonState = (key: string) => {
+    setActionAppliedStates(prev => ({ ...prev, [key]: true }));
+    setTimeout(() => {
+      setActionAppliedStates(prev => ({ ...prev, [key]: false }));
+    }, 2500);
+  };
+
+  const handleApplyToEditor = (codeToApply: string, messageId: string, targetPath?: string) => {
     const path = targetPath || activeFilePath;
+    const buttonKey = `${messageId}-apply-editor`;
+
     if (path) {
       updateFileContent(path, codeToApply);
-      setChatHistory(prev => [...prev, {
-        id: generateId(),
-        role: 'assistant',
-        type: 'text',
-        content: `Code has been applied to ${getFileSystemNode(path)?.name || 'the editor'}.`
-      }]);
-      toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name}.`});
+      toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name || 'the editor'}.`});
+      setTemporaryButtonState(buttonKey);
     } else {
-       setChatHistory(prev => [...prev, {
-        id: generateId(),
-        role: 'assistant',
-        type: 'error',
-        content: "No active file to apply the code to."
-      }]);
-      toast({ variant: "destructive", title: "Error", description: "No active file selected."});
+      toast({ variant: "destructive", title: "Error", description: "No active file selected to apply code."});
     }
   };
 
-  const handleCreateFileAndInsert = async (suggestedFileName: string, code: string) => {
+  const handleCreateFileAndInsert = async (suggestedFileName: string, code: string, messageId: string) => {
     setIsLoading(true);
+    const buttonKey = `${messageId}-create-file`;
     let parentDirNode = activeFilePath ? getFileSystemNode(activeFilePath) : null;
     let parentIdForNewNode: string | null = null;
     let baseDirForNewNode = "/";
 
     if (parentDirNode && !Array.isArray(parentDirNode) && parentDirNode.type === 'file') {
         const pathParts = parentDirNode.path.split('/');
-        pathParts.pop(); // remove filename
+        pathParts.pop(); 
         baseDirForNewNode = pathParts.join('/') || '/';
         const actualParentDirNode = getFileSystemNode(baseDirForNewNode);
         if (actualParentDirNode && !Array.isArray(actualParentDirNode) && actualParentDirNode.type === 'folder') {
             parentIdForNewNode = actualParentDirNode.id;
-        } else { // fallback to root if parent dir not found (should not happen with valid paths)
+        } else { 
             parentIdForNewNode = null;
             baseDirForNewNode = "/";
         }
@@ -108,46 +108,29 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         baseDirForNewNode = parentDirNode.path;
     }
 
-
     const newNode = addNode(parentIdForNewNode, suggestedFileName, 'file', baseDirForNewNode);
 
     if (newNode) {
       openFile(newNode.path);
-      updateFileContent(newNode.path, code); // Update content *after* opening to ensure it's in openedFiles map
-      setChatHistory(prev => [...prev, {
-        id: generateId(),
-        role: 'assistant',
-        type: 'text',
-        content: `File "${newNode.name}" created and code inserted.`
-      }]);
+      updateFileContent(newNode.path, code);
       toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
+      setTemporaryButtonState(buttonKey);
     } else {
-      setChatHistory(prev => [...prev, {
-        id: generateId(),
-        role: 'assistant',
-        type: 'error',
-        content: `Failed to create file "${suggestedFileName}". It might already exist or the name is invalid.`
-      }]);
-      toast({ variant: "destructive", title: "Error", description: `Could not create file "${suggestedFileName}".`});
+      toast({ variant: "destructive", title: "Error", description: `Could not create file "${suggestedFileName}". It might already exist or the name is invalid.`});
     }
     setIsLoading(false);
   };
 
 
-  const handleCopyCode = (codeToCopy: string, messageId: string) => {
+  const handleCopyCode = (codeToCopy: string, messageIdPlusAction: string) => {
     navigator.clipboard.writeText(codeToCopy).then(() => {
-      setCopiedStates(prev => ({ ...prev, [messageId]: true }));
+      setCopiedStates(prev => ({ ...prev, [messageIdPlusAction]: true }));
       setTimeout(() => {
-        setCopiedStates(prev => ({ ...prev, [messageId]: false }));
+        setCopiedStates(prev => ({ ...prev, [messageIdPlusAction]: false }));
       }, 2000);
     }).catch(err => {
       console.error("Failed to copy code:", err);
-      setChatHistory(prev => [...prev, {
-        id: generateId(),
-        role: 'assistant',
-        type: 'error',
-        content: "Failed to copy code to clipboard."
-      }]);
+      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy code to clipboard." });
     });
   };
 
@@ -200,9 +183,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             aiResponse = { 
               id: generateId(), 
               role: 'assistant', 
-              type: 'refactorSuggestion', // Singular
+              type: 'refactorSuggestion', 
               content: "Here's a refactoring suggestion:", 
-              suggestion: result.suggestion // Single suggestion object
+              suggestion: result.suggestion 
             };
           } else {
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: "No specific refactoring suggestions found for the current code." };
@@ -218,7 +201,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: `No examples found for "${query}".` };
         }
       } else { 
-        // Default to code generation, pass current file context
         let effectivePrompt = currentPromptValue;
         const historyForContext = currentChatHistory.slice(0, -1); 
         if (historyForContext.length > 0) {
@@ -321,104 +303,137 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       ) : (
         <ScrollArea ref={scrollAreaRef} className="flex-1 p-1">
           <div className="p-3 space-y-4">
-            {chatHistory.map((msg) => (
-              <div key={msg.id} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
-                <Card className={cn("max-w-[85%] p-0 shadow-sm", msg.role === 'user' ? "bg-primary/20" : "bg-card/90")}>
-                  <CardHeader className="p-3 pb-2 flex flex-row items-center gap-2">
-                    {msg.role === 'assistant' && <BotIcon className="w-5 h-5 text-primary" />}
-                    {msg.role === 'user' && <User className="w-5 h-5 text-primary" />}
-                    <CardDescription className={cn("text-xs", msg.role === 'user' ? "text-primary-foreground/90" : "text-muted-foreground")}>
-                      {msg.role === 'user' ? 'You' : 'AI Assistant'} {msg.type === 'loading' ? 'is thinking...' : ''}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-3 pt-0 text-sm">
-                    {msg.type === 'loading' && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-                    {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
-                    {msg.type === 'error' && <p className="text-destructive whitespace-pre-wrap">{msg.content}</p>}
-                    
-                    {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion') && msg.code && (
-                      <div className="space-y-2">
-                        <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
-                        <div className="relative bg-muted p-2 rounded-md group">
-                          <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code"><code>{msg.code}</code></pre>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleCopyCode(msg.code!, msg.id)}
-                            title={copiedStates[msg.id] ? "Copied!" : "Copy code"}
-                          >
-                            {copiedStates[msg.id] ? <Check className="h-3.5 w-3.5 text-green-500" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
-                          </Button>
-                        </div>
-                        {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
-                          <Button size="sm" variant="outline" onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!)} disabled={isLoading}>
-                            <FilePlus2 className="mr-1.5 h-4 w-4" /> Create File & Insert
-                          </Button>
-                        )}
-                        {msg.type === 'generatedCode' && (
-                           <Button size="sm" variant="outline" onClick={() => handleApplyToEditor(msg.code!)} disabled={isLoading || !activeFilePath}>
-                            <Edit className="mr-1.5 h-4 w-4" /> {activeFilePath ? `Insert into ${currentFileName || 'Editor'}` : 'Insert into Editor (No file open)'}
-                           </Button>
-                        )}
-                      </div>
-                    )}
+            {chatHistory.map((msg) => {
+              const applyEditorKey = `${msg.id}-apply-editor`;
+              const createFileKey = `${msg.id}-create-file`;
 
-                    {msg.type === 'refactorSuggestion' && msg.suggestion && (
-                      <div className="space-y-3">
-                        <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
-                        <Card className="bg-muted/60 shadow-none">
-                          <CardHeader className="p-2">
-                            <CardDescription className="text-xs">{msg.suggestion.description}</CardDescription>
-                          </CardHeader>
-                          <CardContent className="p-2 pt-0">
-                            <div className="relative bg-background/70 p-1.5 rounded-md group mb-1.5">
-                              <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{msg.suggestion.proposedCode}</code></pre>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => handleCopyCode(msg.suggestion!.proposedCode, `${msg.id}-suggestion`)}
-                                title={copiedStates[`${msg.id}-suggestion`] ? "Copied!" : "Copy code"}
-                              >
-                                {copiedStates[`${msg.id}-suggestion`] ? <Check className="h-3 w-3 text-green-500" /> : <ClipboardCopy className="h-3 w-3" />}
-                              </Button>
-                            </div>
-                            <Button size="xs" variant="outline" className="mt-1" onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode)} disabled={isLoading || !activeFilePath}>
-                                {activeFilePath ? 'Apply to Editor' : 'Apply (No file open)'}
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </div>
-                    )}
-                    {msg.type === 'refactorSuggestion' && !msg.suggestion && (
-                         <p className="whitespace-pre-wrap">No specific refactoring suggestion found.</p>
-                    )}
-
-
-                    {msg.type === 'codeExamples' && msg.examples && (
-                      <div className="space-y-2">
-                        <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
-                        {msg.examples.map((ex, i) => (
-                          <div key={i} className="relative bg-muted p-2 rounded-md group">
-                            <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{ex}</code></pre>
+              return (
+                <div key={msg.id} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
+                  <Card className={cn("max-w-[85%] p-0 shadow-sm", msg.role === 'user' ? "bg-primary/20" : "bg-card/90")}>
+                    <CardHeader className="p-3 pb-2 flex flex-row items-center gap-2">
+                      {msg.role === 'assistant' && <BotIcon className="w-5 h-5 text-primary" />}
+                      {msg.role === 'user' && <User className="w-5 h-5 text-primary" />}
+                      <CardDescription className={cn("text-xs", msg.role === 'user' ? "text-primary-foreground/90" : "text-muted-foreground")}>
+                        {msg.role === 'user' ? 'You' : 'AI Assistant'} {msg.type === 'loading' ? 'is thinking...' : ''}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0 text-sm">
+                      {msg.type === 'loading' && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                      {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                      {msg.type === 'error' && <p className="text-destructive whitespace-pre-wrap">{msg.content}</p>}
+                      
+                      {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion') && msg.code && (
+                        <div className="space-y-2">
+                          <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
+                          <div className="relative bg-muted p-2 rounded-md group">
+                            <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code"><code>{msg.code}</code></pre>
                             <Button 
                               variant="ghost" 
                               size="icon" 
                               className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => handleCopyCode(ex, `${msg.id}-example-${i}`)}
-                              title={copiedStates[`${msg.id}-example-${i}`] ? "Copied!" : "Copy code"}
+                              onClick={() => handleCopyCode(msg.code!, `${msg.id}-code`)}
+                              title={copiedStates[`${msg.id}-code`] ? "Copied!" : "Copy code"}
                             >
-                              {copiedStates[`${msg.id}-example-${i}`] ? <Check className="h-3.5 w-3.5 text-green-500" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                              {copiedStates[`${msg.id}-code`] ? <Check className="h-3.5 w-3.5 text-green-500" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
                             </Button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            ))}
+                          {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id)} 
+                              disabled={isLoading || actionAppliedStates[createFileKey]}
+                            >
+                              {actionAppliedStates[createFileKey] ? (
+                                <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
+                              ) : (
+                                <><FilePlus2 className="mr-1.5 h-4 w-4" /> Create File & Insert</>
+                              )}
+                            </Button>
+                          )}
+                          {msg.type === 'generatedCode' && (
+                             <Button 
+                               size="sm" 
+                               variant="outline" 
+                               onClick={() => handleApplyToEditor(msg.code!, msg.id)} 
+                               disabled={isLoading || !activeFilePath || actionAppliedStates[applyEditorKey]}
+                             >
+                               {actionAppliedStates[applyEditorKey] ? (
+                                 <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
+                               ) : (
+                                 <><Edit className="mr-1.5 h-4 w-4" /> {activeFilePath ? `Insert into ${currentFileName || 'Editor'}` : 'Insert (No file open)'}</>
+                               )}
+                             </Button>
+                          )}
+                        </div>
+                      )}
+
+                      {msg.type === 'refactorSuggestion' && msg.suggestion && (
+                        <div className="space-y-3">
+                          <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
+                          <Card className="bg-muted/60 shadow-none">
+                            <CardHeader className="p-2">
+                              <CardDescription className="text-xs">{msg.suggestion.description}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-2 pt-0">
+                              <div className="relative bg-background/70 p-1.5 rounded-md group mb-1.5">
+                                <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{msg.suggestion.proposedCode}</code></pre>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => handleCopyCode(msg.suggestion!.proposedCode, `${msg.id}-suggestion`)}
+                                  title={copiedStates[`${msg.id}-suggestion`] ? "Copied!" : "Copy code"}
+                                >
+                                  {copiedStates[`${msg.id}-suggestion`] ? <Check className="h-3 w-3 text-green-500" /> : <ClipboardCopy className="h-3 w-3" />}
+                                </Button>
+                              </div>
+                              <Button 
+                                size="xs" 
+                                variant="outline" 
+                                className="mt-1" 
+                                onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode, msg.id)} 
+                                disabled={isLoading || !activeFilePath || actionAppliedStates[applyEditorKey]}
+                              >
+                                {actionAppliedStates[applyEditorKey] ? (
+                                  <><Check className="mr-1.5 h-3 w-3 text-green-500" /> Applied</>
+                                ) : (
+                                  <>{activeFilePath ? 'Apply to Editor' : 'Apply (No file open)'}</>
+                                )}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+                      {msg.type === 'refactorSuggestion' && !msg.suggestion && (
+                           <p className="whitespace-pre-wrap">No specific refactoring suggestion found.</p>
+                      )}
+
+
+                      {msg.type === 'codeExamples' && msg.examples && (
+                        <div className="space-y-2">
+                          <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
+                          {msg.examples.map((ex, i) => (
+                            <div key={i} className="relative bg-muted p-2 rounded-md group">
+                              <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{ex}</code></pre>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleCopyCode(ex, `${msg.id}-example-${i}`)}
+                                title={copiedStates[`${msg.id}-example-${i}`] ? "Copied!" : "Copy code"}
+                              >
+                                {copiedStates[`${msg.id}-example-${i}`] ? <Check className="h-3.5 w-3.5 text-green-500" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })}
              {isLoading && chatHistory.length === 0 && ( 
                 <div className="flex justify-center items-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
