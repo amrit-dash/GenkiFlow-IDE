@@ -156,8 +156,11 @@ export function CodeEditorPanel() {
           </div>
           
           {activeFilePath && openedFiles.has(activeFilePath) && (
-             <TabsContent value={activeFilePath} className="flex-1 p-0 m-0 overflow-hidden min-h-0">
-                <ScrollArea className="h-full w-full">
+             <TabsContent 
+                value={activeFilePath} 
+                className="flex-1 p-0 m-0 overflow-hidden min-h-0 relative"
+              > {/* Added relative here */}
+                <ScrollArea className="absolute inset-0 w-full h-full"> {/* Changed to absolute positioning */}
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
