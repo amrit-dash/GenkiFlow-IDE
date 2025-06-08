@@ -98,3 +98,23 @@
     /* Font family is set in tailwind.config.ts and applied via className in layout.tsx */
   }
 }
+
+/* Custom scrollbar styles for editor tabs */
+.editor-tabs-scroll-area > div > div[data-radix-scroll-area-viewport] {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+}
+.editor-tabs-scroll-area > div > div[data-radix-scroll-area-viewport]::-webkit-scrollbar { 
+  display: none;  /* Safari and Chrome */
+  width: 0px;
+  height: 0px;
+}
+
+.editor-tabs-scroll-area .invisible-scrollbar[data-orientation="horizontal"] {
+  height: 0px !important;
+  background: transparent !important;
+}
+
+.editor-tabs-scroll-area .invisible-scrollbar[data-orientation="horizontal"] > [data-radix-scroll-area-thumb] {
+  background: transparent !important;
+}

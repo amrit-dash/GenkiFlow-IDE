@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -25,7 +24,6 @@ export function CodeEditorPanel() {
   const { toast } = useToast();
 
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
-  // const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 }); // Not directly used if using invisible trigger correctly
   const [isRefactoringContextMenu, setIsRefactoringContextMenu] = useState(false);
   const dropdownTriggerRef = useRef<HTMLButtonElement>(null); 
 
@@ -36,7 +34,6 @@ export function CodeEditorPanel() {
         setCurrentContent(fileNode?.content || "");
       }
       const persistedNode = getFileSystemNode(activeFilePath);
-      // Ensure persistedNode is a FileSystemNode and not an array before accessing content
       const persistedContent = (persistedNode && !Array.isArray(persistedNode)) ? persistedNode.content : undefined;
       setHasUnsavedChanges(fileNode?.content !== persistedContent);
     } else if (!activeFilePath && openedFiles.size > 0) {
@@ -46,22 +43,17 @@ export function CodeEditorPanel() {
       setHasUnsavedChanges(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilePath, openedFiles]); // currentContent removed to prevent loops with its own setter
+  }, [activeFilePath, openedFiles]); 
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
         const fileInTab = openedFiles.get(activeFilePath);
         const persistedFileNode = getFileSystemNode(activeFilePath);
         const persistedContent = (persistedFileNode && !Array.isArray(persistedFileNode)) ? persistedFileNode.content : undefined;
-
-        if (fileInTab?.content !== currentContent) {
-             // This check might be redundant if currentContent is primarily driven by user input
-             // and initial load. The key is to correctly set currentContent on tab switch.
-        }
         setHasUnsavedChanges(fileInTab?.content !== persistedContent);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openedFiles.get(activeFilePath)?.content, activeFilePath, getFileSystemNode]); // currentContent removed
+  }, [openedFiles.get(activeFilePath)?.content, activeFilePath, getFileSystemNode]); 
 
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -80,7 +72,6 @@ export function CodeEditorPanel() {
       updateFileContent(activeFilePath, currentContent);
       setTimeout(() => {
         setIsSaving(false);
-        // Toast notification removed as per request
       }, 300);
     }
   }, [activeFilePath, currentContent, hasUnsavedChanges, updateFileContent]);
@@ -101,16 +92,6 @@ export function CodeEditorPanel() {
   const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
     event.preventDefault();
     if (dropdownTriggerRef.current) {
-      // Position the invisible trigger at the mouse click
-      // This method for positioning can be finicky; Radix usually handles positioning relative to the trigger.
-      // A common pattern is to have the trigger be the textarea itself, or a wrapper.
-      // For simplicity with an invisible trigger, we ensure it's "clicked" programmatically or by state.
-      // dropdownTriggerRef.current.style.top = `${event.clientY}px`; // Not needed if Radix handles trigger
-      // dropdownTriggerRef.current.style.left = `${event.clientX}px`;
-      
-      // Instead of manually positioning an invisible div, make the DropdownMenuTrigger wrap the Textarea
-      // or use Radix's dynamic positioning based on the event.
-      // For now, simply opening by state is enough as Radix will position near the trigger.
       setContextMenuOpen(true);
     }
   };
@@ -131,7 +112,6 @@ export function CodeEditorPanel() {
       });
 
       if (result.suggestion && result.suggestion.proposedCode) {
-        // Update currentContent immediately for visual feedback, then persist
         setCurrentContent(result.suggestion.proposedCode); 
         updateFileContent(activeFilePath, result.suggestion.proposedCode);
         toast({
@@ -170,7 +150,7 @@ export function CodeEditorPanel() {
       {openedFiles.size > 0 && (
         <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="border-b border-border">
-            <ScrollArea className="w-full whitespace-nowrap">
+            <ScrollArea className="w-full whitespace-nowrap editor-tabs-scroll-area">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
                   const persistedNode = getFileSystemNode(path);
@@ -224,19 +204,12 @@ export function CodeEditorPanel() {
                   );
                 })}
               </TabsList>
-              {/* Horizontal ScrollBar removed as per request */}
+              <ScrollBar orientation="horizontal" className="invisible-scrollbar" />
             </ScrollArea>
           </div>
             
           <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
-            {/* 
-              The DropdownMenuTrigger should ideally wrap the Textarea or be positioned by Radix.
-              Using an invisible, fixed-positioned trigger is a workaround.
-              For better accessibility and behavior, consider making Textarea the trigger,
-              or using Radix's Popper capabilities for dynamic positioning if available.
-            */}
             <DropdownMenuTrigger ref={dropdownTriggerRef} asChild>
-                {/* This button is invisible and programmatically "clicked" or controlled by contextMenuOpen state */}
                 <button className="fixed opacity-0 pointer-events-none" style={{top:0, left:0, width:0, height:0}} />
             </DropdownMenuTrigger>
             <DropdownMenuContent
