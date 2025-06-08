@@ -116,11 +116,12 @@ export function CodeEditorPanel() {
                         role="button"
                         tabIndex={0}
                         className={cn(
-                          "inline-flex items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", // Base button-like styles
-                          "hover:bg-accent hover:text-accent-foreground", // Ghost-like hover
+                          "inline-flex items-center justify-center transition-colors", // Core flex and transition
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", // Focus styling
+                          "hover:bg-transparent hover:text-accent", // Transparent bg, accent icon color on hover
                           "p-0.5 h-auto w-auto", // Compact icon button sizing
                           "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2", // Positioning
-                          "opacity-0 group-hover:opacity-100 focus-within:opacity-100", // Visibility
+                          "opacity-0 group-hover:opacity-100 focus-within:opacity-100", // Visibility on parent hover/focus
                           "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" // Active tab styling
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
@@ -170,19 +171,23 @@ export function CodeEditorPanel() {
           )}
         </Tabs>
       )}
-       {activeFilePath && hasUnsavedChanges && !isSaving && (
-        <div // Changed from Button to div to act as a simple container for the icon button
+       <div // Changed from Button to div to act as a simple container for the icon button
           onClick={handleSave}
-          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary hover:bg-primary/90 cursor-pointer"
+          className={cn(
+            "absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center cursor-pointer",
+            "bg-primary hover:bg-primary/90",
+            "transition-opacity duration-150 ease-in-out",
+            (activeFilePath && hasUnsavedChanges && !isSaving) ? "opacity-100" : "opacity-0 pointer-events-none"
+          )}
           role="button"
-          tabIndex={0}
+          tabIndex={(activeFilePath && hasUnsavedChanges && !isSaving) ? 0 : -1}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
           title="Save File (Ctrl+S)"
+          aria-hidden={!(activeFilePath && hasUnsavedChanges && !isSaving)}
         >
           <Save className="h-5 w-5 text-primary-foreground" />
           <span className="sr-only">Save File</span>
         </div>
-      )}
       {isSaving && (
          <div className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary/80">
             <Loader2 className="h-5 w-5 animate-spin text-primary-foreground" />
