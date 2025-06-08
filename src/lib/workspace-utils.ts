@@ -38,23 +38,42 @@ export async function downloadWorkspaceAsZip(fileSystem: FileSystemNode[], proje
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
 const UNSUPPORTED_EXTENSIONS = [
+  // Archives
+  '.zip', '.tar', '.gz', '.rar', '.7z',
+  // Documents
   '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  // Audio
   '.mp3', '.wav', '.aac', '.ogg', '.flac',
+  // Video
   '.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv',
+  // Executables & Installers
   '.exe', '.dmg', '.iso', '.bin', '.app', '.msi', '.deb', '.rpm',
-  '.zip', '.tar', '.gz', '.rar', '.7z', // Prevent importing archives within archives
-  '.psd', '.ai', '.fig', '.sketch', // Design files
-  '.o', '.obj', '.class', '.pyc', // Compiled object files
-  // Potentially large image files - can be adjusted if needed
+  // Design files
+  '.psd', '.ai', '.fig', '.sketch',
+  // Compiled object files
+  '.o', '.obj', '.class', '.pyc',
+  // Common Image files (often large or not primary code assets)
   '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.heic', '.heif',
-  '.ico' // Added .ico
+  '.ico'
 ];
 
 export function isFileSupported(fileName: string): boolean {
   const lowerFileName = fileName.toLowerCase();
-  // Allow files without extensions (e.g., Dockerfile, Procfile, .env files if they start with .)
+  // Allow files without extensions (e.g., Dockerfile, Procfile)
+  // Allow dotfiles (e.g., .env, .gitignore) by checking if the name itself starts with a dot
   if (lowerFileName.lastIndexOf('.') === -1 || lowerFileName.startsWith('.')) {
-    return true; 
+    // For dotfiles, we should still check if their specific "extension-like" part is unsupported
+    // e.g. a ".env.zip" should be unsupported.
+    // However, a simple ".env" should be supported.
+    // If a dotfile also has an extension (e.g., .config.json), the general check below handles it.
+    // If it's just ".filename" (no further dot), it's considered to have no extension for this check.
+    if (lowerFileName.startsWith('.') && lowerFileName.substring(1).lastIndexOf('.') === -1) {
+        return true;
+    }
+    // If it's a file without any dot (e.g. "Makefile"), it's supported.
+    if (lowerFileName.lastIndexOf('.') === -1) {
+        return true;
+    }
   }
   return !UNSUPPORTED_EXTENSIONS.some(ext => lowerFileName.endsWith(ext));
 }
@@ -109,13 +128,11 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
 
   zip.forEach((relativePath, zipEntry) => {
     // Skip Mac OS X metadata folders/files
-    if (relativePath.startsWith('__MACOSX/')) {
+    if (relativePath.startsWith('__MACOSX/') || zipEntry.name.split('/').pop() === '.DS_Store') {
+      if (!zipEntry.dir) { // Only add files to unsupported, not the __MACOSX folder itself
+          unsupportedFiles.push(relativePath);
+      }
       return;
-    }
-    // Skip .DS_Store files
-    if (zipEntry.name.endsWith('.DS_Store')) {
-        unsupportedFiles.push(relativePath); // Technically unsupported by not processing
-        return;
     }
 
     if (zipEntry.dir) {
@@ -150,15 +167,18 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
     if (!entry) continue; 
 
     const parts = path.split('/').filter(p => p);
-    const name = parts.pop()!;
-    const parentPath = parts.join('/');
+    const name = parts.pop()!; // This is the last part, which is the name
+    const parentPath = parts.join('/'); // Path of the parent folder
     
-    const fullPath = '/' + path.replace(/\/$/, '');
+    // Construct full path relative to root of ZIP
+    // Ensure path starts with '/' and does not end with '/' for folders unless it's the root itself
+    let fullPath = '/' + path.replace(/\/$/, '');
+    if (fullPath === "" && path === "/") fullPath = "/"; // Handle root case explicitly if path was just "/"
 
 
     const node: FileSystemNode = {
       id: generateId(),
-      name: entry.name || name,
+      name: entry.name || name, // Use name from entry if available (more reliable for original casing)
       type: entry.type,
       path: fullPath,
       content: entry.type === 'file' ? entry.content : undefined,
@@ -169,17 +189,23 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
         node.historyIndex = 0;
     }
 
-    pathMap.set(path, node);
+    pathMap.set(path, node); // Store with original path from zip for lookup
 
-    if (!parentPath) {
+    if (!parentPath) { // This is a root node
       rootNodes.push(node);
     } else {
-      const parentNode = pathMap.get(parentPath + '/'); 
+      const parentNode = pathMap.get(parentPath + '/'); // Parent paths in zip end with '/'
       if (parentNode && parentNode.type === 'folder') {
-        parentNode.children = parentNode.children || [];
+        parentNode.children = parentNode.children || []; // Ensure children array exists
         parentNode.children.push(node);
       } else {
-        console.warn(`Parent for ${path} not found or not a folder. Adding to root.`);
+        // This case might happen if a file is in a path where its parent folder was not explicitly listed
+        // or if the sorting/processing order didn't create the parent first.
+        // For simplicity, we'll treat it as a root node for now, or log a warning.
+        console.warn(`Parent folder for ${path} not found or not a folder. Adding to root or it might be an issue with ZIP structure.`);
+        // A more robust solution might create missing parent folders on the fly.
+        // For now, let's assume valid ZIP structures where folders precede their contents.
+        // If issues persist, this area might need refinement.
         rootNodes.push(node);
       }
     }
@@ -198,15 +224,20 @@ export async function processZipFile(zipData: ArrayBuffer): Promise<{ fileSystem
     // Re-path children if we are "unwrapping" a single root directory
     const rePathChildren = (nodes: FileSystemNode[], parentPathPrefix: string) => {
         nodes.forEach(n => {
+            // The new path is based on the new parentPathPrefix (which is effectively '/')
+            // and the node's own name.
             n.path = (parentPathPrefix === '/' ? '' : parentPathPrefix) + '/' + n.name;
-            if (n.path.startsWith('//')) n.path = n.path.substring(1);
+            if (n.path.startsWith('//')) n.path = n.path.substring(1); // Normalize double slashes if any
+
             if (n.type === 'folder' && n.children) {
                 rePathChildren(n.children, n.path);
             }
         });
     };
+    // When unwrapping, the new parent path for the immediate children of the single root dir is '/'
     rePathChildren(finalFileSystem, '/');
   }
 
   return { fileSystem: finalFileSystem, unsupportedFiles, singleRootDir: singleRootDirName };
 }
+
