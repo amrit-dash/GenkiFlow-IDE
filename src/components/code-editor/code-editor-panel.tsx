@@ -97,7 +97,7 @@ export function CodeEditorPanel() {
   return (
     <div className="flex-1 flex flex-col bg-background h-full relative">
       {openedFiles.size > 0 && (
-        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex flex-col h-full">
+        <Tabs value={activeFilePath || ""} onValueChange={setActiveFilePath} className="flex-1 flex flex-col overflow-hidden">
           <div className="border-b border-border">
             <ScrollArea className="w-full whitespace-nowrap"> 
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
@@ -120,7 +120,8 @@ export function CodeEditorPanel() {
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", 
                           "text-foreground hover:bg-transparent hover:text-accent", 
                           "p-0.5 h-auto w-auto", 
-                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2"
+                          "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2",
+                          "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" 
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
                           e.stopPropagation();
@@ -195,3 +196,4 @@ export function CodeEditorPanel() {
     </div>
   );
 }
+
