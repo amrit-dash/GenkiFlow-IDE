@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useIde } from '@/contexts/ide-context';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { XIcon, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -113,15 +112,18 @@ export function CodeEditorPanel() {
                     >
                       {file.name}
                       {isFileUnsavedInThisTab && <span className="ml-1.5 text-amber-500 text-xs">•</span>}
-                      <Button 
-                        variant="ghost" 
+                      <div 
+                        role="button"
+                        tabIndex={0}
                         className={cn(
-                          "p-0.5 h-auto w-auto rounded-full", // Core style changes
+                          "inline-flex items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", // Base button-like styles
+                          "hover:bg-accent hover:text-accent-foreground", // Ghost-like hover
+                          "p-0.5 h-auto w-auto", // Compact icon button sizing
                           "ml-2 absolute top-1/2 right-2 transform -translate-y-1/2", // Positioning
                           "opacity-0 group-hover:opacity-100 focus-within:opacity-100", // Visibility
                           "data-[state=active]:opacity-60 data-[state=active]:hover:opacity-100" // Active tab styling
                         )}
-                        onClick={(e) => { 
+                        onClick={(e: React.MouseEvent<HTMLDivElement>) => { 
                           e.stopPropagation();
                           if (isFileUnsavedInThisTab) {
                             if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
@@ -130,10 +132,21 @@ export function CodeEditorPanel() {
                           }
                           closeFile(path); 
                         }}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                           if (e.key === 'Enter' || e.key === ' ') {
+                             e.stopPropagation();
+                             if (isFileUnsavedInThisTab) {
+                               if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
+                                 return;
+                               }
+                             }
+                             closeFile(path);
+                           }
+                        }}
                         aria-label={`Close tab ${file.name}`}
                       >
                         <XIcon className="h-3.5 w-3.5" />
-                      </Button>
+                      </div>
                     </TabsTrigger>
                   );
                 })}
@@ -158,14 +171,17 @@ export function CodeEditorPanel() {
         </Tabs>
       )}
        {activeFilePath && hasUnsavedChanges && !isSaving && (
-        <Button
+        <div // Changed from Button to div to act as a simple container for the icon button
           onClick={handleSave}
-          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary hover:bg-primary/90"
+          className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary hover:bg-primary/90 cursor-pointer"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSave();}}
           title="Save File (Ctrl+S)"
         >
-          <Save className="h-5 w-5" />
+          <Save className="h-5 w-5 text-primary-foreground" />
           <span className="sr-only">Save File</span>
-        </Button>
+        </div>
       )}
       {isSaving && (
          <div className="absolute bottom-6 right-6 z-20 rounded-full shadow-lg h-10 w-10 p-0 flex items-center justify-center bg-primary/80">
