@@ -349,7 +349,7 @@ export function CodeEditorPanel() {
                 value={activeFilePath}
                 className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0"
               >
-                <ScrollArea className="flex-1 min-h-0">
+                <ScrollArea className="flex-1 w-full min-h-0"> {/* Added w-full here */}
                   <Textarea
                     value={currentContent}
                     onChange={handleContentChange}
@@ -395,4 +395,3 @@ export function CodeEditorPanel() {
     </div>
   );
 }
-
