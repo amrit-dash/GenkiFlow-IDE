@@ -27,7 +27,7 @@ GenkiFlow IDE is an innovative web-based Integrated Development Environment that
 - **Developer-Focused:** Clean, intuitive interface designed for efficient coding workflows
 - **Extensible Architecture:** Modular design allowing for easy feature additions and improvements
 
-![GenkiFlow IDE Screenshot](https://i.ibb.co/sdW4TcRn/image-2025-06-09-062711110.png)
+![GenkiFlow-IDE Screenshot](https://i.ibb.co/sdW4TcRn/image-2025-06-09-062711110.png)
 
 <div align="center">
   <a href="https://studio--genkiflow-ide.us-central1.hosted.app/ide">
