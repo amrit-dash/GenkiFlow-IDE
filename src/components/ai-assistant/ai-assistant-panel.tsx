@@ -611,7 +611,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             }}
             rows={1}
           />
-          <div className="absolute bottom-2.5 right-2 flex items-center gap-1">
+          <div className="absolute bottom-2.5 right-2 flex items-center gap-0.5">
             <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
               <PopoverTrigger asChild>
                 <Button 
@@ -620,7 +620,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                   title="Attach file for context"
                 >
-                  <Paperclip className="h-4 w-4" />
+                  <Paperclip className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
@@ -651,7 +651,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               size="icon" 
               className={cn(
                 "h-7 w-7 rounded-md transition-colors bg-transparent",
-                isLoading || (!prompt.trim() && attachedFiles.length === 0)
+                (isLoading || (!prompt.trim() && attachedFiles.length === 0))
                   ? "text-muted-foreground"
                   : "text-primary hover:bg-transparent" 
               )}
@@ -659,7 +659,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               onClick={handleSendMessage}
               title="Send message"
             >
-              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
         </div>
