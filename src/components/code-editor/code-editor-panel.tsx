@@ -350,14 +350,14 @@ export function CodeEditorPanel() {
                 value={activeFilePath}
                 className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0"
               >
-                <Textarea
-                  value={currentContent}
-                  onChange={handleContentChange}
-                  onContextMenu={handleTextareaContextMenu}
-                  className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none overflow-y-auto"
-                  placeholder="Select a file to view its content or start typing..."
-                  spellCheck="false"
-                />
+              <Textarea
+                value={currentContent}
+                onChange={handleContentChange}
+                onContextMenu={handleTextareaContextMenu}
+                className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none overflow-y-auto"
+                placeholder="Select a file to view its content or start typing..."
+                spellCheck="false"
+              />
             </TabsContent>
           )}
         </Tabs>
