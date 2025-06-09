@@ -3,11 +3,11 @@ export interface FileSystemNode {
   id: string;
   name: string;
   type: 'file' | 'folder';
-  content?: string; // For files
+  content?: string; // For files: last saved content for fileSystem, live buffer for openedFiles
   children?: FileSystemNode[]; // For folders
   path: string;
-  contentHistory?: string[]; // For file undo/redo
-  historyIndex?: number;    // For file undo/redo
+  contentHistory?: string[]; // For file undo/redo (live buffer in openedFiles, saved state in fileSystem)
+  historyIndex?: number;    // For file undo/redo (live buffer in openedFiles, saved state in fileSystem)
 }
 
 export interface AiSuggestion {
@@ -28,12 +28,13 @@ export interface ChatMessage {
 
 export interface IdeState {
   fileSystem: FileSystemNode[];
-  openedFiles: Map<string, FileSystemNode>; // path -> FileSystemNode
+  openedFiles: Map<string, FileSystemNode>; // path -> FileSystemNode (live editing buffer)
   activeFilePath: string | null;
   setActiveFilePath: (path: string | null) => void;
   openFile: (filePath: string, nodeToOpen?: FileSystemNode) => void;
   closeFile: (filePath: string) => void;
-  updateFileContent: (filePath: string, newContent: string) => void;
+  updateFileContent: (filePath: string, newContent: string) => void; // Updates live buffer in openedFiles
+  saveFile: (filePath: string, contentToSave: string) => void;      // Saves content to fileSystem
   getFileSystemNode: (pathOrId: string) => FileSystemNode | FileSystemNode[] | undefined;
   addNode: (parentId: string | null, name: string, type: 'file' | 'folder', currentDirectoryPath?: string) => FileSystemNode | null;
   deleteNode: (nodeIdOrPath: string) => boolean;
@@ -48,4 +49,3 @@ export interface IdeState {
 }
 
 // Add other shared types here
-

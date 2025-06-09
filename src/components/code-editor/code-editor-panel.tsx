@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useIde } from '@/contexts/ide-context';
-import { ScrollBar } from '@/components/ui/scroll-area';
+// Removed ScrollBar and ScrollArea imports as they are no longer used for the Textarea
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { XIcon, Loader2, Save, Wand2 } from 'lucide-react';
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { refactorCodeServer } from '@/app/(ide)/actions';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; // Keep for TabsList
 
 export function CodeEditorPanel() {
   const { 
@@ -25,12 +25,14 @@ export function CodeEditorPanel() {
     openedFiles, 
     setActiveFilePath, 
     closeFile, 
-    updateFileContent, 
+    updateFileContent, // This now only updates the live buffer
+    saveFile,          // New function to persist to fileSystem
     getFileSystemNode,
     undoContentChange,
     redoContentChange 
   } = useIde();
   
+  // currentContent reflects the live editor buffer from openedFiles
   const [currentContent, setCurrentContent] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
@@ -45,94 +47,90 @@ export function CodeEditorPanel() {
 
   useEffect(() => {
     if (activeFilePath && openedFiles.has(activeFilePath)) {
-      const fileNode = openedFiles.get(activeFilePath);
-      setCurrentContent(fileNode?.content || "");
+      const fileNodeInOpenedFiles = openedFiles.get(activeFilePath);
+      setCurrentContent(fileNodeInOpenedFiles?.content || "");
     } else if (!activeFilePath && openedFiles.size > 0) {
       const firstKey = Array.from(openedFiles.keys())[0];
-      setActiveFilePath(firstKey);
+      setActiveFilePath(firstKey); // This will trigger this effect again for the new active file
     } else if (openedFiles.size === 0) {
       setCurrentContent(""); 
     }
   }, [activeFilePath, openedFiles, setActiveFilePath]);
 
+  // Update unsaved changes indicators
   useEffect(() => {
     let currentActiveUnsaved = false;
     if (activeFilePath && openedFiles.has(activeFilePath)) {
-      const activeFileNodeInEditor = openedFiles.get(activeFilePath); 
+      const liveFileNode = openedFiles.get(activeFilePath); 
       const persistedNode = getFileSystemNode(activeFilePath); 
       const persistedContent = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
       
-      if (activeFileNodeInEditor && activeFileNodeInEditor.content !== persistedContent) {
+      if (liveFileNode && liveFileNode.content !== persistedContent) {
         currentActiveUnsaved = true;
       }
     }
     setActiveFileHasUnsavedChanges(currentActiveUnsaved);
 
     let count = 0;
-    openedFiles.forEach((tabFileNode, path) => {
-      const contentToCheck = tabFileNode.content; 
+    openedFiles.forEach((liveFileNode, path) => {
       const persistedNode = getFileSystemNode(path);
       const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
-      if (contentToCheck !== persistedContentOfNode) {
+      if (liveFileNode.content !== persistedContentOfNode) {
         count++;
       }
     });
     setUnsavedFilesCount(count);
-  }, [activeFilePath, openedFiles, getFileSystemNode]);
+  }, [activeFilePath, openedFiles, getFileSystemNode, currentContent]); // Added currentContent to re-evaluate when live buffer changes
 
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
-    setCurrentContent(newText); 
+    setCurrentContent(newText); // Update local state for immediate textarea reflection
     if (activeFilePath) {
-      const file = openedFiles.get(activeFilePath);
-      if (file) {
-        openedFiles.set(activeFilePath, { ...file, content: newText });
-        setActiveFileHasUnsavedChanges(newText !== (getFileSystemNode(activeFilePath) as any)?.content);
-        let count = 0;
-        openedFiles.forEach((tabFileNode, path) => {
-          const contentToEval = path === activeFilePath ? newText : tabFileNode.content;
-          const persistedNode = getFileSystemNode(path);
-          const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
-          if (contentToEval !== persistedContentOfNode) count++;
-        });
-        setUnsavedFilesCount(count);
-      }
+      updateFileContent(activeFilePath, newText); // Update context (live buffer and history)
     }
   };
 
   const handleSave = useCallback(async () => {
-    if (activeFilePath && activeFileHasUnsavedChanges) {
+    if (activeFilePath && activeFileHasUnsavedChanges) { // activeFileHasUnsavedChanges is now reliable
       setIsSaving(true);
-      await updateFileContent(activeFilePath, currentContent); 
+      // currentContent is from local state, which should be in sync with openedFiles.get(activeFilePath).content
+      await saveFile(activeFilePath, currentContent); 
+      toast({ title: "File Saved", description: `${openedFiles.get(activeFilePath)?.name || activeFilePath} saved.` });
       setTimeout(() => {
         setIsSaving(false);
       }, 300);
     }
-  }, [activeFilePath, currentContent, activeFileHasUnsavedChanges, updateFileContent]);
+  }, [activeFilePath, currentContent, activeFileHasUnsavedChanges, saveFile, openedFiles, toast]);
 
   const handleSaveAll = useCallback(async () => {
     if (unsavedFilesCount === 0) return;
     setIsSaving(true);
+    let savedCount = 0;
 
     const savePromises: Promise<void>[] = [];
-
     openedFiles.forEach((tabFileNode, path) => {
-      const contentToSave = tabFileNode.content; 
       const persistedNode = getFileSystemNode(path);
       const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
       
-      if (contentToSave !== persistedContentOfNode && contentToSave !== undefined) {
-        savePromises.push(updateFileContent(path, contentToSave));
+      if (tabFileNode.content !== persistedContentOfNode && tabFileNode.content !== undefined) {
+        savePromises.push(
+          saveFile(path, tabFileNode.content).then(() => {
+            savedCount++;
+          })
+        );
       }
     });
     
     await Promise.all(savePromises);
+    if (savedCount > 0) {
+      toast({ title: "All Files Saved", description: `${savedCount} file(s) saved.` });
+    }
 
     setTimeout(() => {
       setIsSaving(false);
     }, 300); 
-  }, [openedFiles, getFileSystemNode, updateFileContent, unsavedFilesCount]);
+  }, [openedFiles, getFileSystemNode, saveFile, unsavedFilesCount, toast]);
 
 
   useEffect(() => {
@@ -159,30 +157,9 @@ export function CodeEditorPanel() {
     return () => {
       document.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [handleSave, activeFileHasUnsavedChanges, unsavedFilesCount, activeFilePath, undoContentChange, redoContentChange]);
+  }, [handleSave, activeFileHasUnsavedChanges, activeFilePath, undoContentChange, redoContentChange]);
 
-  useEffect(() => {
-    if (activeFilePath) {
-      requestAnimationFrame(() => {
-        const activeTabTrigger = document.querySelector(
-          `.editor-tabs-scroll-area button[role="tab"][value="${CSS.escape(activeFilePath)}"]`
-        );
-        const scrollViewport = document.querySelector('.editor-tabs-scroll-area div[data-radix-scroll-area-viewport]');
-
-        if (activeTabTrigger && scrollViewport) {
-          const triggerRect = activeTabTrigger.getBoundingClientRect();
-          const viewportRect = scrollViewport.getBoundingClientRect();
-
-          if (triggerRect.left < viewportRect.left || triggerRect.right > viewportRect.right) {
-            activeTabTrigger.scrollIntoView({
-              inline: 'nearest',
-              block: 'nearest',
-            });
-          }
-        }
-      });
-    }
-  }, [activeFilePath, openedFiles]);
+  // Removed the useEffect hook for scrolling active tab into view
 
   const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
     event.preventDefault();
@@ -201,15 +178,18 @@ export function CodeEditorPanel() {
       const fileNameForContext = (activeNode && !Array.isArray(activeNode)) ? activeNode.name : activeFilePath;
 
       const result = await refactorCodeServer({
-        codeSnippet: currentContent, 
+        codeSnippet: currentContent, // Use live content from editor
         fileContext: `File: ${fileNameForContext}`,
       });
 
       if (result.suggestion && result.suggestion.proposedCode) {
-        await updateFileContent(activeFilePath, result.suggestion.proposedCode);
+        // Update the live buffer first. This will also update local `currentContent` via useEffect.
+        updateFileContent(activeFilePath, result.suggestion.proposedCode);
+        // Then, save this refactored code.
+        await saveFile(activeFilePath, result.suggestion.proposedCode);
         toast({
-          title: "Refactor Applied",
-          description: "Code refactored and applied to the editor.",
+          title: "Refactor Applied & Saved",
+          description: "Code refactored and changes saved.",
         });
       } else {
         toast({
@@ -230,7 +210,7 @@ export function CodeEditorPanel() {
   };
 
 
-  if (openedFiles.size === 0) {
+  if (openedFiles.size === 0 && !activeFilePath) { // Ensure this condition is robust
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-background p-4 h-full">
         <p className="text-muted-foreground">No files open. Select a file from the explorer.</p>
@@ -247,8 +227,8 @@ export function CodeEditorPanel() {
     statusDisplay = "Saved";
   }
 
-  const showSaveButton = activeFileHasUnsavedChanges && unsavedFilesCount > 1;
-  const showSaveAllButton = unsavedFilesCount > 0 && !isSaving;
+  const showSaveButton = activeFileHasUnsavedChanges && !isSaving; // Simplified save button logic
+  const showSaveAllButton = unsavedFilesCount > 1 && !isSaving; // Show save all if more than 1 unsaved
 
 
   return (
@@ -259,9 +239,10 @@ export function CodeEditorPanel() {
             <ScrollArea className="w-full whitespace-nowrap editor-tabs-scroll-area">
               <TabsList className="bg-background border-none p-0 m-0 h-auto rounded-none inline-flex">
                 {Array.from(openedFiles.entries()).map(([path, file]) => {
-                  const persistedNode = getFileSystemNode(path);
-                  const persistedContent = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
-                  const isFileUnsavedInThisTab = file.content !== persistedContent;
+                  // Unsaved check: compare live openedFile content with persisted fileSystem content
+                  const persistedFileNode = getFileSystemNode(path);
+                  const isFileUnsavedInThisTab = file.content !== (persistedFileNode && !Array.isArray(persistedFileNode) && persistedFileNode.type === 'file' ? persistedFileNode.content : undefined);
+                  
                   return (
                     <TabsTrigger
                       key={path}
@@ -286,11 +267,11 @@ export function CodeEditorPanel() {
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                           e.stopPropagation();
-                          const contentForThisTab = openedFiles.get(path)?.content; 
+                          const liveContentForThisTab = openedFiles.get(path)?.content; 
                           const persistedNodeForThisTab = getFileSystemNode(path);
                           const persistedContentForThisTab = (persistedNodeForThisTab && !Array.isArray(persistedNodeForThisTab) && persistedNodeForThisTab.type === 'file') ? persistedNodeForThisTab.content : undefined;
                           
-                          if (contentForThisTab !== persistedContentForThisTab) {
+                          if (liveContentForThisTab !== persistedContentForThisTab) {
                             if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                               return;
                             }
@@ -300,10 +281,10 @@ export function CodeEditorPanel() {
                         onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                            if (e.key === 'Enter' || e.key === ' ') {
                              e.stopPropagation();
-                             const contentForThisTab = openedFiles.get(path)?.content;
+                             const liveContentForThisTab = openedFiles.get(path)?.content;
                              const persistedNodeForThisTab = getFileSystemNode(path);
                              const persistedContentForThisTab = (persistedNodeForThisTab && !Array.isArray(persistedNodeForThisTab) && persistedNodeForThisTab.type === 'file') ? persistedNodeForThisTab.content : undefined;
-                             if (contentForThisTab !== persistedContentForThisTab) {
+                             if (liveContentForThisTab !== persistedContentForThisTab) {
                                if (!window.confirm("You have unsaved changes in this tab. Are you sure you want to close it?")) {
                                  return;
                                }
@@ -348,9 +329,9 @@ export function CodeEditorPanel() {
           {activeFilePath && openedFiles.has(activeFilePath) && (
              <TabsContent
                 value={activeFilePath}
-                className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0"
+                className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0" // Ensures TabsContent can grow
               >
-              <Textarea
+              <Textarea // Textarea itself handles scrolling
                 value={currentContent}
                 onChange={handleContentChange}
                 onContextMenu={handleTextareaContextMenu}
@@ -373,7 +354,7 @@ export function CodeEditorPanel() {
                 size="sm" 
                 onClick={handleSave} 
                 className="h-auto px-2 py-0.5 text-xs text-muted-foreground hover:bg-transparent hover:text-primary"
-                title="Save Current File (Ctrl+S)"
+                title={`Save ${openedFiles.get(activeFilePath!)?.name || activeFilePath} (Ctrl+S)`}
               >
                 <Save className="h-3 w-3 mr-1" /> Save
               </Button>
@@ -386,7 +367,7 @@ export function CodeEditorPanel() {
                 className="h-auto px-2 py-0.5 text-xs text-muted-foreground hover:bg-transparent hover:text-primary"
                 title="Save All Pending Files"
               >
-                <Save className="h-3 w-3 mr-1" /> Save All
+                <Save className="h-3 w-3 mr-1" /> Save All ({unsavedFilesCount})
               </Button>
             )}
           </div>
