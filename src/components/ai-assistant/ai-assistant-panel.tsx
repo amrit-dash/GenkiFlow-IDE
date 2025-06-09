@@ -193,7 +193,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const currentAttachedFile = attachedFile; // Capture current attached file
 
     setPrompt("");
-    setAttachedFile(null); // Clear attachment after sending
+    // Do not clear attachment here, user might want to ask follow-up questions with the same file.
+    // setAttachedFile(null); 
     setIsLoading(true);
 
     const loadingMessageId = generateId();
@@ -331,12 +332,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         </Button>
       </div>
       
-      {chatHistory.length === 0 && !isLoading && !attachedFile ? (
+      {chatHistory.length === 0 && !isLoading ? (
         <div className="flex-1 p-4 flex flex-col items-center justify-center text-center space-y-3 overflow-y-auto">
           <MessageSquare className="w-12 h-12 text-primary opacity-70 mb-2" />
           <h3 className="text-lg font-semibold text-foreground">GenkiFlow AI Assistant</h3>
           <p className="text-xs text-muted-foreground max-w-xs">
-            Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below. Attach a file for specific context.
+            Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below. {attachedFile ? `Using ${attachedFile.name} as context.` : "Attach a file for specific context."}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full max-w-md pt-3">
             <HintCard 
@@ -627,6 +628,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </div>
   );
 }
+
+    
 
     
 
