@@ -10,16 +10,16 @@ import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
-import { Bot, TerminalSquare, Settings2 } from 'lucide-react';
+import { Bot, TerminalSquare, Settings2, Loader2 } from 'lucide-react'; // Added Loader2
 import { cn } from '@/lib/utils';
-import { ManageWorkspaceModal } from '@/components/manage-workspace-modal'; // Updated import
+import { ManageWorkspaceModal } from '@/components/manage-workspace-modal';
 import { useToast } from '@/hooks/use-toast';
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(true); 
   const [showTerminalPanel, setShowTerminalPanel] = useState(false);
-  const [showManageWorkspaceModal, setShowManageWorkspaceModal] = useState(false); // Updated state
+  const [showManageWorkspaceModal, setShowManageWorkspaceModal] = useState(false);
   const { isBusy: isIdeBusy } = useIde();
 
 
@@ -30,6 +30,7 @@ export default function IdePage() {
   if (!isClient || isIdeBusy) {
     return (
         <div className="flex h-screen w-screen items-center justify-center bg-background">
+            <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" /> 
             <p className="text-muted-foreground">Loading IDE...</p>
         </div>
     );
@@ -111,14 +112,14 @@ export default function IdePage() {
         </Button>
         <Button
           size="icon"
-          onClick={() => setShowManageWorkspaceModal(true)} // Updated onClick
-          title="Manage Workspace" // Updated title
+          onClick={() => setShowManageWorkspaceModal(true)}
+          title="Manage Workspace"
           className={cn(
             "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
             "bg-card text-card-foreground border border-border hover:bg-accent hover:text-accent-foreground"
           )}
         >
-          <Settings2 className="h-5 w-5"/> {/* Updated Icon */}
+          <Settings2 className="h-5 w-5"/>
           <span className="sr-only">Manage Workspace</span>
         </Button>
       </div>
@@ -131,3 +132,4 @@ export default function IdePage() {
     </div>
   );
 }
+
