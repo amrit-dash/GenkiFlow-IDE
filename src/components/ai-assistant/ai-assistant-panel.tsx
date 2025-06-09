@@ -650,15 +650,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             type="submit"
             size="icon"
             className={cn(
-                "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent hover:bg-transparent",
-                (isLoading || (!prompt.trim() && attachedFiles.length === 0)) && "opacity-50",
-                (!isLoading && (prompt.trim() || attachedFiles.length > 0)) ? "text-primary" : "text-primary opacity-50" 
+                "absolute bottom-2 right-2 h-8 w-8 rounded-md transition-colors bg-transparent hover:bg-transparent text-primary"
             )}
             disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
             onClick={handleSendMessage}
             title="Send message"
           >
-            {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-6 w-6" />}
+            {isLoading ? <Loader2 className="h-7 w-7 animate-spin" /> : <Send className="h-7 w-7" />}
           </Button>
         </div>
       </div>
