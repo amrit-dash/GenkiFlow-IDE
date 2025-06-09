@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Enhanced AI flow for code generation with contextual enrichment.
@@ -32,7 +33,7 @@ const AttachedFileSchema = z.object({
 });
 
 const EnhancedGenerateCodeInputSchema = z.object({
-  prompt: z.string().describe('The user prompt for code generation.'),
+  prompt: z.string().describe("The user's primary request or question."),
   currentFilePath: z.string().optional().describe('Path of the currently active file.'),
   currentFileContent: z.string().optional().describe('Content of the currently active file.'),
   currentFileName: z.string().optional().describe('Name of the currently active file.'),
@@ -148,7 +149,7 @@ ENHANCED INSTRUCTIONS:
 4. **Smart file targeting**: Analyze generated code language/type and match with appropriate existing files or suggest new file creation
 5. **Code generation**: Create high-quality, contextually appropriate code
 6. **Smart merging**: When modifying existing files, use intelligentCodeMerger to analyze how generated content should be integrated with existing content
-7. **After generation**: Use errorValidation tool to check the generated code for issues
+7. **After generation**: Use errorValidation tool to check the generated code for issues.
 8. **File operations**: Use fileSystemOperations when file placement decisions are needed
 9. **File execution**: Use fileSystemExecutor to find, list, delete, rename, or move files when explicitly requested
 10. **Terminal commands**: Use terminalOperations for command execution when requested
@@ -163,13 +164,13 @@ WORKFLOW:
 5. Determine optimal file targeting based on code type and context analysis (stage: 'analyzing', progress: 45)
 6. Generate appropriate code (stage: 'processing', progress: 65)
 7. If modifying existing file: Use intelligentCodeMerger to determine best merge strategy (stage: 'processing', progress: 80)
-8. Validate the generated/merged code with errorValidation (stage: 'validating', progress: 90)
+8. Validate the generated/merged code with errorValidation. If the tool provides high-confidence \`suggestions\` with \`fixedCode\`, apply these fixes directly to your \`code\` output and mention this in the \`explanation\`. (stage: 'validating', progress: 90)
 9. Complete with final results (stage: 'completing', progress: 100)
 
 ERROR HANDLING:
-- If errors are found during validation, provide automatic fixes
-- If operation fails, use operationProgress with stage: 'error'
-- Always explain what you're doing before using tools
+- If the errorValidation tool finds errors and provides high-confidence \`suggestions\` with \`fixedCode\`, incorporate these fixes directly into your \`code\` output. Explain that you've applied these automatic corrections in your \`explanation\` field.
+- If an operation fails (e.g., a tool call returns an error), use operationProgress with stage: 'error' to inform the user.
+- Always explain what you're doing before using tools, especially if it involves file system modifications or command execution.
 
 SPECIAL HANDLING:
 - For blank/untitled files: Suggest appropriate renaming based on the code purpose
@@ -241,3 +242,5 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
     return output!;
   }
 ); 
+
+    
