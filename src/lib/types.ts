@@ -24,6 +24,7 @@ export interface ChatMessage {
   suggestion?: AiSuggestion; // For refactorSuggestion (singular)
   examples?: string[]; // For codeExamples
   suggestedFileName?: string; // For newFileSuggestion
+  targetPath?: string; // For refactorSuggestion and generatedCode, to know which file it applies to
 }
 
 export interface IdeState {

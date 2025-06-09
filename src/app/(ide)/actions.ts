@@ -68,7 +68,7 @@ function formatErrorForClient(baseMessage: string, error: any): string {
     }
     // If it's a Zod validation error from Genkit, it might start with "Input validation failed"
     if (error.message.startsWith("Input validation failed") || error.message.startsWith("Output validation failed")) {
-        // Could attempt to parse error.cause for Zod issues if desired for client, but simple message is safer
+        // Could attempt to parse error.cause for Zod issues if client, but simple message is safer
         return `${baseMessage} There was an issue with the data format.`;
     }
     // For other relatively short messages, it might be safe to append.
@@ -88,6 +88,7 @@ export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInpu
 
 export async function generateCodeServer(input: GenerateCodeInput): Promise<GenerateCodeOutput> {
   try {
+    // console.log("generateCodeServer input:", JSON.stringify(input, null, 2)); // For debugging
     return await generateCode(input);
   } catch (error: any) {
     logDetailedError("generateCodeServer", error);
@@ -112,4 +113,3 @@ export async function findExamplesServer(input: FindCodebaseExamplesInput): Prom
     throw new Error(formatErrorForClient("Failed to find codebase examples.", error));
   }
 }
-
