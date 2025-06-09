@@ -26,7 +26,7 @@ interface AttachedFile {
   content: string;
 }
 
-const MAX_ATTACHED_FILES = 4; // Updated to 4
+const MAX_ATTACHED_FILES = 4;
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
@@ -415,7 +415,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                       {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion') && msg.code && (
                         <div className="space-y-2">
                           <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
-                          <div className="relative bg-muted p-2 rounded-md group">
+                          <div className="relative bg-muted p-2 rounded-md group themed-scrollbar">
                             <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code themed-scrollbar"><code>{msg.code}</code></pre>
                             <Button 
                               variant="ghost" 
@@ -494,7 +494,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               <CardDescription className="text-xs">{msg.suggestion.description}</CardDescription>
                             </CardHeader>
                             <CardContent className="p-2 pt-0">
-                              <div className="relative bg-background/70 p-1.5 rounded-md group mb-1.5">
+                              <div className="relative bg-background/70 p-1.5 rounded-md group themed-scrollbar mb-1.5">
                                 <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code themed-scrollbar"><code>{msg.suggestion.proposedCode}</code></pre>
                                 <Button 
                                   variant="ghost" 
@@ -545,7 +545,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                         <div className="space-y-2">
                           <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
                           {msg.examples.map((ex, i) => (
-                            <div key={i} className="relative bg-muted p-2 rounded-md group">
+                            <div key={i} className="relative bg-muted p-2 rounded-md group themed-scrollbar">
                               <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code themed-scrollbar"><code>{ex}</code></pre>
                               <Button 
                                 variant="ghost" 
@@ -583,7 +583,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   <Paperclip className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate" title={file.path}>{file.name}</span>
                 </div>
-                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => handleRemoveAttachedFile(file.path)} title="Remove attachment">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-5 w-5 shrink-0 text-muted-foreground hover:bg-transparent hover:text-primary focus-visible:ring-0 focus-visible:ring-offset-0" 
+                  onClick={() => handleRemoveAttachedFile(file.path)} 
+                  title="Remove attachment"
+                >
                   <XCircle className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -617,7 +623,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   <Paperclip className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[300px] p-0 mb-1" side="top" align="end">
+              <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
                 <Command>
                   <CommandInput placeholder="Search files to attach..." />
                   <CommandList>
