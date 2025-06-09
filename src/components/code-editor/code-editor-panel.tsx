@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useIde } from '@/contexts/ide-context';
-import { ScrollBar } from '@/components/ui/scroll-area'; // ScrollBar might still be needed for horizontal tab scrolling
+import { ScrollBar } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { XIcon, Loader2, Save, Wand2 } from 'lucide-react';
@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { refactorCodeServer } from '@/app/(ide)/actions';
-import { ScrollArea } from '@/components/ui/scroll-area'; // Keep for TabsList
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export function CodeEditorPanel() {
   const { 
@@ -48,23 +48,20 @@ export function CodeEditorPanel() {
       const fileNode = openedFiles.get(activeFilePath);
       setCurrentContent(fileNode?.content || "");
     } else if (!activeFilePath && openedFiles.size > 0) {
-      // If no active file path but files are open, set the first one as active
       const firstKey = Array.from(openedFiles.keys())[0];
       setActiveFilePath(firstKey);
-      // Content will be set by the above block once activeFilePath updates
     } else if (openedFiles.size === 0) {
-      setCurrentContent(""); // Clear content if no files are open
+      setCurrentContent(""); 
     }
   }, [activeFilePath, openedFiles, setActiveFilePath]);
 
   useEffect(() => {
     let currentActiveUnsaved = false;
     if (activeFilePath && openedFiles.has(activeFilePath)) {
-      const activeFileNodeInEditor = openedFiles.get(activeFilePath); // Reflects live editor state
-      const persistedNode = getFileSystemNode(activeFilePath); // Reflects "saved" state from fileSystem
+      const activeFileNodeInEditor = openedFiles.get(activeFilePath); 
+      const persistedNode = getFileSystemNode(activeFilePath); 
       const persistedContent = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
       
-      // Unsaved if editor content (currentContent from activeFileNodeInEditor) differs from "saved" content in fileSystem
       if (activeFileNodeInEditor && activeFileNodeInEditor.content !== persistedContent) {
         currentActiveUnsaved = true;
       }
@@ -73,7 +70,6 @@ export function CodeEditorPanel() {
 
     let count = 0;
     openedFiles.forEach((tabFileNode, path) => {
-      // For the active file, its content on the openedFiles map is the source of truth for unsaved status calculation
       const contentToCheck = tabFileNode.content; 
       const persistedNode = getFileSystemNode(path);
       const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
@@ -87,16 +83,11 @@ export function CodeEditorPanel() {
 
   const handleContentChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = event.target.value;
-    setCurrentContent(newText); // Update local state for immediate textarea reflection
+    setCurrentContent(newText); 
     if (activeFilePath) {
-      // Update content in openedFiles map but DO NOT trigger save/history yet
-      // This is for live unsaved status calculation. Saving/history is handled by updateFileContent.
       const file = openedFiles.get(activeFilePath);
       if (file) {
         openedFiles.set(activeFilePath, { ...file, content: newText });
-        // Trigger a re-check of unsaved status without creating a new map instance if not necessary
-        // The dependency on 'openedFiles' in the unsaved check useEffect should handle this if 'openedFiles' itself changes.
-        // To be safe, force a recalculation (or rely on the useEffect for openedFiles)
         setActiveFileHasUnsavedChanges(newText !== (getFileSystemNode(activeFilePath) as any)?.content);
         let count = 0;
         openedFiles.forEach((tabFileNode, path) => {
@@ -113,12 +104,9 @@ export function CodeEditorPanel() {
   const handleSave = useCallback(async () => {
     if (activeFilePath && activeFileHasUnsavedChanges) {
       setIsSaving(true);
-      // currentContent from local state IS the latest.
-      // updateFileContent also updates the 'content' on the openedFiles map entry.
       await updateFileContent(activeFilePath, currentContent); 
       setTimeout(() => {
         setIsSaving(false);
-        // No toast for single save
       }, 300);
     }
   }, [activeFilePath, currentContent, activeFileHasUnsavedChanges, updateFileContent]);
@@ -130,7 +118,6 @@ export function CodeEditorPanel() {
     const savePromises: Promise<void>[] = [];
 
     openedFiles.forEach((tabFileNode, path) => {
-      // Use the content from the tabFileNode as it's the most up-to-date for each tab
       const contentToSave = tabFileNode.content; 
       const persistedNode = getFileSystemNode(path);
       const persistedContentOfNode = (persistedNode && !Array.isArray(persistedNode) && persistedNode.type === 'file') ? persistedNode.content : undefined;
@@ -144,7 +131,6 @@ export function CodeEditorPanel() {
 
     setTimeout(() => {
       setIsSaving(false);
-      // No toast for save all
     }, 300); 
   }, [openedFiles, getFileSystemNode, updateFileContent, unsavedFilesCount]);
 
@@ -160,10 +146,6 @@ export function CodeEditorPanel() {
         event.preventDefault();
         if (activeFileHasUnsavedChanges) {
           handleSave();
-        } else if (unsavedFilesCount > 0 && !activeFileHasUnsavedChanges) {
-           // If active is saved but others aren't, Ctrl+S could trigger Save All.
-           // Or prioritize active file only. Current: only saves active IF unsaved.
-           // For now, let Save All button handle this scenario explicitly.
         }
       } else if (activeFilePath && undoKeyPressed) {
         event.preventDefault();
@@ -179,11 +161,37 @@ export function CodeEditorPanel() {
     };
   }, [handleSave, activeFileHasUnsavedChanges, unsavedFilesCount, activeFilePath, undoContentChange, redoContentChange]);
 
+  useEffect(() => {
+    if (activeFilePath) {
+      // Ensure the DOM is updated before trying to find the element
+      requestAnimationFrame(() => {
+        const activeTabTrigger = document.querySelector(
+          // CSS.escape is used for file paths that might contain special characters
+          `.editor-tabs-scroll-area button[role="tab"][value="${CSS.escape(activeFilePath)}"]`
+        );
+        // The viewport is a div with data-radix-scroll-area-viewport attribute inside the .editor-tabs-scroll-area
+        const scrollViewport = document.querySelector('.editor-tabs-scroll-area div[data-radix-scroll-area-viewport]');
+
+        if (activeTabTrigger && scrollViewport) {
+          const triggerRect = activeTabTrigger.getBoundingClientRect();
+          const viewportRect = scrollViewport.getBoundingClientRect();
+
+          // Check if the tab is not fully visible horizontally
+          if (triggerRect.left < viewportRect.left || triggerRect.right > viewportRect.right) {
+            activeTabTrigger.scrollIntoView({
+              behavior: 'smooth',
+              inline: 'nearest', // Primarily for horizontal scrolling
+              block: 'nearest',  // Ensures vertical alignment if tabs ever wrap (though not current design)
+            });
+          }
+        }
+      });
+    }
+  }, [activeFilePath, openedFiles]); // Re-run when activeFilePath or openedFiles change
+
   const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
     event.preventDefault();
     setContextMenuPosition({ x: event.clientX, y: event.clientY });
-    // The DropdownMenuTrigger is not directly used to open, so we toggle manually.
-    // However, it's better to control DropdownMenu's open prop directly.
     setContextMenuOpen(true); 
   };
 
@@ -283,7 +291,7 @@ export function CodeEditorPanel() {
                         )}
                         onClick={(e: React.MouseEvent<HTMLDivElement>) => {
                           e.stopPropagation();
-                          const contentForThisTab = openedFiles.get(path)?.content; // Use content from openedFiles map
+                          const contentForThisTab = openedFiles.get(path)?.content; 
                           const persistedNodeForThisTab = getFileSystemNode(path);
                           const persistedContentForThisTab = (persistedNodeForThisTab && !Array.isArray(persistedNodeForThisTab) && persistedNodeForThisTab.type === 'file') ? persistedNodeForThisTab.content : undefined;
                           
@@ -322,14 +330,11 @@ export function CodeEditorPanel() {
             
           <DropdownMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
             <DropdownMenuTrigger ref={dropdownTriggerRef} asChild>
-                 {/* Invisible trigger, positioned by onContextMenu handler */}
                 <button className="fixed opacity-0 pointer-events-none" style={{top:contextMenuPosition.y, left:contextMenuPosition.x, width:0, height:0}} />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               className="w-56"
               onCloseAutoFocus={(e) => e.preventDefault()} 
-              // Position manually if needed, though Radix usually handles it well if trigger is visible
-              // style={{ position: 'fixed', top: contextMenuPosition.y, left: contextMenuPosition.x }}
             >
               <DropdownMenuItem
                 onClick={handleContextMenuRefactor}
