@@ -243,7 +243,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               type: 'refactorSuggestion',
               content: `Here's a refactoring suggestion for ${fileNameForRefactor || 'the code'}:`,
               suggestion: result.suggestion,
-              targetPath: firstAttachedFile?.path || activeFilePath
+              targetPath: firstAttachedFile?.path! || activeFilePath!
             };
           } else {
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: `No specific refactoring suggestions found for ${fileNameForRefactor || 'the code'}.` };
@@ -293,7 +293,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 type: 'generatedCode',
                 content: "Here's the generated code:",
                 code: result.code,
-                targetPath: result.targetPath || defaultTargetPath
+                targetPath: result.targetPath! || defaultTargetPath!
             };
         }
       }
@@ -602,7 +602,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             placeholder="Chat with AI Assistant..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 min-h-[80px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-1 pr-[40px] themed-scrollbar"
+            className="flex-1 min-h-[80px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-1 pr-[40px] themed-scrollbar text-xs"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -617,10 +617,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-1 right-3 h-[0.6rem] w-[0.6rem] text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="absolute top-1 right-3 h-[0.5rem] w-[0.5rem] text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                     title="Attach file for context"
                 >
-                    <Paperclip className="h-[0.3rem] w-[0.3rem] shrink-0" />
+                    <Paperclip className="h-[0.25rem] w-[0.25rem] shrink-0" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
@@ -651,14 +651,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             type="submit"
             size="icon"
             className={cn(
-                "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent text-primary hover:bg-transparent",
+                "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent text-primary hover:bg-transparent disabled:opacity-50",
                 (isLoading || (!prompt.trim() && attachedFiles.length === 0)) && "opacity-50"
             )}
             disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
             onClick={handleSendMessage}
             title="Send message"
           >
-            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-6 w-6" />}
           </Button>
         </div>
       </div>
