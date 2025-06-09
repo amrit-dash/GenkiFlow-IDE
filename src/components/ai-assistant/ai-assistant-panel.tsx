@@ -574,11 +574,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         </ScrollArea>
       )}
 
-      <div className="pt-4 pb-4 border-t border-sidebar-border mt-auto space-y-2">
+      <div className="p-4 border-t border-sidebar-border mt-auto space-y-2"> {/* Restored px-4 */}
         {attachedFiles.length > 0 && (
-          <div className="grid grid-cols-2 gap-1.5 px-4"> {/* Added px-4 to match other padding, or remove if full-width grid is okay */}
+          <div className="grid grid-cols-2 gap-1.5">
             {attachedFiles.map(file => (
-              <div key={file.path} className="flex items-center justify-between text-xs bg-muted p-1 rounded-md">
+              <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1.5 py-0.5 rounded-md"> {/* Adjusted padding for height */}
                 <div className="flex items-center gap-1.5 text-muted-foreground truncate">
                   <Pin className="h-3.5 w-3.5 shrink-0 text-primary" />
                   <span className="truncate" title={file.path}>{file.name}</span>
@@ -602,7 +602,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             placeholder="Chat with AI Assistant..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 min-h-[80px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-6 py-2 pr-12 themed-scrollbar text-xs"
+            className="flex-1 min-h-[80px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-3 pr-14 py-3 themed-scrollbar text-xs" // Adjusted padding: pl-3, pr-14, py-3
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -612,53 +612,56 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             rows={1}
           />
           
-          <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="ghost"
-                    className="absolute bottom-2 left-2 h-[0.5rem] w-[0.5rem] text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                    title="Attach file for context"
-                >
-                    <Paperclip className="h-px w-px shrink-0" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="start">
-              <Command>
-                <CommandInput placeholder="Search files to attach..." />
-                <CommandList>
-                  <CommandEmpty>No files found.</CommandEmpty>
-                  <CommandGroup heading="Workspace Files">
-                    <ScrollArea className="h-[200px] themed-scrollbar">
-                      {allFilesForSelector.map((file) => (
-                        <CommandItem
-                          key={file.value}
-                          value={file.value}
-                          onSelect={() => handleFileSelect(file.path)}
-                          className="text-xs cursor-pointer"
-                        >
-                          {file.label}
-                        </CommandItem>
-                      ))}
-                    </ScrollArea>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <div className="absolute bottom-2 right-2 flex flex-col items-center"> {/* Button Stack */}
+            <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
+                <PopoverTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon" // Default icon size is h-10 w-10, icon inside is smaller
+                        className="h-7 w-7 mb-1 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                        title="Attach file for context"
+                    >
+                        <Paperclip className="h-4 w-4 shrink-0" />
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
+                  <Command>
+                    <CommandInput placeholder="Search files to attach..." />
+                    <CommandList>
+                      <CommandEmpty>No files found.</CommandEmpty>
+                      <CommandGroup heading="Workspace Files">
+                        <ScrollArea className="h-[200px] themed-scrollbar">
+                          {allFilesForSelector.map((file) => (
+                            <CommandItem
+                              key={file.value}
+                              value={file.value}
+                              onSelect={() => handleFileSelect(file.path)}
+                              className="text-xs cursor-pointer"
+                            >
+                              {file.label}
+                            </CommandItem>
+                          ))}
+                        </ScrollArea>
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+            </Popover>
 
-          <Button
-            type="submit"
-            size="icon"
-            className={cn(
-                "absolute bottom-2 right-2 h-8 w-8 rounded-md transition-colors bg-transparent hover:bg-transparent text-primary",
-                (isLoading || (!prompt.trim() && attachedFiles.length === 0)) && "opacity-50"
-            )}
-            disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
-            onClick={handleSendMessage}
-            title="Send message"
-          >
-            {isLoading ? <Loader2 className="h-8 w-8 animate-spin" /> : <Send className="h-8 w-8" />}
-          </Button>
+            <Button
+              type="submit"
+              size="icon" 
+              className={cn(
+                  "h-10 w-10 rounded-full transition-colors bg-primary text-primary-foreground hover:bg-primary/90", // Circular button with background
+                  (isLoading || (!prompt.trim() && attachedFiles.length === 0)) && "opacity-60" // Custom disabled look for bg button
+              )}
+              disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
+              onClick={handleSendMessage}
+              title="Send message"
+            >
+              {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
