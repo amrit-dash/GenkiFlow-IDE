@@ -577,7 +577,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         <div className="w-full max-w-xl mx-auto"> {/* Centered container with max width */}
           {/* Row 1: Attachments Section */}
           {attachedFiles.length > 0 && (
-            <div className="w-80 pb-0.5 mb-2"> {/* Full width container for attachments */}
+            <div className="w-full pb-0.5 pr-11 mb-2"> {/* Full width container for attachments */}
               <div className="grid grid-cols-2 gap-2">
                 {attachedFiles.map(file => (
                   <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1 py-0.5 rounded-md">
