@@ -16,7 +16,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 
 interface AiAssistantPanelProps {
-  isVisible: boolean; 
+  isVisible: boolean;
   onToggleVisibility: () => void;
 }
 
@@ -31,7 +31,7 @@ const MAX_ATTACHED_FILES = 4;
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
 const HintCard = ({ icon: Icon, title, description, onActivate }: { icon: React.ElementType, title: string, description: string, onActivate: () => void }) => (
-  <Card 
+  <Card
     className="w-full p-3 hover:bg-accent/60 cursor-pointer transition-colors shadow-sm hover:shadow-md"
     onClick={onActivate}
     tabIndex={0}
@@ -51,14 +51,14 @@ const HintCard = ({ icon: Icon, title, description, onActivate }: { icon: React.
 
 
 export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantPanelProps) {
-  const { 
-    activeFilePath, 
-    openedFiles, 
-    updateFileContent, 
-    getFileSystemNode, 
-    addNode, 
+  const {
+    activeFilePath,
+    openedFiles,
+    updateFileContent,
+    getFileSystemNode,
+    addNode,
     openFile,
-    fileSystem 
+    fileSystem
   } = useIde();
   const [prompt, setPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -111,7 +111,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     if (path) {
       updateFileContent(path, codeToApply);
       toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name || 'the editor'}.`});
-      if (!actionAppliedStates[buttonKey]) { 
+      if (!actionAppliedStates[buttonKey]) {
         setButtonAppliedState(buttonKey);
       }
     } else {
@@ -121,19 +121,19 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
   const handleCreateFileAndInsert = async (suggestedFileName: string, code: string, messageId: string, buttonKey: string) => {
     setIsLoading(true);
-    
+
     let parentDirNode = activeFilePath ? getFileSystemNode(activeFilePath) : null;
     let parentIdForNewNode: string | null = null;
     let baseDirForNewNode = "/";
 
     if (parentDirNode && !Array.isArray(parentDirNode) && parentDirNode.type === 'file') {
         const pathParts = parentDirNode.path.split('/');
-        pathParts.pop(); 
+        pathParts.pop();
         baseDirForNewNode = pathParts.join('/') || '/';
         const actualParentDirNode = getFileSystemNode(baseDirForNewNode);
         if (actualParentDirNode && !Array.isArray(actualParentDirNode) && actualParentDirNode.type === 'folder') {
             parentIdForNewNode = actualParentDirNode.id;
-        } else { 
+        } else {
             parentIdForNewNode = null;
             baseDirForNewNode = "/";
         }
@@ -146,13 +146,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const newNode = addNode(parentIdForNewNode, suggestedFileName, 'file', baseDirForNewNode);
 
     if (newNode) {
-      openFile(newNode.path, newNode); 
+      openFile(newNode.path, newNode);
       updateFileContent(newNode.path, code);
       const toastResult = toast({ title: "File Created", description: `"${newNode.name}" created and code inserted.`});
       setTimeout(() => {
         toastResult.dismiss();
       }, 1000);
-      if (!actionAppliedStates[buttonKey]) { 
+      if (!actionAppliedStates[buttonKey]) {
         setButtonAppliedState(buttonKey);
       }
     } else {
@@ -178,7 +178,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setChatHistory([]);
     setPrompt("");
     setAttachedFiles([]);
-    setActionAppliedStates({}); 
+    setActionAppliedStates({});
     textareaRef.current?.focus();
   };
 
@@ -200,7 +200,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const currentChatHistory = [...chatHistory, userMessage];
     setChatHistory(currentChatHistory);
     const currentPromptValue = prompt;
-    const currentAttachedFiles = [...attachedFiles]; 
+    const currentAttachedFiles = [...attachedFiles];
 
     setPrompt("");
     // Do not clear attachments for follow-up
@@ -217,7 +217,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     try {
       let aiResponse: ChatMessage | null = null;
       const lowerCasePrompt = currentPromptValue.toLowerCase();
-      
+
       const firstAttachedFile = currentAttachedFiles.length > 0 ? currentAttachedFiles[0] : null;
 
       if (lowerCasePrompt.includes("summarize") || lowerCasePrompt.includes("summary")) {
@@ -237,20 +237,20 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } else {
           const result = await refactorCodeServer({ codeSnippet: codeToRefactor, fileContext: `File: ${fileNameForRefactor || 'current file'}\n\n${codeToRefactor}` });
           if (result.suggestion) {
-            aiResponse = { 
-              id: generateId(), 
-              role: 'assistant', 
-              type: 'refactorSuggestion', 
-              content: `Here's a refactoring suggestion for ${fileNameForRefactor || 'the code'}:`, 
+            aiResponse = {
+              id: generateId(),
+              role: 'assistant',
+              type: 'refactorSuggestion',
+              content: `Here's a refactoring suggestion for ${fileNameForRefactor || 'the code'}:`,
               suggestion: result.suggestion,
-              targetPath: firstAttachedFile?.path || activeFilePath 
+              targetPath: firstAttachedFile?.path || activeFilePath
             };
           } else {
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: `No specific refactoring suggestions found for ${fileNameForRefactor || 'the code'}.` };
           }
         }
       } else if (lowerCasePrompt.includes("find example") || lowerCasePrompt.includes("show example") || lowerCasePrompt.includes("how to use")) {
-        const queryMatch = currentPromptValue.match(/(?:find example|show example|how to use)\s*(?:of|for)?\s*([\w\s.<>(){}!"';:,[-]+)/i); 
+        const queryMatch = currentPromptValue.match(/(?:find example|show example|how to use)\s*(?:of|for)?\s*([\w\s.<>(){}!"';:,[-]+)/i);
         const query = queryMatch && queryMatch[1] ? queryMatch[1].trim() : currentPromptValue;
         const result = await findExamplesServer({ query });
          if (result.examples && result.examples.length > 0) {
@@ -258,22 +258,22 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } else {
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: `No examples found for "${query}".` };
         }
-      } else { 
+      } else {
         let effectivePrompt = currentPromptValue;
-        const historyForContext = currentChatHistory.slice(0, -1); 
+        const historyForContext = currentChatHistory.slice(0, -1);
         if (historyForContext.length > 0) {
             const lastMessages = historyForContext
-                .slice(-3) 
+                .slice(-3)
                 .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`)
                 .join('\n\n');
             effectivePrompt = `${lastMessages}\n\nUser: ${currentPromptValue}`;
         }
-        
-        const result = await generateCodeServer({ 
-            prompt: effectivePrompt, 
-            currentFilePath: activeFilePath || undefined, 
+
+        const result = await generateCodeServer({
+            prompt: effectivePrompt,
+            currentFilePath: activeFilePath || undefined,
             currentFileContent: currentCode,
-            attachedFiles: currentAttachedFiles.map(f => ({ path: f.path, content: f.content })) 
+            attachedFiles: currentAttachedFiles.map(f => ({ path: f.path, content: f.content }))
         });
 
         if (result.isNewFile && result.suggestedFileName) {
@@ -287,22 +287,22 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             };
         } else {
             const defaultTargetPath = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
-             aiResponse = { 
-                id: generateId(), 
-                role: 'assistant', 
-                type: 'generatedCode', 
-                content: "Here's the generated code:", 
+             aiResponse = {
+                id: generateId(),
+                role: 'assistant',
+                type: 'generatedCode',
+                content: "Here's the generated code:",
                 code: result.code,
-                targetPath: result.targetPath || defaultTargetPath 
+                targetPath: result.targetPath || defaultTargetPath
             };
         }
       }
-      
+
       setChatHistory(prev => prev.filter(msg => msg.id !== loadingMessageId).concat(aiResponse!));
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
-      console.error("AI Assistant Error:", error); 
+      console.error("AI Assistant Error:", error);
       setChatHistory(prev => prev.filter(msg => msg.id !== loadingMessageId).concat({
         id: generateId(),
         role: 'assistant',
@@ -353,37 +353,37 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <span className="sr-only">New Chat</span>
         </Button>
       </div>
-      
+
       {chatHistory.length === 0 && !isLoading ? (
         <div className="flex-1 p-4 flex flex-col items-center justify-center text-center space-y-3 overflow-y-auto themed-scrollbar">
           <MessageSquare className="w-12 h-12 text-primary opacity-70 mb-2" />
           <h3 className="text-lg font-semibold text-foreground">GenkiFlow AI Assistant</h3>
           <p className="text-xs text-muted-foreground max-w-xs">
-            Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below. 
+            Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below.
             {attachedFiles.length > 0 ? ` Using ${attachedFiles.map(f=>f.name).join(', ')} as context.` : ` Attach up to ${MAX_ATTACHED_FILES} files for specific context.`}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full max-w-md pt-3">
-            <HintCard 
-              icon={FileText} 
-              title="Summarize Code" 
+            <HintCard
+              icon={FileText}
+              title="Summarize Code"
               description="Get a concise summary of the code in your active editor tab or an attached file."
               onActivate={() => { setPrompt("Summarize the code."); textareaRef.current?.focus(); }}
             />
-            <HintCard 
-              icon={Code2} 
-              title="Generate Code" 
+            <HintCard
+              icon={Code2}
+              title="Generate Code"
               description="Describe any code you need (e.g., a function, a component, a script), and I'll generate it."
               onActivate={() => { setPrompt("Generate a Python function that takes a list of numbers and returns their sum."); textareaRef.current?.focus(); }}
             />
-            <HintCard 
-              icon={Wand2} 
-              title="Refactor Code" 
+            <HintCard
+              icon={Wand2}
+              title="Refactor Code"
               description="Suggest improvements for the code in your active editor tab or an attached file."
               onActivate={() => { setPrompt("Refactor the current code for better readability and performance."); textareaRef.current?.focus(); }}
             />
-            <HintCard 
-              icon={SearchCode} 
-              title="Find Examples" 
+            <HintCard
+              icon={SearchCode}
+              title="Find Examples"
               description="Search the codebase for usage examples of functions or components."
               onActivate={() => { setPrompt("Find examples of how the Button component is used."); textareaRef.current?.focus(); }}
             />
@@ -411,15 +411,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                       {msg.type === 'loading' && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
                       {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
                       {msg.type === 'error' && <p className="text-destructive whitespace-pre-wrap">{msg.content}</p>}
-                      
+
                       {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion') && msg.code && (
                         <div className="space-y-2">
                           <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
                           <div className="relative bg-muted p-2 rounded-md group themed-scrollbar">
                             <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code themed-scrollbar"><code>{msg.code}</code></pre>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={() => handleCopyCode(msg.code!, `${msg.id}-code`)}
                               title={copiedStates[`${msg.id}-code`] ? "Copied!" : "Copy code"}
@@ -429,10 +429,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           </div>
                           {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
                             <div className="flex items-center gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)} 
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)}
                                 disabled={isLoading || actionAppliedStates[createFileKey]}
                               >
                                 {actionAppliedStates[createFileKey] ? (
@@ -457,10 +457,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           )}
                           {msg.type === 'generatedCode' && (
                              <div className="flex items-center gap-2">
-                               <Button 
-                                 size="sm" 
-                                 variant="outline" 
-                                 onClick={() => handleApplyToEditor(msg.code!, msg.id, applyGeneratedCodeKey, msg.targetPath)} 
+                               <Button
+                                 size="sm"
+                                 variant="outline"
+                                 onClick={() => handleApplyToEditor(msg.code!, msg.id, applyGeneratedCodeKey, msg.targetPath)}
                                  disabled={isLoading || (!msg.targetPath && !activeFilePath) || actionAppliedStates[applyGeneratedCodeKey]}
                                >
                                  {actionAppliedStates[applyGeneratedCodeKey] ? (
@@ -496,9 +496,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             <CardContent className="p-2 pt-0">
                               <div className="relative bg-background/70 p-1.5 rounded-md group themed-scrollbar mb-1.5">
                                 <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code themed-scrollbar"><code>{msg.suggestion.proposedCode}</code></pre>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
                                   onClick={() => handleCopyCode(msg.suggestion!.proposedCode, `${msg.id}-suggestion`)}
                                   title={copiedStates[`${msg.id}-suggestion`] ? "Copied!" : "Copy code"}
@@ -507,11 +507,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 </Button>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Button 
-                                  size="xs" 
-                                  variant="outline" 
-                                  className="mt-1" 
-                                  onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode, msg.id, applyEditorKey, msg.targetPath)} 
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  className="mt-1"
+                                  onClick={() => handleApplyToEditor(msg.suggestion!.proposedCode, msg.id, applyEditorKey, msg.targetPath)}
                                   disabled={isLoading || (!msg.targetPath && !activeFilePath) || actionAppliedStates[applyEditorKey]}
                                 >
                                   {actionAppliedStates[applyEditorKey] ? (
@@ -547,9 +547,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           {msg.examples.map((ex, i) => (
                             <div key={i} className="relative bg-muted p-2 rounded-md group themed-scrollbar">
                               <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code themed-scrollbar"><code>{ex}</code></pre>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                                 onClick={() => handleCopyCode(ex, `${msg.id}-example-${i}`)}
                                 title={copiedStates[`${msg.id}-example-${i}`] ? "Copied!" : "Copy code"}
@@ -565,7 +565,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 </div>
               );
             })}
-             {isLoading && chatHistory.length === 0 && ( 
+             {isLoading && chatHistory.length === 0 && (
                 <div className="flex justify-center items-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -583,11 +583,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   <Paperclip className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate" title={file.path}>{file.name}</span>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-5 w-5 shrink-0 text-muted-foreground hover:bg-transparent hover:text-primary focus-visible:ring-0 focus-visible:ring-offset-0" 
-                  onClick={() => handleRemoveAttachedFile(file.path)} 
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0 text-muted-foreground hover:bg-transparent hover:text-primary focus-visible:ring-0 focus-visible:ring-offset-0"
+                  onClick={() => handleRemoveAttachedFile(file.path)}
                   title="Remove attachment"
                 >
                   <XCircle className="h-3.5 w-3.5" />
@@ -614,13 +614,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <div className="absolute bottom-2.5 right-2 flex items-center gap-0.5">
             <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
               <PopoverTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                   title="Attach file for context"
                 >
-                  <Paperclip className="h-3.5 w-3.5" />
+                  <Paperclip className="h-3 w-3" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
@@ -646,20 +646,20 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 </Command>
               </PopoverContent>
             </Popover>
-            <Button 
-              type="submit" 
-              size="icon" 
+            <Button
+              type="submit"
+              size="icon"
               className={cn(
                 "h-7 w-7 rounded-md transition-colors bg-transparent",
                 (isLoading || (!prompt.trim() && attachedFiles.length === 0))
-                  ? "text-muted-foreground" 
-                  : "text-primary hover:bg-transparent" 
+                  ? "text-muted-foreground"
+                  : "text-primary hover:bg-transparent"
               )}
               disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
               onClick={handleSendMessage}
               title="Send message"
             >
-              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-5 w-5" />}
             </Button>
           </div>
         </div>
