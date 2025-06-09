@@ -602,7 +602,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             placeholder="Chat with AI Assistant..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pr-[70px] themed-scrollbar"
+            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-1 pr-[70px] themed-scrollbar"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -652,7 +652,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               className={cn(
                 "h-7 w-7 rounded-md transition-colors bg-transparent",
                 (isLoading || (!prompt.trim() && attachedFiles.length === 0))
-                  ? "text-muted-foreground"
+                  ? "text-muted-foreground" 
                   : "text-primary hover:bg-transparent" 
               )}
               disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
