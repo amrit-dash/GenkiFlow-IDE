@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
 import type { AiSuggestion, ChatMessage, FileSystemNode } from '@/lib/types';
@@ -580,7 +580,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             {attachedFiles.map(file => (
               <div key={file.path} className="flex items-center justify-between text-xs bg-muted p-1.5 rounded-md">
                 <div className="flex items-center gap-1.5 text-muted-foreground truncate">
-                  <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                  <Pin className="h-3.5 w-3.5 shrink-0 text-primary" />
                   <span className="truncate" title={file.path}>{file.name}</span>
                 </div>
                 <Button
