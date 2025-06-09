@@ -18,6 +18,7 @@ import {terminalOperations} from '../tools/terminal-operations';
 import {fileSystemExecutor} from '../tools/file-system-executor';
 import {codebaseDataset} from '../tools/codebase-dataset';
 import {intelligentCodeMerger} from '../tools/intelligent-code-merger';
+import {fileContextAnalyzer} from '../tools/file-context-analyzer';
 
 const ChatHistoryItemSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -90,7 +91,7 @@ const prompt = ai.definePrompt({
   name: 'enhancedGenerateCodePrompt',
   input: {schema: EnhancedGenerateCodeInputSchema},
   output: {schema: EnhancedGenerateCodeOutputSchema},
-  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger],
+  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger, fileContextAnalyzer],
   prompt: `You are an expert AI coding assistant with deep understanding of software architecture and best practices.
 
 User Prompt: {{{prompt}}}
@@ -143,23 +144,27 @@ Project Analysis:
 ENHANCED INSTRUCTIONS:
 1. **Before starting**: Use operationProgress tool to explain what you're about to do
 2. **During analysis**: If the user asks about specific functions/components, use codeUsageAnalysis to find how they're used throughout the codebase
-3. **Code generation**: Create high-quality, contextually appropriate code
-4. **Smart merging**: When modifying existing files, use intelligentCodeMerger to analyze how generated content should be integrated with existing content
-5. **After generation**: Use errorValidation tool to check the generated code for issues
-6. **File operations**: Use fileSystemOperations when file placement decisions are needed
-7. **File execution**: Use fileSystemExecutor to find, list, delete, rename, or move files when explicitly requested
-8. **Terminal commands**: Use terminalOperations for command execution when requested
-9. **Dataset management**: Use codebaseDataset to create/query codebase knowledge for better context
-10. **Code examples**: Use codebaseSearch to find relevant examples when helpful
+3. **File context analysis**: Use fileContextAnalyzer to understand what existing files do and their suitability for new code
+4. **Smart file targeting**: Analyze generated code language/type and match with appropriate existing files or suggest new file creation
+5. **Code generation**: Create high-quality, contextually appropriate code
+6. **Smart merging**: When modifying existing files, use intelligentCodeMerger to analyze how generated content should be integrated with existing content
+7. **After generation**: Use errorValidation tool to check the generated code for issues
+8. **File operations**: Use fileSystemOperations when file placement decisions are needed
+9. **File execution**: Use fileSystemExecutor to find, list, delete, rename, or move files when explicitly requested
+10. **Terminal commands**: Use terminalOperations for command execution when requested
+11. **Dataset management**: Use codebaseDataset to create/query codebase knowledge for better context
+12. **Code examples**: Use codebaseSearch to find relevant examples when helpful
 
 WORKFLOW:
 1. Start with operationProgress (stage: 'starting', progress: 10)
-2. Initialize/query codebaseDataset for better project context (stage: 'analyzing', progress: 20)
-3. Analyze context and requirements (stage: 'analyzing', progress: 30)
-4. Generate appropriate code (stage: 'processing', progress: 60)
-5. If modifying existing file: Use intelligentCodeMerger to determine best merge strategy (stage: 'processing', progress: 75)
-6. Validate the generated/merged code with errorValidation (stage: 'validating', progress: 90)
-7. Complete with final results (stage: 'completing', progress: 100)
+2. Initialize/query codebaseDataset for better project context (stage: 'analyzing', progress: 15)
+3. Analyze context and requirements (stage: 'analyzing', progress: 25)
+4. Use fileContextAnalyzer on relevant existing files to understand their purpose and suitability (stage: 'analyzing', progress: 35)
+5. Determine optimal file targeting based on code type and context analysis (stage: 'analyzing', progress: 45)
+6. Generate appropriate code (stage: 'processing', progress: 65)
+7. If modifying existing file: Use intelligentCodeMerger to determine best merge strategy (stage: 'processing', progress: 80)
+8. Validate the generated/merged code with errorValidation (stage: 'validating', progress: 90)
+9. Complete with final results (stage: 'completing', progress: 100)
 
 ERROR HANDLING:
 - If errors are found during validation, provide automatic fixes
@@ -176,6 +181,14 @@ SPECIAL HANDLING:
 - For terminal requests: Use terminalOperations to execute commands with user confirmation
 - Use progress updates throughout the process
 
+SMART FILE TARGETING GUIDELINES:
+- **Language Matching**: Always prefer files that match the generated code's language (Python to .py, JavaScript to .js/.ts, etc.)
+- **Context Relevance**: Use fileContextAnalyzer to check if user's request matches what existing files do
+- **Avoid README Insertion**: Never insert code into README.md, documentation files, or configuration files unless explicitly requested for documentation updates
+- **Purpose Alignment**: Match generated code purpose with file purpose (utilities to utility files, components to component files, etc.)
+- **File Quality Check**: Use context analysis to ensure target file has good structure and isn't overly complex
+- **New File Suggestion**: If no suitable existing file found, suggest creating a new file with appropriate name and extension
+
 INTELLIGENT MERGING GUIDELINES:
 - When user asks to "update this section" or "add function X": Use intelligentCodeMerger with insertionContext
 - When generated content contains complete file: Use intelligentCodeMerger to extract only new/changed parts
@@ -183,6 +196,11 @@ INTELLIGENT MERGING GUIDELINES:
 - When adding new features: Use intelligentCodeMerger to find optimal insertion points
 - Always pass user's instruction as userInstruction parameter to intelligentCodeMerger
 - If merger returns low confidence, provide both merged result and original full replacement as alternatives
+
+DOCUMENTATION HANDLING:
+- When user explicitly asks to "update README" or "add to documentation": Allow modifications to .md files
+- When user asks to "document the new function" or similar: Update relevant documentation sections
+- When user wants code examples in docs: Insert properly formatted code blocks in documentation files
 
 FILE OPERATION EXAMPLES:
 - "delete untitled files" → Use fileSystemExecutor with operation: 'list' to find untitled files, then 'delete'

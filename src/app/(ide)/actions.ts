@@ -429,11 +429,26 @@ export async function suggestFilenameServer(input: {
       projectStructure: input.projectStructure,
     });
 
+    // Extract the original extension from currentFileName
+    let originalExt = '';
+    if (input.currentFileName && input.currentFileName.includes('.')) {
+      originalExt = '.' + input.currentFileName.split('.').pop();
+    }
+
+    // Ensure all suggestions use the original extension
+    const suggestions = result.suggestions.map(s => {
+      if (originalExt && !s.filename.endsWith(originalExt)) {
+        const base = s.filename.replace(/\.[^.]+$/, '');
+        return { ...s, filename: base + originalExt };
+      }
+      return s;
+    });
+
     return {
       success: true,
-      suggestions: result.suggestions,
+      suggestions,
       analysis: result.analysis,
-      topSuggestion: result.suggestions[0] || null,
+      topSuggestion: suggestions[0] || null,
     };
   } catch (error: any) {
     logDetailedError("suggestFilenameServer", error);
@@ -503,5 +518,82 @@ export async function intelligentCodeMergerServer(input: {
   } catch (error: any) {
     logDetailedError("intelligentCodeMergerServer", error);
     throw new Error(formatErrorForClient("Failed to perform intelligent code merging.", error));
+  }
+}
+
+// File Context Analyzer - Analyzes file content to understand purpose and suitability
+export async function fileContextAnalyzerServer(input: {
+  filePath: string;
+  fileContent: string;
+  fileName: string;
+  fileExtension: string;
+  projectContext?: string;
+}) {
+  try {
+    const { fileContextAnalyzer } = await import('@/ai/tools/file-context-analyzer');
+    const result = await fileContextAnalyzer({
+      filePath: input.filePath,
+      fileContent: input.fileContent,
+      fileName: input.fileName,
+      fileExtension: input.fileExtension,
+      projectContext: input.projectContext,
+    });
+
+    return {
+      success: true,
+      analysis: result.analysis,
+      contextScore: result.contextScore,
+      tags: result.tags,
+      recommendedForNewCode: result.recommendedForNewCode,
+      reasoning: result.reasoning,
+    };
+  } catch (error: any) {
+    logDetailedError("fileContextAnalyzerServer", error);
+    throw new Error(formatErrorForClient("Failed to analyze file context.", error));
+  }
+}
+
+// Smart Folder Operations - Intelligent folder operations with context awareness
+export async function smartFolderOperationsServer(input: {
+  operation: 'move' | 'rename' | 'delete' | 'analyze';
+  targetPath: string;
+  userInstruction: string;
+  destinationHint?: string;
+  fileSystemTree: string;
+  folderContents?: Array<{
+    path: string;
+    name: string;
+    type: 'file' | 'folder';
+    language?: string;
+    purpose?: string;
+  }>;
+}) {
+  try {
+    const { smartFolderOperations } = await import('@/ai/tools/smart-folder-operations');
+    const result = await smartFolderOperations({
+      operation: input.operation,
+      targetPath: input.targetPath,
+      userInstruction: input.userInstruction,
+      destinationHint: input.destinationHint,
+      fileSystemTree: input.fileSystemTree,
+      folderContents: input.folderContents,
+    });
+
+    return {
+      success: true,
+      operation: result.operation,
+      canExecuteDirectly: result.canExecuteDirectly,
+      suggestions: result.suggestions,
+      topSuggestion: result.topSuggestion,
+      needsUserConfirmation: result.needsUserConfirmation,
+      confirmationPrompt: result.confirmationPrompt,
+      suggestedNewName: result.suggestedNewName,
+      folderAnalysis: result.folderAnalysis,
+      reasoning: result.reasoning,
+      confidence: result.confidence,
+    };
+  } catch (error: any) {
+    logDetailedError("smartFolderOperationsServer", error);
+    throw new Error(formatErrorForClient("Failed to perform smart folder operations.", error));
   }
 }

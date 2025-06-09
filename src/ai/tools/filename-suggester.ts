@@ -46,12 +46,21 @@ export const filenameSuggester = ai.defineTool(
     
     const content = input.fileContent;
     const currentName = input.currentFileName;
+    const fileType = input.fileType || 'file';
     
     // Deep analyze the file content
     const analysis = analyzeFileContentDeep(content);
     
     // Generate exactly 3 intelligent, non-repetitive suggestions
-    const suggestions = generateIntelligentSuggestions(content, analysis, currentName, input.context);
+    let suggestions = generateIntelligentSuggestions(content, analysis, currentName, input.context);
+    
+    // If folder, clean up names
+    if (fileType === 'folder') {
+      suggestions = suggestions.map(s => ({
+        ...s,
+        filename: cleanFolderName(s.filename)
+      }));
+    }
     
     return {
       suggestions: suggestions.slice(0, 3), // Ensure exactly 3 suggestions
@@ -377,4 +386,9 @@ function generateFallbackName(analysis: any, index: number, ext: string): string
   ];
   
   return fallbacks[index] || `file${index}${ext}`;
+}
+
+function cleanFolderName(name: string) {
+  let base = name.split('.')[0];
+  return base.charAt(0).toUpperCase() + base.slice(1);
 } 

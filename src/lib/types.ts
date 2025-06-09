@@ -141,10 +141,42 @@ export interface SmartCodePlacementData {
   };
 }
 
+export interface SmartFolderOperationData {
+  operation: 'move' | 'rename' | 'delete' | 'analyze';
+  targetPath: string;
+  canExecuteDirectly: boolean;
+  suggestions: Array<{
+    folderPath: string;
+    folderName: string;
+    confidence: number;
+    reasoning: string;
+    relevanceScore: number;
+  }>;
+  topSuggestion?: {
+    folderPath: string;
+    folderName: string;
+    confidence: number;
+    reasoning: string;
+    relevanceScore: number;
+  };
+  needsUserConfirmation: boolean;
+  confirmationPrompt?: string;
+  suggestedNewName?: string;
+  folderAnalysis?: {
+    totalFiles: number;
+    languages: string[];
+    primaryPurpose: string;
+    suggestedNames: string[];
+    isWellOrganized: boolean;
+  };
+  reasoning: string;
+  confidence: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'generatedCode' | 'refactorSuggestion' | 'codeExamples' | 'error' | 'loading' | 'newFileSuggestion' | 'enhancedCodeGeneration' | 'fileOperationSuggestion' | 'progressUpdate' | 'errorValidation' | 'usageAnalysis' | 'fileOperationExecution' | 'terminalCommandExecution' | 'smartCodePlacement' | 'filenameSuggestion';
+  type: 'text' | 'generatedCode' | 'refactorSuggestion' | 'codeExamples' | 'error' | 'loading' | 'newFileSuggestion' | 'enhancedCodeGeneration' | 'fileOperationSuggestion' | 'progressUpdate' | 'errorValidation' | 'usageAnalysis' | 'fileOperationExecution' | 'terminalCommandExecution' | 'smartCodePlacement' | 'filenameSuggestion' | 'smartFolderOperation';
   content: string; // For text, error messages, or descriptions
   code?: string; // For generatedCode, newFileSuggestion, enhancedCodeGeneration
   suggestion?: AiSuggestion; // For refactorSuggestion (singular)
@@ -162,6 +194,7 @@ export interface ChatMessage {
   terminalCommandData?: TerminalCommandExecutionData; // For terminal command execution
   smartPlacementData?: SmartCodePlacementData; // For smart code placement suggestions
   filenameSuggestionData?: FilenameSuggestionData; // For AI-powered filename suggestions
+  smartFolderOperationData?: SmartFolderOperationData; // For smart folder operations
 }
 
 export interface ProgressData {

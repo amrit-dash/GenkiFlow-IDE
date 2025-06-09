@@ -19,3 +19,6 @@ import '@/ai/tools/codebase-indexer.ts';
 import '@/ai/tools/filename-suggester.ts';
 import '@/ai/tools/smart-content-insertion.ts';
 import '@/ai/tools/intelligent-code-merger.ts';
+import '@/ai/tools/file-context-analyzer.ts';
+import '@/ai/tools/smart-folder-operations.ts';
+import '@/ai/tools/advanced-rag-system.ts';

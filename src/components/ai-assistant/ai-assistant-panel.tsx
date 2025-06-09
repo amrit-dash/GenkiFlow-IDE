@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
-import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer, intelligentCodeMergerServer } from '@/app/(ide)/actions';
+import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer, intelligentCodeMergerServer, smartFolderOperationsServer } from '@/app/(ide)/actions';
 import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
 import type { AiSuggestion, ChatMessage, FileSystemNode } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -27,7 +27,23 @@ interface AttachedFileUIData {
   content: string;
 }
 
+interface UndoOperation {
+  type: 'delete' | 'rename' | 'move' | 'create';
+  data: any;
+  timestamp: number;
+  description: string;
+}
+
+interface ConfirmationDialogData {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  operation: () => void;
+  isDangerous?: boolean;
+}
+
 const MAX_ATTACHED_FILES = 4;
+const MAX_UNDO_OPERATIONS = 10;
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
@@ -72,14 +88,178 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
   const [actionAppliedStates, setActionAppliedStates] = useState<Record<string, boolean>>({});
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  const [undoStack, setUndoStack] = useState<UndoOperation[]>([]);
+  const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogData>({
+    isOpen: false,
+    title: '',
+    message: '',
+    operation: () => {},
+    isDangerous: false
+  });
   const { toast } = useToast();
 
   const [attachedFiles, setAttachedFiles] = useState<AttachedFileUIData[]>([]);
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
 
+  // 1. Add state for code preview expansion
+  const [expandedCodePreviews, setExpandedCodePreviews] = useState<Record<string, boolean>>({});
+
   const currentCode = activeFilePath ? openedFiles.get(activeFilePath)?.content : undefined;
   const currentFileNode = activeFilePath ? getFileSystemNode(activeFilePath) : undefined;
   const currentFileName = (currentFileNode && !Array.isArray(currentFileNode)) ? currentFileNode.name : undefined;
+
+  // Undo and confirmation helper functions
+  const addToUndoStack = (operation: UndoOperation) => {
+    setUndoStack(prev => {
+      const newStack = [operation, ...prev];
+      return newStack.slice(0, MAX_UNDO_OPERATIONS);
+    });
+  };
+
+  const executeUndo = async (operation: UndoOperation) => {
+    try {
+      switch (operation.type) {
+        case 'delete':
+          // Recreate the deleted file/folder
+          const parentPath = operation.data.parentPath || '/';
+          const parentNode = parentPath === '/' ? null : getFileSystemNode(parentPath);
+          const parentId = parentNode && !Array.isArray(parentNode) ? parentNode.id : null;
+          
+          const restoredNode = addNode(parentId, operation.data.name, operation.data.type, parentPath);
+          if (restoredNode && operation.data.content && operation.data.type === 'file') {
+            updateFileContent(restoredNode.path, operation.data.content);
+          }
+          toast({
+            title: "Undo Successful",
+            description: `Restored ${operation.data.name}`,
+          });
+          break;
+          
+        case 'rename':
+          // Rename back to original name
+          const nodeToRenameBack = getFileSystemNode(operation.data.newPath);
+          if (nodeToRenameBack && !Array.isArray(nodeToRenameBack)) {
+            renameNode(nodeToRenameBack.id, operation.data.originalName);
+            toast({
+              title: "Undo Successful", 
+              description: `Renamed back to ${operation.data.originalName}`,
+            });
+          }
+          break;
+          
+        case 'move':
+          // Move back to original location
+          const nodeToMoveBack = getFileSystemNode(operation.data.newPath);
+          const originalParent = getFileSystemNode(operation.data.originalParentPath);
+          if (nodeToMoveBack && !Array.isArray(nodeToMoveBack) && originalParent && !Array.isArray(originalParent)) {
+            moveNode(nodeToMoveBack.id, originalParent.id);
+            toast({
+              title: "Undo Successful",
+              description: `Moved back to original location`,
+            });
+          }
+          break;
+          
+        case 'create':
+          // Delete the created file
+          const nodeToDelete = getFileSystemNode(operation.data.path);
+          if (nodeToDelete && !Array.isArray(nodeToDelete)) {
+            deleteNode(nodeToDelete.id);
+            toast({
+              title: "Undo Successful",
+              description: `Removed created ${operation.data.name}`,
+            });
+          }
+          break;
+      }
+    } catch (error) {
+      toast({
+        title: "Undo Failed",
+        description: "Could not undo the operation",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const showConfirmationDialog = (title: string, message: string, operation: () => void, isDangerous: boolean = false) => {
+    setConfirmationDialog({
+      isOpen: true,
+      title,
+      message,
+      operation,
+      isDangerous
+    });
+  };
+
+  const closeConfirmationDialog = () => {
+    setConfirmationDialog({
+      isOpen: false,
+      title: '',
+      message: '',
+      operation: () => {},
+      isDangerous: false
+    });
+  };
+
+  const findNodeByPath = (targetPath: string): FileSystemNode | null => {
+    console.log('🔍 Finding node for path:', targetPath);
+    
+    // Clean and normalize the path
+    const cleanPath = targetPath.trim().replace(/\/+/g, '/');
+    console.log('🧹 Cleaned path:', cleanPath);
+    
+    // Direct path lookup
+    let node = getFileSystemNode(cleanPath);
+    console.log('🎯 Direct lookup result:', node);
+    
+    if (node && !Array.isArray(node)) {
+      return node;
+    }
+    
+    // Try alternative path formats
+    const variations = [
+      cleanPath.startsWith('/') ? cleanPath.slice(1) : '/' + cleanPath,
+      cleanPath.replace(/^\//, ''),
+      '/' + cleanPath.replace(/^\//, ''),
+    ];
+    
+    for (const variation of variations) {
+      console.log('🔄 Trying variation:', variation);
+      node = getFileSystemNode(variation);
+      if (node && !Array.isArray(node)) {
+        console.log('✅ Found with variation:', variation);
+        return node;
+      }
+    }
+    
+    // Search by name in flat file list
+    const allFiles = flattenFileSystem(fileSystem);
+    const fileName = cleanPath.split('/').pop();
+    console.log('📁 Searching for filename:', fileName, 'in', allFiles.length, 'files');
+    
+    const foundFile = allFiles.find(f => {
+      const match = fileName && (f.label === fileName || 
+                   f.value.endsWith('/' + fileName) ||
+                   f.value === fileName ||
+                   f.label.includes(fileName));
+      if (match) {
+        console.log('🎯 Found match:', f);
+      }
+      return match;
+    });
+    
+    if (foundFile) {
+      node = getFileSystemNode(foundFile.value);
+      console.log('📂 Node from filename search:', node);
+      if (node && !Array.isArray(node)) {
+        return node;
+      }
+    }
+    
+    console.log('❌ No node found for path:', targetPath);
+    return null;
+  };
 
   const flattenFileSystem = useCallback((nodes: FileSystemNode[], basePath: string = ''): { label: string, value: string, path: string }[] => {
     let list: { label: string, value: string, path: string }[] = [];
@@ -89,6 +269,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         list.push({ label: displayPath, value: node.path, path: node.path });
       }
       if (node.type === 'folder' && node.children) {
+        // Add folder itself to the list for attachment
+        list.push({ label: displayPath + '/', value: node.path, path: node.path });
         list = list.concat(flattenFileSystem(node.children, displayPath));
       }
     });
@@ -111,18 +293,45 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setActionAppliedStates(prev => ({ ...prev, [key]: true }));
   };
 
-  const handleApplyToEditor = async (codeToApply: string, messageId: string, buttonKey: string, targetPath?: string, insertionContext?: string) => {
+  const isFullFileReplacement = (code: string) => {
+    const trimmed = code.trim();
+    return (
+      trimmed.startsWith('#') ||
+      trimmed.startsWith('"""') ||
+      /^def |^class |^import |^from /.test(trimmed)
+    );
+  };
+
+  const [forceReplaceState, setForceReplaceState] = useState<Record<string, boolean>>({});
+
+  const handleApplyToEditor = async (codeToApply: string, messageId: string, buttonKey: string, targetPath?: string, insertionContext?: string, forceReplace = false) => {
     const path = targetPath || activeFilePath;
 
     if (path) {
       const targetNode = getFileSystemNode(path);
       if (targetNode && !Array.isArray(targetNode)) {
+        setLoadingStates(prev => ({ ...prev, [buttonKey]: true }));
         const existingContent = openedFiles.get(path)?.content || targetNode.content || '';
         const fileName = targetNode.name;
         const fileExtension = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
-        
         try {
-          // Use intelligent code merger for smart content integration
+          if (forceReplace || isFullFileReplacement(codeToApply)) {
+            updateFileContent(path, codeToApply);
+            toast({ title: 'File Replaced', description: `Full file replaced in ${fileName}` });
+            setLoadingStates(prev => ({ ...prev, [buttonKey]: false }));
+            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
+            setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
+            return;
+          }
+          const similarity = calculateCodeSimilarity(existingContent.trim(), codeToApply.trim());
+          if (similarity >= 0.95) {
+            updateFileContent(path, codeToApply);
+            toast({ title: 'File Replaced', description: `Replaced entire file (${Math.round(similarity * 100)}% similarity detected) in ${fileName}` });
+            setLoadingStates(prev => ({ ...prev, [buttonKey]: false }));
+            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
+            setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
+            return;
+          }
           const mergerResult = await intelligentCodeMergerServer({
             existingContent,
             generatedContent: codeToApply,
@@ -131,64 +340,101 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             userInstruction: insertionContext || 'Generated code insertion',
             insertionContext: insertionContext || 'AI assistant code application',
           });
-
-          if (mergerResult.success && mergerResult.confidence > 0.7) {
-            updateFileContent(path, mergerResult.mergedContent);
-            const operationSummary = mergerResult.operations.map((op: any) => op.type).join(', ');
-            toast({ 
-              title: "Code Merged Intelligently", 
-              description: `${mergerResult.summary} (${operationSummary}) - Confidence: ${Math.round(mergerResult.confidence * 100)}%`
-            });
-            
-            // Show warnings if any
-            if (mergerResult.warnings.length > 0) {
-              console.warn('Merge warnings:', mergerResult.warnings);
-            }
-            
-            if (!actionAppliedStates[buttonKey]) {
-              setButtonAppliedState(buttonKey);
-            }
-          } else if (mergerResult.success && mergerResult.confidence <= 0.7) {
-            // Low confidence merge - offer both options
-            updateFileContent(path, mergerResult.mergedContent);
-            toast({ 
-              title: "Code Merged (Low Confidence)", 
-              description: `${mergerResult.summary} - Confidence: ${Math.round(mergerResult.confidence * 100)}%. Review changes carefully.`,
-              variant: "default"
-            });
-            
-            if (!actionAppliedStates[buttonKey]) {
-              setButtonAppliedState(buttonKey);
-            }
+          // If merged content does not contain all of generated code, warn and offer force replace
+          if (!mergerResult.mergedContent.includes(codeToApply.trim().slice(0, 20))) {
+            setForceReplaceState(prev => ({ ...prev, [buttonKey]: true }));
           } else {
-            // Fallback to simple replacement if intelligent merger fails
-            updateFileContent(path, codeToApply);
-            toast({ 
-              title: "Code Applied (Fallback)", 
-              description: `Full content replacement in ${fileName}. Intelligent merging was not possible.`,
-              variant: "destructive"
-            });
-            if (!actionAppliedStates[buttonKey]) {
-              setButtonAppliedState(buttonKey);
-            }
+            setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
           }
+          updateFileContent(path, mergerResult.mergedContent);
+          toast({ title: 'Code Merged', description: mergerResult.summary });
+          setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
         } catch (error) {
-          console.error('Intelligent code merger failed:', error);
-          // Fallback to simple replacement
           updateFileContent(path, codeToApply);
-          toast({ 
-            title: "Code Applied (Error Fallback)", 
-            description: `Full content replacement in ${fileName} due to merger error.`,
-            variant: "destructive"
-          });
-          if (!actionAppliedStates[buttonKey]) {
-            setButtonAppliedState(buttonKey);
-          }
+          toast({ title: 'File Replaced (Error Fallback)', description: `Full file replaced in ${fileName}` });
+          setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
+          setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
         }
+        setLoadingStates(prev => ({ ...prev, [buttonKey]: false }));
       }
     } else {
-      toast({ variant: "destructive", title: "Error", description: "No active file selected to apply code."});
+      toast({ variant: 'destructive', title: 'Error', description: 'No active file selected to apply code.' });
+      setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
     }
+  };
+
+  // Robust similarity calculation using Levenshtein distance and LCS
+  const calculateCodeSimilarity = (text1: string, text2: string): number => {
+    if (!text1 && !text2) return 1;
+    if (!text1 || !text2) return 0;
+    if (text1 === text2) return 1;
+
+    // Remove extra whitespace and normalize
+    const normalize = (str: string) => str.replace(/\s+/g, ' ').trim();
+    const norm1 = normalize(text1);
+    const norm2 = normalize(text2);
+    
+    if (norm1 === norm2) return 1;
+
+    // Use Jaro-Winkler similarity for better text comparison
+    const jaroSimilarity = (s1: string, s2: string): number => {
+      if (s1 === s2) return 1;
+      
+      const len1 = s1.length;
+      const len2 = s2.length;
+      const matchWindow = Math.floor(Math.max(len1, len2) / 2) - 1;
+      
+      if (matchWindow < 0) return 0;
+      
+      const s1Matches = new Array(len1).fill(false);
+      const s2Matches = new Array(len2).fill(false);
+      
+      let matches = 0;
+      
+      // Find matches
+      for (let i = 0; i < len1; i++) {
+        const start = Math.max(0, i - matchWindow);
+        const end = Math.min(i + matchWindow + 1, len2);
+        
+        for (let j = start; j < end; j++) {
+          if (s2Matches[j] || s1[i] !== s2[j]) continue;
+          s1Matches[i] = true;
+          s2Matches[j] = true;
+          matches++;
+          break;
+        }
+      }
+      
+      if (matches === 0) return 0;
+      
+      // Find transpositions
+      let transpositions = 0;
+      let k = 0;
+      for (let i = 0; i < len1; i++) {
+        if (!s1Matches[i]) continue;
+        while (!s2Matches[k]) k++;
+        if (s1[i] !== s2[k]) transpositions++;
+        k++;
+      }
+      
+      const jaro = (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3;
+      
+      // Apply Winkler bonus for common prefix
+      let prefix = 0;
+      for (let i = 0; i < Math.min(len1, len2, 4); i++) {
+        if (s1[i] === s2[i]) prefix++;
+        else break;
+      }
+      
+      return jaro + (0.1 * prefix * (1 - jaro));
+    };
+
+    // Calculate similarity using multiple methods and take the maximum
+    const jaroSim = jaroSimilarity(norm1, norm2);
+    const lengthSim = 1 - Math.abs(norm1.length - norm2.length) / Math.max(norm1.length, norm2.length);
+    
+    // Combined similarity with weighted factors
+    return Math.max(jaroSim * 0.8 + lengthSim * 0.2, jaroSim);
   };
 
   const handleCreateFileAndInsert = async (suggestedFileName: string, code: string, messageId: string, buttonKey: string) => {
@@ -530,30 +776,92 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } else {
           aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify which file to rename or attach a file." };
         }
-      } else if (lowerCasePrompt.includes("move") && lowerCasePrompt.includes("to")) {
-        // File move operations
+      } else if (lowerCasePrompt.includes("move") && (lowerCasePrompt.includes("to") || lowerCasePrompt.includes("into"))) {
+        // Smart file/folder move operations
         const fileToMove = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
-        const destinationMatch = currentPromptValue.match(/move.*?to\s+([^\s]+)/i);
-        const destination = destinationMatch ? destinationMatch[1] : null;
+        const destinationMatch = currentPromptValue.match(/move.*?(?:to|into)\s+([^\s]+)/i);
+        const destinationHint = destinationMatch ? destinationMatch[1] : null;
         
-        if (fileToMove && destination) {
-          const result = await handleFileOperation('move', { targetPath: fileToMove, destinationPath: destination });
-          aiResponse = {
-            id: generateId(),
-            role: 'assistant',
-            type: 'fileOperationExecution',
-            content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed'}`,
-            fileOperationData: {
+        if (fileToMove) {
+          try {
+            const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
+            
+            // Use smart folder operations to find the best destination
+            const smartResult = await smartFolderOperationsServer({
               operation: 'move',
-              success: result?.success || false,
               targetPath: fileToMove,
-              destinationPath: destination,
-              message: result?.message || 'Operation completed',
-              requiresConfirmation: false,
+              userInstruction: currentPromptValue,
+              destinationHint: destinationHint || undefined,
+              fileSystemTree,
+            });
+
+            if (smartResult.success) {
+              if (smartResult.canExecuteDirectly && smartResult.topSuggestion) {
+                // High confidence - execute directly
+                const result = await handleFileOperation('move', { 
+                  targetPath: fileToMove, 
+                  destinationPath: smartResult.topSuggestion.folderPath 
+                });
+                
+                aiResponse = {
+                  id: generateId(),
+                  role: 'assistant',
+                  type: 'fileOperationExecution',
+                  content: result?.success 
+                    ? `✅ Successfully moved to ${smartResult.topSuggestion.folderName}! ${smartResult.reasoning}`
+                    : `❌ ${result?.message || 'Move operation failed'}`,
+                  fileOperationData: {
+                    operation: 'move',
+                    success: result?.success || false,
+                    targetPath: fileToMove,
+                    destinationPath: smartResult.topSuggestion.folderPath,
+                    message: result?.message || 'Operation completed',
+                    requiresConfirmation: false,
+                  }
+                };
+              } else {
+                // Need user confirmation - show suggestions
+                aiResponse = {
+                  id: generateId(),
+                  role: 'assistant',
+                  type: 'smartFolderOperation',
+                  content: smartResult.needsUserConfirmation && smartResult.confirmationPrompt 
+                    ? smartResult.confirmationPrompt
+                    : `I found ${smartResult.suggestions.length} potential destinations for this file. Please choose one:`,
+                  smartFolderOperationData: {
+                    ...smartResult,
+                    targetPath: fileToMove,
+                  },
+                };
+              }
+            } else {
+              throw new Error('Smart folder operation failed');
             }
-          };
+          } catch (error) {
+            console.error('Smart move operation failed:', error);
+            // Fallback to simple move
+            if (destinationHint) {
+              const result = await handleFileOperation('move', { targetPath: fileToMove, destinationPath: destinationHint });
+              aiResponse = {
+                id: generateId(),
+                role: 'assistant',
+                type: 'fileOperationExecution',
+                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed'}`,
+                fileOperationData: {
+                  operation: 'move',
+                  success: result?.success || false,
+                  targetPath: fileToMove,
+                  destinationPath: destinationHint,
+                  message: result?.message || 'Operation completed',
+                  requiresConfirmation: false,
+                }
+              };
+            } else {
+              aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Could not determine destination. Please be more specific about where to move the file." };
+            }
+          }
         } else {
-          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify the file to move and destination. Example: 'move this file to /components'" };
+          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify the file to move or attach a file first." };
         }
       } else if (lowerCasePrompt.includes("list") && (lowerCasePrompt.includes("files") || lowerCasePrompt.includes("untitled"))) {
         // List files operations
@@ -620,8 +928,16 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               code: result.code,
               suggestedFileName: result.suggestedFileName,
               explanation: result.explanation,
-              fileOperationSuggestion: result.fileOperationSuggestion,
-              alternativeOptions: result.alternativeOptions,
+              fileOperationSuggestion: result.fileOperationSuggestion ? {
+                ...result.fileOperationSuggestion,
+                targetPath: result.fileOperationSuggestion.targetPath || undefined,
+                newName: result.fileOperationSuggestion.newName || undefined,
+              } : undefined,
+              alternativeOptions: result.alternativeOptions?.map(option => ({
+                ...option,
+                targetPath: option.targetPath || undefined,
+                suggestedFileName: option.suggestedFileName || undefined,
+              })),
               codeQuality: result.codeQuality,
               smartPlacementData: {
                 suggestedFiles: smartPlacement.suggestions,
@@ -646,8 +962,16 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               code: result.code,
               targetPath: result.targetPath || defaultTargetPath || undefined,
               explanation: result.explanation,
-              fileOperationSuggestion: result.fileOperationSuggestion,
-              alternativeOptions: result.alternativeOptions,
+              fileOperationSuggestion: result.fileOperationSuggestion ? {
+                ...result.fileOperationSuggestion,
+                targetPath: result.fileOperationSuggestion.targetPath || undefined,
+                newName: result.fileOperationSuggestion.newName || undefined,
+              } : undefined,
+              alternativeOptions: result.alternativeOptions?.map(option => ({
+                ...option,
+                targetPath: option.targetPath || undefined,
+                suggestedFileName: option.suggestedFileName || undefined,
+              })),
               codeQuality: result.codeQuality,
               smartPlacementData: hasGoodSuggestions ? {
                 suggestedFiles: smartPlacement.suggestions,
@@ -724,19 +1048,117 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       return;
     }
     if (attachedFiles.some(f => f.path === filePath)) {
-      toast({ variant: "default", title: "Already Attached", description: "This file is already attached." });
+      toast({ variant: "default", title: "Already Attached", description: "This file or folder is already attached." });
       setFileSelectorOpen(false);
       return;
     }
 
     const fileNode = getFileSystemNode(filePath);
-    if (fileNode && !Array.isArray(fileNode) && fileNode.type === 'file') {
-      const openedFile = openedFiles.get(filePath);
-      const contentToAttach = openedFile ? openedFile.content : fileNode.content;
-      setAttachedFiles(prev => [...prev, { path: filePath, name: fileNode.name, content: contentToAttach || '' }]);
+    if (fileNode && !Array.isArray(fileNode)) {
+      let attachedFile: AttachedFileUIData;
+      
+      if (fileNode.type === 'folder') {
+        // For folders, create a comprehensive context
+        const folderContent = generateFolderContext(fileNode);
+        attachedFile = {
+          path: filePath,
+          name: fileNode.name + '/',
+          content: folderContent
+        };
+        toast({ title: "Folder Attached", description: `"${fileNode.name}" folder with ${countFilesInFolder(fileNode)} files attached as context.` });
+      } else {
+        // For files, use existing logic
+        const openedFile = openedFiles.get(filePath);
+        const contentToAttach = openedFile ? openedFile.content : fileNode.content;
+        attachedFile = {
+          path: filePath,
+          name: fileNode.name,
+          content: contentToAttach || ''
+        };
+        toast({ title: "File Attached", description: `"${fileNode.name}" has been attached as context.` });
+      }
+      
+      setAttachedFiles(prev => [...prev, attachedFile]);
     }
     setFileSelectorOpen(false);
     textareaRef.current?.focus();
+  };
+
+  const countFilesInFolder = (folderNode: FileSystemNode): number => {
+    if (!folderNode.children) return 0;
+    
+    let count = 0;
+    const traverse = (nodes: FileSystemNode[]) => {
+      nodes.forEach(node => {
+        if (node.type === 'file') {
+          count++;
+        } else if (node.type === 'folder' && node.children) {
+          traverse(node.children);
+        }
+      });
+    };
+    
+    traverse(folderNode.children);
+    return count;
+  };
+
+  const generateFolderContext = (folderNode: FileSystemNode): string => {
+    if (!folderNode.children) return `Folder: ${folderNode.name}\nEmpty folder`;
+
+    let context = `Folder: ${folderNode.name}\n`;
+    context += `Path: ${folderNode.path}\n`;
+    context += `Total files: ${countFilesInFolder(folderNode)}\n\n`;
+    
+    const filesByType: Record<string, FileSystemNode[]> = {};
+    const traverse = (nodes: FileSystemNode[], currentPath: string = '') => {
+      nodes.forEach(node => {
+        const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+        
+        if (node.type === 'file') {
+          const ext = node.name.split('.').pop() || 'no-ext';
+          if (!filesByType[ext]) filesByType[ext] = [];
+          filesByType[ext].push(node);
+        } else if (node.type === 'folder' && node.children) {
+          traverse(node.children, fullPath);
+        }
+      });
+    };
+    
+    traverse(folderNode.children);
+    
+    // Add file structure summary
+    context += "File Structure:\n";
+    Object.entries(filesByType).forEach(([ext, files]) => {
+      context += `- ${ext.toUpperCase()} files (${files.length}): ${files.map(f => f.name).join(', ')}\n`;
+    });
+    
+    context += "\n";
+    
+    // Add content of key files (limit to prevent overwhelming context)
+    const keyFiles: FileSystemNode[] = [];
+    const importantExtensions = ['ts', 'tsx', 'js', 'jsx', 'py', 'md'];
+    
+    importantExtensions.forEach(ext => {
+      if (filesByType[ext]) {
+        keyFiles.push(...filesByType[ext].slice(0, 3)); // Limit to 3 files per type
+      }
+    });
+    
+    if (keyFiles.length > 0) {
+      context += "Key File Contents:\n\n";
+      keyFiles.slice(0, 5).forEach(file => { // Limit total files to 5
+        const fileContent = openedFiles.get(file.path)?.content || file.content || '';
+        const contentPreview = fileContent.length > 500 
+          ? fileContent.slice(0, 500) + '\n... (truncated)'
+          : fileContent;
+        
+        context += `=== ${file.name} ===\n`;
+        context += contentPreview;
+        context += '\n\n';
+      });
+    }
+    
+    return context;
   };
 
   const handleRemoveAttachedFile = (filePathToRemove: string) => {
@@ -746,186 +1168,182 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   // File Operation Handlers
   const handleFileOperation = async (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => {
     console.log('🔧 FILE OPERATION STARTED:', operation, operationData);
+    
+    // For destructive operations, show confirmation dialog
+    if (operation === 'delete') {
+      const targetNode = findNodeByPath(operationData.targetPath);
+      const isFolder = targetNode && !Array.isArray(targetNode) && Array.isArray(targetNode.children);
+      const itemType = isFolder ? 'folder' : 'file';
+      const itemName = targetNode ? targetNode.name : operationData.targetPath.split('/').pop();
+      
+      showConfirmationDialog(
+        `Delete ${itemType}`,
+        `Are you sure you want to delete "${itemName}"? This action cannot be undone.`,
+        () => performFileOperation(operation, operationData),
+        true
+      );
+      return { success: false, message: 'Waiting for user confirmation' };
+    }
+    
+    return performFileOperation(operation, operationData);
+  };
+
+  const performFileOperation = async (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => {
     const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
     
     try {
       console.log('🌳 Current file system tree:', fileSystemTree);
-      console.log('📁 Available files:', flattenFileSystem(fileSystem).map(f => f.value));
       
-      // Skip the server validation and directly execute the operation
       let success = false;
       let message = '';
+      let undoOperation: UndoOperation | null = null;
 
       switch (operation) {
         case 'delete':
           if (operationData.targetPath) {
-            console.log('🗑️ Attempting to delete file:', operationData.targetPath);
+            console.log('🗑️ Attempting to delete:', operationData.targetPath);
             
-            // Try to find the node with different path variations
-            let nodeToDelete = getFileSystemNode(operationData.targetPath);
-            console.log('🔍 Found node (first try):', nodeToDelete);
+            const nodeToDelete = findNodeByPath(operationData.targetPath);
             
-            if (!nodeToDelete || Array.isArray(nodeToDelete)) {
-              // Try without leading slash if present
-              const altPath = operationData.targetPath.startsWith('/') ? operationData.targetPath.slice(1) : '/' + operationData.targetPath;
-              nodeToDelete = getFileSystemNode(altPath);
-              console.log('🔍 Found node (alt path:', altPath, '):', nodeToDelete);
-            }
-            
-            if (!nodeToDelete || Array.isArray(nodeToDelete)) {
-              // Try finding by name in the flat list
-              const allFiles = flattenFileSystem(fileSystem);
-              console.log('🔍 All available files:', allFiles.map(f => ({ label: f.label, value: f.value })));
-              
-              const targetFileName = operationData.targetPath.split('/').pop();
-              const foundFile = allFiles.find(f => f.label.includes(targetFileName) || f.value.includes(targetFileName));
-              console.log('🔍 Found by name search:', foundFile);
-              
-              if (foundFile) {
-                nodeToDelete = getFileSystemNode(foundFile.value);
-                console.log('🔍 Node from name search:', nodeToDelete);
-              }
-            }
-            
-            if (nodeToDelete && !Array.isArray(nodeToDelete)) {
+            if (nodeToDelete) {
               console.log('✅ Node found for deletion:', nodeToDelete);
               
-              // Close file if it's open and wait a bit for the close to complete
+              // Prepare undo data before deletion
+              undoOperation = {
+                type: 'delete',
+                data: {
+                  name: nodeToDelete.name,
+                  type: Array.isArray(nodeToDelete.children) ? 'folder' : 'file',
+                  content: !Array.isArray(nodeToDelete.children) ? (openedFiles.get(nodeToDelete.path)?.content || nodeToDelete.content || '') : '',
+                  parentPath: nodeToDelete.path.substring(0, nodeToDelete.path.lastIndexOf('/')),
+                  originalPath: nodeToDelete.path
+                },
+                timestamp: Date.now(),
+                description: `Deleted ${nodeToDelete.name}`
+              };
+              
+              // Close file if it's open
               if (openedFiles.has(nodeToDelete.path)) {
                 console.log('📄 Closing opened file:', nodeToDelete.path);
                 closeFile(nodeToDelete.path);
-                // Wait a bit for the close operation to complete
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
               
               console.log('🗑️ Calling deleteNode with ID:', nodeToDelete.id);
               success = deleteNode(nodeToDelete.id);
-              console.log('🗑️ Delete result:', success);
               
-              // If delete failed, try again after a short delay
-              if (!success) {
-                console.log('🔄 First delete attempt failed, retrying...');
-                await new Promise(resolve => setTimeout(resolve, 200));
-                success = deleteNode(nodeToDelete.id);
-                console.log('🗑️ Retry delete result:', success);
-              }
-              
-              // Double-check if the file actually got deleted even if deleteNode returned false
-              if (!success) {
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const nodeStillExists = getFileSystemNode(nodeToDelete.path);
-                if (!nodeStillExists) {
-                  console.log('✅ File was actually deleted despite deleteNode returning false');
-                  success = true;
-                }
-              }
-              
-              message = success 
-                ? `Successfully deleted ${nodeToDelete.name}` 
-                : `Failed to delete ${nodeToDelete.name}. The file may be in use or protected.`;
-                
-              console.log('📝 Final message:', message);
-              // After deletion, remove from attachments if present
               if (success) {
+                message = `Successfully deleted ${nodeToDelete.name}`;
+                // Remove from attachments if present
                 setAttachedFiles(prev => prev.filter(f => f.path !== nodeToDelete.path));
+                // Add to undo stack
+                if (undoOperation) {
+                  addToUndoStack(undoOperation);
+                }
+              } else {
+                message = `Failed to delete ${nodeToDelete.name}`;
               }
             } else {
               success = false;
-              const allFiles = flattenFileSystem(fileSystem);
-              message = `File not found at path: ${operationData.targetPath}. Available files: ${allFiles.map(f => f.value).join(', ')}`;
-              console.log('❌ File not found. Available files:', allFiles.map(f => f.value));
+              message = `File not found: ${operationData.targetPath}`;
             }
-          } else {
-            success = false;
-            message = 'No target path specified for delete operation';
-            console.log('❌ No target path provided');
           }
           break;
 
         case 'rename':
           if (operationData.targetPath && operationData.newName) {
-            console.log('🏷️ Attempting to rename file:', operationData.targetPath, 'to', operationData.newName);
+            console.log('🏷️ Attempting to rename:', operationData.targetPath, 'to', operationData.newName);
             
-            // Try to find the node with different path variations
-            let nodeToRename = getFileSystemNode(operationData.targetPath);
-            console.log('🔍 Found node (first try):', nodeToRename);
+            const nodeToRename = findNodeByPath(operationData.targetPath);
             
-            if (!nodeToRename || Array.isArray(nodeToRename)) {
-              const altPath = operationData.targetPath.startsWith('/') ? operationData.targetPath.slice(1) : '/' + operationData.targetPath;
-              nodeToRename = getFileSystemNode(altPath);
-              console.log('🔍 Found node (alt path:', altPath, '):', nodeToRename);
-            }
-            
-            if (!nodeToRename || Array.isArray(nodeToRename)) {
-              // Try finding by name in the flat list
-              const allFiles = flattenFileSystem(fileSystem);
-              console.log('🔍 All available files:', allFiles.map(f => ({ label: f.label, value: f.value })));
-              
-              const targetFileName = operationData.targetPath.split('/').pop();
-              const foundFile = allFiles.find(f => f.label.includes(targetFileName) || f.value.includes(targetFileName));
-              console.log('🔍 Found by name search:', foundFile);
-              
-              if (foundFile) {
-                nodeToRename = getFileSystemNode(foundFile.value);
-                console.log('🔍 Node from name search:', nodeToRename);
-              }
-            }
-            
-            if (nodeToRename && !Array.isArray(nodeToRename)) {
+            if (nodeToRename) {
               console.log('✅ Node found for rename:', nodeToRename);
-              console.log('🏷️ Calling renameNode with ID:', nodeToRename.id, 'new name:', operationData.newName);
               
+              const originalName = nodeToRename.name;
+              const newPath = nodeToRename.path.replace(originalName, operationData.newName);
+              
+              // Prepare undo data
+              undoOperation = {
+                type: 'rename',
+                data: {
+                  originalName,
+                  newName: operationData.newName,
+                  originalPath: nodeToRename.path,
+                  newPath
+                },
+                timestamp: Date.now(),
+                description: `Renamed ${originalName} to ${operationData.newName}`
+              };
+              
+              console.log('🏷️ Calling renameNode with ID:', nodeToRename.id);
               success = renameNode(nodeToRename.id, operationData.newName);
-              console.log('🏷️ Rename result:', success);
               
-              // If rename failed, try again after a short delay
-              if (!success) {
-                console.log('🔄 First rename attempt failed, retrying...');
-                await new Promise(resolve => setTimeout(resolve, 200));
-                success = renameNode(nodeToRename.id, operationData.newName);
-                console.log('🏷️ Retry rename result:', success);
+              if (success) {
+                message = `Successfully renamed to ${operationData.newName}`;
+                // Add to undo stack
+                addToUndoStack(undoOperation);
+              } else {
+                message = `Failed to rename ${operationData.targetPath}`;
               }
-              
-              // Double-check if the file actually got renamed even if renameNode returned false
-              if (!success) {
-                await new Promise(resolve => setTimeout(resolve, 300));
-                const oldNodeExists = getFileSystemNode(nodeToRename.path);
-                const newPath = nodeToRename.path.replace(nodeToRename.name, operationData.newName);
-                const newNodeExists = getFileSystemNode(newPath);
-                if (!oldNodeExists && newNodeExists) {
-                  console.log('✅ File was actually renamed despite renameNode returning false');
-                  success = true;
-                }
-              }
-              
-              message = success 
-                ? `Successfully renamed to ${operationData.newName}` 
-                : `Failed to rename ${operationData.targetPath}`;
-                
-              console.log('📝 Final message:', message);
             } else {
               success = false;
-              const allFiles = flattenFileSystem(fileSystem);
-              message = `File not found at path: ${operationData.targetPath}. Available files: ${allFiles.map(f => f.value).join(', ')}`;
-              console.log('❌ File not found. Available files:', allFiles.map(f => f.value));
+              message = `File not found: ${operationData.targetPath}`;
             }
           } else {
             success = false;
             message = 'Target path and new name are required for rename operation';
-            console.log('❌ Missing target path or new name');
           }
           break;
 
         case 'move':
           if (operationData.targetPath && operationData.destinationPath) {
-            const nodeToMove = getFileSystemNode(operationData.targetPath);
-            const destinationNode = getFileSystemNode(operationData.destinationPath);
-            if (nodeToMove && !Array.isArray(nodeToMove) && destinationNode && !Array.isArray(destinationNode)) {
-              moveNode(nodeToMove.id, destinationNode.id);
-              success = true;
-              message = `Successfully moved ${operationData.targetPath} to ${operationData.destinationPath}`;
+            console.log('📦 Attempting to move:', operationData.targetPath, 'to', operationData.destinationPath);
+            
+            const nodeToMove = findNodeByPath(operationData.targetPath);
+            const destinationNode = findNodeByPath(operationData.destinationPath);
+            
+            console.log('📁 Source node:', nodeToMove);
+            console.log('📂 Destination node:', destinationNode);
+            
+            if (nodeToMove && destinationNode) {
+              // Ensure destination is a folder
+              const isDestinationFolder = Array.isArray(destinationNode.children);
+              
+              if (!isDestinationFolder) {
+                success = false;
+                message = `Destination "${destinationNode.name}" is not a folder`;
+              } else {
+                // Prepare undo data
+                const originalParentPath = nodeToMove.path.substring(0, nodeToMove.path.lastIndexOf('/'));
+                const newPath = destinationNode.path + '/' + nodeToMove.name;
+                
+                undoOperation = {
+                  type: 'move',
+                  data: {
+                    name: nodeToMove.name,
+                    originalPath: nodeToMove.path,
+                    newPath,
+                    originalParentPath,
+                    destinationPath: destinationNode.path
+                  },
+                  timestamp: Date.now(),
+                  description: `Moved ${nodeToMove.name} to ${destinationNode.name}`
+                };
+                
+                console.log('📦 Calling moveNode with IDs:', nodeToMove.id, 'to', destinationNode.id);
+                try {
+                  moveNode(nodeToMove.id, destinationNode.id);
+                  success = true;
+                  message = `Successfully moved ${nodeToMove.name} to ${destinationNode.name}`;
+                  addToUndoStack(undoOperation);
+                } catch (error) {
+                  success = false;
+                  message = `Failed to move ${nodeToMove.name}`;
+                }
+              }
             } else {
-              message = `Failed to move file - source or destination not found`;
+              success = false;
+              message = `Source or destination not found - Source: ${nodeToMove ? 'Found' : 'Not found'}, Destination: ${destinationNode ? 'Found' : 'Not found'}`;
             }
           }
           break;
@@ -968,6 +1386,18 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         description: message,
         variant: success ? "default" : "destructive"
       });
+
+      // After a successful rename operation, update attachedFiles if the renamed file/folder was attached
+      if (success && operation === 'rename') {
+        setAttachedFiles(prev => prev.map(f => {
+          if (f.path === operationData.targetPath) {
+            // Update both path and name
+            const newPath = operationData.targetPath.replace(/[^/]+$/, operationData.newName);
+            return { ...f, path: newPath, name: operationData.newName };
+          }
+          return f;
+        }));
+      }
 
       return { success, message };
 
@@ -1154,6 +1584,88 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     return 'JavaScript';
   };
 
+  const getDynamicCodeQuality = (codeQuality: any, code: string) => {
+    const language = detectMainLanguage(code);
+    const functionCount = (code.match(/def |function |const .* = |class /g) || []).length;
+    
+    // Create dynamic quality indicators based on language
+    const getLanguageSpecific = () => {
+      switch (language) {
+        case 'Python':
+          return {
+            languageLabel: 'Pythonic',
+            languageCheck: codeQuality.followsBestPractices && codeQuality.isWellDocumented,
+            languageIcon: '🐍'
+          };
+        case 'TypeScript':
+          return {
+            languageLabel: 'TypeScript',
+            languageCheck: codeQuality.isTypeScriptCompatible,
+            languageIcon: '📘'
+          };
+        case 'JavaScript':
+          return {
+            languageLabel: 'Modern JS',
+            languageCheck: codeQuality.followsBestPractices,
+            languageIcon: '⚡'
+          };
+        case 'React':
+          return {
+            languageLabel: 'React Best',
+            languageCheck: codeQuality.followsBestPractices && codeQuality.isTypeScriptCompatible,
+            languageIcon: '⚛️'
+          };
+        default:
+          return {
+            languageLabel: 'Standards',
+            languageCheck: codeQuality.followsBestPractices,
+            languageIcon: '✨'
+          };
+      }
+    };
+
+    const languageSpecific = getLanguageSpecific();
+    const codeStandards = codeQuality.followsBestPractices && codeQuality.hasProperErrorHandling;
+
+    return {
+      language,
+      functionCount,
+      languageSpecific,
+      codeStandards,
+      complexity: codeQuality.estimatedComplexity,
+      isWellRefactored: codeQuality.followsBestPractices && codeQuality.isWellDocumented,
+    };
+  };
+
+  // Helper for toggling code preview
+  const toggleCodePreview = (msgId: string) => {
+    setExpandedCodePreviews(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+  };
+
+  // Helper for file/folder icon
+  const getFileOrFolderIcon = (label: string) => {
+    if (label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-yellow-600" />;
+    return <FileText className="inline h-4 w-4 mr-1 text-primary" />;
+  };
+
+  // Helper for file/folder display name
+  const getDisplayName = (label: string) => {
+    if (label.endsWith('/')) return label.slice(0, -1);
+    return label.split('/').pop() || label;
+  };
+
+  // In the folder renaming suggestion logic (smart folder operation, rename, etc):
+  // When generating or displaying a suggested folder name, ensure:
+  // - No extension is present (remove anything after a dot)
+  // - The name is capitalized (first letter uppercase, rest lowercase or as appropriate)
+  // Example:
+  const cleanFolderName = (name: string) => {
+    // Remove extension if present
+    let base = name.split('.')[0];
+    // Capitalize first letter
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  };
+
   return (
     <div className="w-full border-l border-border bg-sidebar flex flex-col h-full">
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
@@ -1227,7 +1739,29 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
                       {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion' || msg.type === 'enhancedCodeGeneration') && msg.code && (
                         <div className="space-y-2">
-                          <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mb-1"
+                            onClick={() => toggleCodePreview(msg.id)}
+                          >
+                            {expandedCodePreviews[msg.id] ? 'Hide Generated Code' : 'View Generated Code'}
+                          </Button>
+                          {expandedCodePreviews[msg.id] && (
+                            <div className="relative bg-muted p-2 rounded-md group themed-scrollbar mt-1">
+                              <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code themed-scrollbar"><code>{msg.code}</code></pre>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => handleCopyCode(msg.code!, `${msg.id}-code`)}
+                                title={copiedStates[`${msg.id}-code`] ? "Copied!" : "Copy code"}
+                              >
+                                {copiedStates[`${msg.id}-code`] ? <Check className="h-3.5 w-3.5 text-green-500" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+                              </Button>
+                            </div>
+                          )}
+                          {/* Existing code block for code preview remains for backward compatibility */}
                           <div className="relative bg-muted p-2 rounded-md group themed-scrollbar">
                             <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code themed-scrollbar"><code>{msg.code}</code></pre>
                             <Button
@@ -1246,7 +1780,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)}
-                                disabled={isLoading || actionAppliedStates[createFileKey]}
+                                disabled={isLoading || actionAppliedStates[createFileKey] || loadingStates[createFileKey]}
                               >
                                 {actionAppliedStates[createFileKey] ? (
                                   <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
@@ -1274,7 +1808,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                  size="sm"
                                  variant="outline"
                                  onClick={async () => await handleApplyToEditor(msg.code!, msg.id, applyGeneratedCodeKey, msg.targetPath, 'Generated code from AI assistant')}
-                                 disabled={isLoading || (!msg.targetPath && !activeFilePath) || actionAppliedStates[applyGeneratedCodeKey]}
+                                                                   disabled={isLoading || (!msg.targetPath && !activeFilePath) || actionAppliedStates[applyGeneratedCodeKey] || loadingStates[applyGeneratedCodeKey]}
                                >
                                  {actionAppliedStates[applyGeneratedCodeKey] ? (
                                    <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
@@ -1285,7 +1819,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                      const targetNode = getFileSystemNode(targetPath);
                                      const fileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'Editor';
                                      return `Insert into ${fileName}`;
-                                   })()}</>
+                                   })()}
+                                   {loadingStates[applyGeneratedCodeKey] && <Loader2 className="h-4 w-4 animate-spin ml-1" />}
+                                   </>
                                  )}
                                </Button>
                                {actionAppliedStates[applyGeneratedCodeKey] && (msg.targetPath || activeFilePath) && (
@@ -1345,28 +1881,37 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 </Card>
                               )}
 
-                              {/* Code Quality Assessment */}
-                              {msg.codeQuality && (
+                              {/* Code Quality Assessment - Dynamic */}
+                              {msg.codeQuality && msg.code && (() => {
+                                const dynamicQuality = getDynamicCodeQuality(msg.codeQuality, msg.code);
+                                return (
                                 <Card className="bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800">
                                   <CardContent className="p-2">
-                                    <div className="flex items-center gap-2 mb-1">
+                                      <div className="flex items-center gap-2 mb-2">
                                       <Check className="h-4 w-4 text-green-600" />
                                       <span className="text-xs font-medium text-green-700 dark:text-green-300">
                                         Code Quality
                                       </span>
                                       <span className="text-xs text-green-600 dark:text-green-400 capitalize">
-                                        ({msg.codeQuality.estimatedComplexity} complexity)
+                                          ({dynamicQuality.complexity} complexity)
                                       </span>
                                     </div>
+                                      
+                                      {/* Language and Function Count */}
+                                      <div className="text-xs text-green-600 dark:text-green-400 mb-2 flex items-center gap-3">
+                                        <span>{dynamicQuality.languageSpecific.languageIcon} {dynamicQuality.language}</span>
+                                        <span>📊 {dynamicQuality.functionCount} function{dynamicQuality.functionCount !== 1 ? 's' : ''}</span>
+                                      </div>
+                                      
                                     <div className="grid grid-cols-2 gap-1 text-xs">
-                                      <div className={cn("flex items-center gap-1", msg.codeQuality.followsBestPractices ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
-                                        {msg.codeQuality.followsBestPractices ? "✓" : "○"} Best Practices
+                                        <div className={cn("flex items-center gap-1", dynamicQuality.languageSpecific.languageCheck ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                          {dynamicQuality.languageSpecific.languageCheck ? "✓" : "○"} {dynamicQuality.languageSpecific.languageLabel}
                                       </div>
-                                      <div className={cn("flex items-center gap-1", msg.codeQuality.isTypeScriptCompatible ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
-                                        {msg.codeQuality.isTypeScriptCompatible ? "✓" : "○"} TypeScript
+                                        <div className={cn("flex items-center gap-1", dynamicQuality.codeStandards ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                          {dynamicQuality.codeStandards ? "✓" : "○"} Code Standards
                                       </div>
-                                      <div className={cn("flex items-center gap-1", msg.codeQuality.hasProperErrorHandling ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
-                                        {msg.codeQuality.hasProperErrorHandling ? "✓" : "○"} Error Handling
+                                        <div className={cn("flex items-center gap-1", dynamicQuality.isWellRefactored ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                          {dynamicQuality.isWellRefactored ? "✓" : "○"} Well Refactored
                                       </div>
                                       <div className={cn("flex items-center gap-1", msg.codeQuality.isWellDocumented ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
                                         {msg.codeQuality.isWellDocumented ? "✓" : "○"} Documented
@@ -1374,11 +1919,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                     </div>
                                   </CardContent>
                                 </Card>
+                                );
+                              })()}
+                            </div>
                               )}
                             </div>
                           )}
-                        </div>
-                      )}
 
                       {/* Smart Code Placement Suggestions */}
                       {msg.type === 'smartCodePlacement' && msg.smartPlacementData && (
@@ -1419,7 +1965,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                       msg.smartPlacementData!.analysis.topSuggestion!.filePath,
                                       'Smart code placement suggestion'
                                     )}
-                                    disabled={isLoading || actionAppliedStates[`${msg.id}-smart-suggested`]}
+                                    disabled={isLoading || actionAppliedStates[`${msg.id}-smart-suggested`] || loadingStates[`${msg.id}-smart-suggested`]}
                                     className="bg-blue-600 hover:bg-blue-700"
                                   >
                                     {actionAppliedStates[`${msg.id}-smart-suggested`] ? (
@@ -1442,7 +1988,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                       activeFilePath,
                                       'Smart code placement to current file'
                                     )}
-                                    disabled={isLoading || actionAppliedStates[`${msg.id}-smart-current`]}
+                                    disabled={isLoading || actionAppliedStates[`${msg.id}-smart-current`] || loadingStates[`${msg.id}-smart-current`]}
                                   >
                                     {actionAppliedStates[`${msg.id}-smart-current`] ? (
                                       <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
@@ -1465,7 +2011,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                     msg.id,
                                     `${msg.id}-smart-new`
                                   )}
-                                  disabled={isLoading || actionAppliedStates[`${msg.id}-smart-new`]}
+                                                                      disabled={isLoading || actionAppliedStates[`${msg.id}-smart-new`] || loadingStates[`${msg.id}-smart-new`]}
                                 >
                                   {actionAppliedStates[`${msg.id}-smart-new`] ? (
                                     <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Created</>
@@ -1498,7 +2044,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                             suggestion.filePath,
                                             'Alternative smart placement suggestion'
                                           )}
-                                          disabled={isLoading || actionAppliedStates[`${msg.id}-alt-${idx}`]}
+                                          disabled={isLoading || actionAppliedStates[`${msg.id}-alt-${idx}`] || loadingStates[`${msg.id}-alt-${idx}`]}
                                         >
                                           {actionAppliedStates[`${msg.id}-alt-${idx}`] ? 'Applied' : 'Add'}
                                         </Button>
@@ -1598,15 +2144,46 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
                           )}>
                             <CardContent className="p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                {msg.fileOperationData.success ? (
-                                  <Check className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <XCircle className="h-4 w-4 text-red-600" />
-                                )}
-                                <span className="text-sm font-medium capitalize">
-                                  {msg.fileOperationData.operation} Operation
-                                </span>
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  {msg.fileOperationData.success ? (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                  )}
+                                  <span className="text-sm font-medium capitalize">
+                                    {msg.fileOperationData.operation} Operation
+                                  </span>
+                                </div>
+                                {/* Undo button for successful delete operations */}
+                                {msg.fileOperationData && msg.fileOperationData.success && ['delete', 'rename', 'move', 'create'].includes(msg.fileOperationData.operation) && (() => {
+                                  const opData = msg.fileOperationData;
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs ml-2"
+                                      onClick={() => {
+                                        // Find the most recent matching operation in undo stack
+                                        const recentOp = undoStack.find(op => 
+                                          op.type === opData.operation &&
+                                          ((op.data.originalPath && op.data.originalPath === opData.targetPath) ||
+                                           (op.data.newPath && op.data.newPath === opData.targetPath) ||
+                                           (op.data.destinationPath && op.data.destinationPath === opData.destinationPath) ||
+                                           (op.data.path && op.data.path === opData.targetPath))
+                                        );
+                                        if (recentOp) {
+                                          executeUndo(recentOp);
+                                          setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp));
+                                        }
+                                      }}
+                                      title={`Undo ${opData.operation} operation`}
+                                    >
+                                      <Undo2 className="h-3 w-3 mr-1" />
+                                      Undo
+                                    </Button>
+                                  );
+                                })()}
                               </div>
                               
                               {msg.fileOperationData.targetPath && (
@@ -1690,6 +2267,127 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                         </div>
                       )}
 
+                      {/* Smart Folder Operations */}
+                      {msg.type === 'smartFolderOperation' && msg.smartFolderOperationData && (
+                        <div className="space-y-3">
+                          <div className="whitespace-pre-wrap font-medium text-sm mb-2">
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
+                          
+                          <Card className="bg-orange-50/50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800">
+                            <CardContent className="p-3">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Brain className="h-4 w-4 text-orange-600" />
+                                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                  Smart {msg.smartFolderOperationData.operation.charAt(0).toUpperCase() + msg.smartFolderOperationData.operation.slice(1)} Suggestions
+                                </span>
+                                <span className="text-xs text-orange-600 dark:text-orange-400">
+                                  ({Math.round(msg.smartFolderOperationData.confidence * 100)}% confidence)
+                                </span>
+                              </div>
+                              
+                              {/* Folder Analysis */}
+                              {msg.smartFolderOperationData.folderAnalysis && (
+                                <div className="mb-3 p-2 bg-orange-100/50 dark:bg-orange-900/20 rounded">
+                                  <div className="text-xs font-medium text-orange-800 dark:text-orange-200 mb-1">
+                                    📁 Folder Analysis: {msg.smartFolderOperationData.folderAnalysis.totalFiles} files, {msg.smartFolderOperationData.folderAnalysis.languages.join(', ')}
+                                  </div>
+                                  <div className="text-xs text-orange-700 dark:text-orange-300">
+                                    Purpose: {msg.smartFolderOperationData.folderAnalysis.primaryPurpose}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Destination/Rename Suggestions */}
+                              <div className="space-y-2">
+                                {msg.smartFolderOperationData.suggestions.slice(0, 3).map((suggestion, idx) => {
+                                  const buttonKey = `${msg.id}-folder-${idx}`;
+                                  const isApplied = actionAppliedStates[buttonKey];
+                                  const anyApplied = Object.keys(actionAppliedStates).some(k => k.startsWith(`${msg.id}-folder-`) && actionAppliedStates[k]);
+                                  return (
+                                    <div key={idx} className="relative flex items-center justify-between p-2 bg-white/60 dark:bg-slate-800/60 rounded border mb-2">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono text-sm font-medium">{suggestion.folderName}</span>
+                                          <span className="text-xs bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-2 py-1 rounded">
+                                            {Math.round(suggestion.confidence * 100)}%
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                          {suggestion.reasoning}
+                                        </div>
+                                        <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                          📂 {suggestion.folderPath}
+                                        </div>
+                                      </div>
+                                      <button
+                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
+                                        title={isApplied ? 'Applied' : `Use this ${msg.smartFolderOperationData?.operation === 'move' ? 'destination' : 'name'}`}
+                                        disabled={isLoading || (anyApplied && !isApplied)}
+                                        onClick={async () => {
+                                          setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
+                                          const opName = msg.smartFolderOperationData?.operation || 'Operation';
+                                          const opNameCap = opName.charAt(0).toUpperCase() + opName.slice(1);
+                                          
+                                          try {
+                                            let result: any;
+                                            if (msg.smartFolderOperationData?.operation === 'move') {
+                                              result = await handleFileOperation('move', {
+                                                targetPath: msg.smartFolderOperationData?.targetPath,
+                                                destinationPath: suggestion.folderPath
+                                              });
+                                            } else if (msg.smartFolderOperationData?.operation === 'rename') {
+                                              result = await handleFileOperation('rename', {
+                                                targetPath: msg.smartFolderOperationData?.targetPath,
+                                                newName: suggestion.folderName
+                                              });
+                                            } else if (msg.smartFolderOperationData?.operation === 'delete') {
+                                              result = await handleFileOperation('delete', {
+                                                targetPath: suggestion.folderPath
+                                              });
+                                            }
+                                            
+                                            if (result?.success) {
+                                              toast({
+                                                title: `${opNameCap} Success`,
+                                                description: result.message || `Successfully completed ${opName}`,
+                                              });
+                                            } else {
+                                              toast({
+                                                title: `${opNameCap} Failed`,
+                                                description: result?.message || `${opName} operation failed.`,
+                                                variant: 'destructive',
+                                              });
+                                              setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
+                                            }
+                                          } catch (error) {
+                                            toast({
+                                              title: `${opNameCap} Error`,
+                                              description: "An unexpected error occurred during operation.",
+                                              variant: 'destructive',
+                                            });
+                                            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
+                                          }
+                                        }}
+                                      >
+                                        {isApplied ? <Check className="h-5 w-5 text-green-600" /> : <Check className="h-5 w-5" />}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              
+                              {/* AI Reasoning */}
+                              <div className="mt-3 pt-2 border-t border-orange-200 dark:border-orange-800">
+                                <div className="text-xs text-orange-600 dark:text-orange-400">
+                                  🤖 {msg.smartFolderOperationData.reasoning}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+
                       {/* AI-Powered Filename Suggestions */}
                       {msg.type === 'filenameSuggestion' && msg.filenameSuggestionData && (
                         <div className="space-y-3">
@@ -1744,16 +2442,47 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           if (msg.filenameSuggestionData?.targetPath) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
+                                              // Clean up folder name if the target is a folder
+                                              let newName = suggestion.filename;
+                                              const node = getFileSystemNode(msg.filenameSuggestionData.targetPath);
+                                              if (node && !Array.isArray(node) && node.type === 'folder') {
+                                                newName = cleanFolderName(newName);
+                                              }
                                               const result = await handleFileOperation('rename', {
                                                 targetPath: msg.filenameSuggestionData.targetPath,
-                                                newName: suggestion.filename
+                                                newName
                                               });
                                               if (result?.success) {
                                                 toast({
                                                   title: "File Renamed",
-                                                  description: `Successfully renamed to "${suggestion.filename}"`,
+                                                  description: `Successfully renamed to \"${newName}\"`,
                                                 });
-                                                // Keep as applied
+                                                // Disable all tick mark buttons for this suggestion group
+                                                setActionAppliedStates(prev => {
+                                                  const newState = { ...prev };
+                                                  Object.keys(newState).forEach(k => {
+                                                    if (k.startsWith(`${msg.id}-rename-`)) newState[k] = true;
+                                                  });
+                                                  return newState;
+                                                });
+                                                // Add a fileOperationExecution message to the chat for undo UI
+                                                setChatHistory(prev => [
+                                                  ...prev,
+                                                  {
+                                                    id: generateId(),
+                                                    role: 'assistant',
+                                                    type: 'fileOperationExecution',
+                                                    content: `✅ Successfully renamed to ${newName}`,
+                                                    fileOperationData: {
+                                                      operation: 'rename',
+                                                      success: true,
+                                                      targetPath: msg.filenameSuggestionData!.targetPath,
+                                                      newName,
+                                                      message: result.message,
+                                                      requiresConfirmation: false,
+                                                    }
+                                                  }
+                                                ]);
                                               } else {
                                                 toast({
                                                   title: "Rename Failed",
@@ -1872,7 +2601,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 onSelect={() => handleFileSelect(file.path)}
                                 className="text-xs cursor-pointer"
                               >
-                                {file.label}
+                                {getFileOrFolderIcon(file.label)}{getDisplayName(file.label)}
                               </CommandItem>
                             ))}
                           </ScrollArea>
@@ -1899,6 +2628,53 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           </div>
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      {confirmationDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className={cn(
+            "w-96 max-w-[90vw]",
+            confirmationDialog.isDangerous 
+              ? "border-red-200 bg-red-50/90 dark:border-red-800 dark:bg-red-950/90"
+              : "border-border bg-background"
+          )}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                {confirmationDialog.isDangerous ? (
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                ) : (
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                )}
+                <CardTitle className="text-lg">{confirmationDialog.title}</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {confirmationDialog.message}
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={closeConfirmationDialog}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant={confirmationDialog.isDangerous ? "destructive" : "default"}
+                  size="sm"
+                  onClick={() => {
+                    confirmationDialog.operation();
+                    closeConfirmationDialog();
+                  }}
+                >
+                  Confirm
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
