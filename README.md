@@ -1,8 +1,12 @@
 # GenkiFlow IDE
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Built with Next.js](https://img.shields.io/badge/Built%20with-Next.js-000000.svg)
-![Powered by Google Genkit](https://img.shields.io/badge/Powered%20by-Google%20Genkit-4285F4.svg)
+![Built with Next.js](https://img.shields.io/badge/-Next.js-000000?logo=nextdotjs&logoColor=white)
+![Powered by React](https://img.shields.io/badge/-React-61DAFB?logo=react&logoColor=white)
+![Written in TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?logo=typescript&logoColor=white)
+![Styled with Tailwind CSS](https://img.shields.io/badge/-Tailwind%20CSS-06B6D4?logo=tailwindcss&logoColor=white)
+![Powered by Firebase Studio](https://img.shields.io/badge/-Firebase%20Studio-FFCA28?logo=firebase&logoColor=black)
+![GenkiFlow IDE Screenshot](https://i.ibb.co/sdW4TcRn/image-2025-06-09-062711110.png)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GenkiFlow%20IDE-brightgreen)](https://studio--genkiflow-ide.us-central1.hosted.app/ide)
 
 GenkiFlow IDE is a cutting-edge, web-based Integrated Development Environment (IDE) that harnesses the power of generative AI through Google Genkit to enhance your coding workflow. This IDE is designed to provide intelligent code assistance, making development faster, more efficient, and more enjoyable.
 
@@ -18,7 +22,7 @@ GenkiFlow IDE is a cutting-edge, web-based Integrated Development Environment (I
 
 ## Technology Stack
 
-*   **Frontend:** Next.js
+*   **Frontend:** Next.js, React, TypeScript, Tailwind CSS
 *   **AI Backend:** Google Genkit
 
 ## Getting Started
@@ -35,5 +39,3 @@ To get started with GenkiFlow IDE, clone the repository and follow the setup ins
 *   `/docs`: Project documentation, including the blueprint.
 *   `/.idx`: Development environment configurations.
 *   `/.vscode`: VS Code settings.
-
-
