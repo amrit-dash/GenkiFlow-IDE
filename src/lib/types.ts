@@ -15,6 +15,26 @@ export interface AiSuggestion {
   proposedCode: string;
 }
 
+interface AttachedFileContext {
+  path: string;
+  content: string;
+}
+
+export interface GenerateCodeInput {
+  prompt: string;
+  currentFilePath?: string;
+  currentFileContent?: string;
+  attachedFiles?: AttachedFileContext[]; // Updated to array
+}
+
+export interface GenerateCodeOutput {
+  code: string;
+  isNewFile: boolean;
+  suggestedFileName?: string;
+  targetPath?: string; 
+}
+
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
