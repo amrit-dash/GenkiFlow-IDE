@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -8,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Terminal as TerminalIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
+import type { FileSystemNode } from '@/lib/types';
 
 interface OutputLine {
   id: string;
@@ -21,7 +21,7 @@ interface TerminalPanelProps {
 }
 
 export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelProps) {
-  const { addNode, deleteNode, getFileSystemNode } = useIde();
+  const { addNode, deleteNode, getFileSystemNode, openedFiles } = useIde();
   const [inputCommand, setInputCommand] = useState('');
   const [outputLines, setOutputLines] = useState<OutputLine[]>([
     { id: 'welcome', type: 'info', text: 'Terminal. Type "help" for commands.'}
@@ -57,6 +57,20 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
     return newPath === "/" && currentParts.length > 0 && !targetPath.endsWith('/') && targetPath !== '.' && targetPath !== '..' ? newPath : (newPath || '/');
   };
 
+  // Helper function to safely check if a node is a single FileSystemNode (not array)
+  const isSingleNode = (node: FileSystemNode | FileSystemNode[] | undefined): node is FileSystemNode => {
+    return node !== undefined && !Array.isArray(node);
+  };
+
+  // Helper function to safely get children from a node result
+  const getNodeChildren = (nodeResult: FileSystemNode | FileSystemNode[] | undefined): FileSystemNode[] => {
+    if (Array.isArray(nodeResult)) {
+      return nodeResult;
+    } else if (isSingleNode(nodeResult) && nodeResult.type === 'folder' && nodeResult.children) {
+      return nodeResult.children;
+    }
+    return [];
+  };
 
   const handleCommandSubmit = () => {
     const trimmedCommand = inputCommand.trim();
@@ -86,7 +100,6 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         nameForOperation = targetName; // targetName is just the name, path is currentPath
     }
 
-
     switch (command.toLowerCase()) {
       case 'echo':
         addOutputLine(args.join(' '));
@@ -106,43 +119,42 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         addOutputLine('  mkdir <name>        - Creates a directory in current or specified path');
         addOutputLine('  touch <name>        - Creates a file in current or specified path');
         addOutputLine('  rm <name>           - Deletes a file or folder from current or specified path');
+        addOutputLine('  cat <file>          - Displays file content');
         break;
       case 'date':
         addOutputLine(new Date().toLocaleString());
         break;
       case 'ls':
         {
-            const pathToLs = args[0] ? resolvePath(args[0]) : currentPath;
-            const node = getFileSystemNode(pathToLs);
-            if (node && node.type === 'folder' && node.children) {
-                if (node.children.length === 0) {
-                    addOutputLine('(empty directory)');
-                } else {
-                    node.children.slice().sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
-                }
-            } else if (node && node.type === 'file') {
-                addOutputLine(node.name);
-            } else if (pathToLs === '/') { // Listing root
-                const rootNodes = getFileSystemNode('/'); // This should conceptually get root children
-                if (Array.isArray(rootNodes) && rootNodes.length > 0) {
-                     rootNodes.slice().sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
-                } else if (Array.isArray(rootNodes) && rootNodes.length === 0) {
-                    addOutputLine('(empty root directory)');
-                }
-                 else {
-                     // If getFileSystemNode('/') doesn't return an array for root, handle it or log error
-                     const fs = getFileSystemNode('///get_all_root_nodes///'); // Special marker, context handles it
-                     if (Array.isArray(fs)) {
-                        if (fs.length === 0) addOutputLine('(empty root directory)');
-                        else fs.slice().sort((a,b) => a.name.localeCompare(b.name)).sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1)).forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
-                     } else {
-                        addOutputLine(`ls: cannot access '${args[0] || pathToLs}': No such file or directory`, 'error');
-                     }
-                }
+          const pathToLs = args[0] ? resolvePath(args[0]) : currentPath;
+          const nodeResult = getFileSystemNode(pathToLs);
+          
+          if (isSingleNode(nodeResult) && nodeResult.type === 'folder' && nodeResult.children) {
+            if (nodeResult.children.length === 0) {
+              addOutputLine('(empty directory)');
+            } else {
+              nodeResult.children
+                .slice()
+                .sort((a,b) => a.name.localeCompare(b.name))
+                .sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1))
+                .forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
             }
-            else {
-                addOutputLine(`ls: cannot access '${args[0] || pathToLs}': No such file or directory`, 'error');
+          } else if (isSingleNode(nodeResult) && nodeResult.type === 'file') {
+            addOutputLine(nodeResult.name);
+          } else if (pathToLs === '/') { // Listing root
+            const children = getNodeChildren(nodeResult);
+            if (children.length === 0) {
+              addOutputLine('(empty root directory)');
+            } else {
+              children
+                .slice()
+                .sort((a,b) => a.name.localeCompare(b.name))
+                .sort((a,b) => (a.type === 'folder' ? -1 : 1) - (b.type === 'folder' ? -1 : 1))
+                .forEach(child => addOutputLine(`${child.name}${child.type === 'folder' ? '/' : ''}`));
             }
+          } else {
+            addOutputLine(`ls: cannot access '${args[0] || pathToLs}': No such file or directory`, 'error');
+          }
         }
         break;
       case 'pwd':
@@ -159,9 +171,9 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
             break;
         }
         const nodeToCd = getFileSystemNode(newResolvedPath);
-        if (nodeToCd && nodeToCd.type === 'folder') {
+        if (isSingleNode(nodeToCd) && nodeToCd.type === 'folder') {
             setCurrentPath(newResolvedPath);
-        } else if (nodeToCd && nodeToCd.type === 'file') {
+        } else if (isSingleNode(nodeToCd) && nodeToCd.type === 'file') {
             addOutputLine(`cd: ${args[0]}: Not a directory`, 'error');
         } else {
             addOutputLine(`cd: ${args[0]}: No such file or directory`, 'error');
@@ -179,7 +191,7 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
             }
         } else {
             const parentDirNode = getFileSystemNode(operationPath);
-            if (parentDirNode && parentDirNode.type === 'folder') {
+            if (isSingleNode(parentDirNode) && parentDirNode.type === 'folder') {
                 const createdDir = addNode(parentDirNode.id, nameForOperation, 'folder', operationPath);
                 if (createdDir) {
                     addOutputLine(`mkdir: created directory '${nameForOperation}' in ${operationPath}`);
@@ -203,7 +215,7 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
             }
         } else {
             const parentDirNode = getFileSystemNode(operationPath);
-            if (parentDirNode && parentDirNode.type === 'folder') {
+            if (isSingleNode(parentDirNode) && parentDirNode.type === 'folder') {
                 const createdFile = addNode(parentDirNode.id, nameForOperation, 'file', operationPath);
                 if (createdFile) {
                     addOutputLine(`touch: created file '${nameForOperation}' in ${operationPath}`);
@@ -219,12 +231,26 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
         if (!nameForOperation) { addOutputLine('rm: missing operand', 'error'); break; }
         const fullPathToDelete = (operationPath === '/' && !nameForOperation.startsWith('/') ? '/' : (operationPath === '/' ? '' : operationPath + '/')) + nameForOperation;
         const nodeToDelete = getFileSystemNode(fullPathToDelete); 
-        if (nodeToDelete) {
-            const success = deleteNode(nodeToDelete.id); 
-            if (success) addOutputLine(`rm: removed '${nameForOperation}' from ${operationPath}`);
-            else addOutputLine(`rm: cannot remove '${nameForOperation}': Deletion failed.`, 'error');
+        if (!nodeToDelete) {
+          addOutputLine(`rm: cannot remove '${nameForOperation}': No such file or directory in ${operationPath}`, 'error');
+        } else if (Array.isArray(nodeToDelete)) {
+          addOutputLine(`rm: ambiguous match for '${nameForOperation}'.`, 'error');
+        } else if (openedFiles.has(fullPathToDelete)) {
+          addOutputLine(`rm: cannot remove '${nameForOperation}': File is currently open in the editor. Please close it first.`, 'error');
         } else {
-            addOutputLine(`rm: cannot remove '${nameForOperation}': No such file or directory in ${operationPath}`, 'error');
+          const success = deleteNode(nodeToDelete.id); 
+          if (success) addOutputLine(`rm: removed '${nameForOperation}' from ${operationPath}`);
+          else addOutputLine(`rm: cannot remove '${nameForOperation}': Deletion failed.`, 'error');
+        }
+        break;
+      case 'cat':
+        if (!nameForOperation) { addOutputLine('cat: missing operand', 'error'); break; }
+        const fullPathToCat = (operationPath === '/' && !nameForOperation.startsWith('/') ? '/' : (operationPath === '/' ? '' : operationPath + '/')) + nameForOperation;
+        const fileToCat = getFileSystemNode(fullPathToCat);
+        if (isSingleNode(fileToCat) && fileToCat.type === 'file') {
+          addOutputLine(fileToCat.content || '(empty file)');
+        } else {
+          addOutputLine(`cat: ${nameForOperation}: No such file or directory`, 'error');
         }
         break;
       default:
@@ -269,7 +295,7 @@ export function TerminalPanel({ isVisible, onToggleVisibility }: TerminalPanelPr
       }
     } else if (e.key === 'Tab') {
         e.preventDefault();
-        const commonCommands = ['clear', 'echo', 'help', 'date', 'ls', 'cd', 'pwd', 'mkdir', 'touch', 'rm'];
+        const commonCommands = ['clear', 'echo', 'help', 'date', 'ls', 'cd', 'pwd', 'mkdir', 'touch', 'rm', 'cat'];
         const currentInput = inputCommand.toLowerCase();
         const matches = commonCommands.filter(cmd => cmd.startsWith(currentInput));
         if (matches.length === 1) {

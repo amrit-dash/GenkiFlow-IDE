@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -115,7 +114,7 @@ export function CodeEditorPanel() {
       
       if (tabFileNode.content !== persistedContentOfNode && tabFileNode.content !== undefined) {
         savePromises.push(
-          saveFile(path, tabFileNode.content).then(() => {
+          Promise.resolve(saveFile(path, tabFileNode.content)).then(() => {
             savedCount++;
           })
         );

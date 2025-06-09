@@ -14,6 +14,9 @@ import {codebaseSearch} from '../tools/codebase-search';
 import {errorValidation} from '../tools/error-validation';
 import {codeUsageAnalysis} from '../tools/code-usage-analysis';
 import {operationProgress} from '../tools/operation-progress';
+import {terminalOperations} from '../tools/terminal-operations';
+import {fileSystemExecutor} from '../tools/file-system-executor';
+import {codebaseDataset} from '../tools/codebase-dataset';
 
 const ChatHistoryItemSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -86,7 +89,7 @@ const prompt = ai.definePrompt({
   name: 'enhancedGenerateCodePrompt',
   input: {schema: EnhancedGenerateCodeInputSchema},
   output: {schema: EnhancedGenerateCodeOutputSchema},
-  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress],
+  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset],
   prompt: `You are an expert AI coding assistant with deep understanding of software architecture and best practices.
 
 User Prompt: {{{prompt}}}
@@ -137,14 +140,18 @@ ENHANCED INSTRUCTIONS:
 3. **Code generation**: Create high-quality, contextually appropriate code
 4. **After generation**: Use errorValidation tool to check the generated code for issues
 5. **File operations**: Use fileSystemOperations when file placement decisions are needed
-6. **Code examples**: Use codebaseSearch to find relevant examples when helpful
+6. **File execution**: Use fileSystemExecutor to find, list, delete, rename, or move files when explicitly requested
+7. **Terminal commands**: Use terminalOperations for command execution when requested
+8. **Dataset management**: Use codebaseDataset to create/query codebase knowledge for better context
+9. **Code examples**: Use codebaseSearch to find relevant examples when helpful
 
 WORKFLOW:
 1. Start with operationProgress (stage: 'starting', progress: 10)
-2. Analyze context and requirements (stage: 'analyzing', progress: 30)
-3. Generate appropriate code (stage: 'processing', progress: 70)
-4. Validate the generated code with errorValidation (stage: 'validating', progress: 90)
-5. Complete with final results (stage: 'completing', progress: 100)
+2. Initialize/query codebaseDataset for better project context (stage: 'analyzing', progress: 20)
+3. Analyze context and requirements (stage: 'analyzing', progress: 30)
+4. Generate appropriate code (stage: 'processing', progress: 70)
+5. Validate the generated code with errorValidation (stage: 'validating', progress: 90)
+6. Complete with final results (stage: 'completing', progress: 100)
 
 ERROR HANDLING:
 - If errors are found during validation, provide automatic fixes
@@ -156,7 +163,15 @@ SPECIAL HANDLING:
 - For mismatched contexts (e.g., Python code but JS file open): Offer to create new file with proper extension
 - For large codebases: Suggest modular approach with multiple files
 - For existing files: Provide targeted modifications that integrate well
+- For file operations requests: Use fileSystemExecutor to list, find, delete, rename, or move files
+- For terminal requests: Use terminalOperations to execute commands with user confirmation
 - Use progress updates throughout the process
+
+FILE OPERATION EXAMPLES:
+- "delete untitled files" → Use fileSystemExecutor with operation: 'list' to find untitled files, then 'delete'
+- "rename this file" → Use fileSystemExecutor with operation: 'rename'
+- "move file to components folder" → Use fileSystemExecutor with operation: 'move'
+- "what files are in this project" → Use fileSystemExecutor with operation: 'list'
 
 OUTPUT REQUIREMENTS:
 - Generate clean, production-ready code

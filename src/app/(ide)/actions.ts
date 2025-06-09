@@ -190,3 +190,283 @@ export async function trackOperationProgressServer(input: {
     throw new Error(formatErrorForClient("Failed to track operation progress.", error));
   }
 }
+
+// File System Operations Server Actions
+export async function executeFileSystemOperationServer(input: {
+  operation: 'create' | 'delete' | 'rename' | 'move';
+  targetPath?: string;
+  newName?: string;
+  destinationPath?: string;
+  content?: string;
+  fileType?: 'file' | 'folder';
+  fileSystemTree: string;
+}) {
+  try {
+    const { fileSystemOperations } = await import('@/ai/tools/file-system-operations');
+    return await fileSystemOperations({
+      operation: input.operation,
+      currentFileSystemTree: input.fileSystemTree,
+      targetPath: input.targetPath,
+      newName: input.newName,
+      destinationPath: input.destinationPath,
+      content: input.content,
+      fileType: input.fileType,
+    });
+  } catch (error: any) {
+    logDetailedError("executeFileSystemOperationServer", error);
+    throw new Error(formatErrorForClient("Failed to execute file system operation.", error));
+  }
+}
+
+export async function executeFileSystemCommandServer(input: {
+  operation: 'create' | 'delete' | 'rename' | 'move' | 'list';
+  targetPath?: string;
+  newName?: string;
+  destinationPath?: string;
+  content?: string;
+  fileType?: 'file' | 'folder';
+  fileSystemTree: string;
+}) {
+  try {
+    const { fileSystemExecutor } = await import('@/ai/tools/file-system-executor');
+    return await fileSystemExecutor({
+      operation: input.operation,
+      targetPath: input.targetPath,
+      newName: input.newName,
+      destinationPath: input.destinationPath,
+      content: input.content,
+      fileType: input.fileType,
+      currentFileSystemTree: input.fileSystemTree,
+    });
+  } catch (error: any) {
+    logDetailedError("executeFileSystemCommandServer", error);
+    throw new Error(formatErrorForClient("Failed to execute file system command.", error));
+  }
+}
+
+export async function executeTerminalCommandServer(input: {
+  command: string;
+  context: string;
+  requiresConfirmation?: boolean;
+  isBackground?: boolean;
+}) {
+  try {
+    const { terminalOperations } = await import('@/ai/tools/terminal-operations');
+    return await terminalOperations({
+      command: input.command,
+      context: input.context,
+      requiresConfirmation: input.requiresConfirmation ?? true,
+      isBackground: input.isBackground ?? false,
+    });
+  } catch (error: any) {
+    logDetailedError("executeTerminalCommandServer", error);
+    throw new Error(formatErrorForClient("Failed to execute terminal command.", error));
+  }
+}
+
+export async function manageCodebaseDatasetServer(input: {
+  operation: 'create' | 'update' | 'query' | 'refresh';
+  fileSystemTree: string;
+  openFiles?: Array<{
+    path: string;
+    content: string;
+    language?: string;
+  }>;
+  projectContext?: {
+    name?: string;
+    description?: string;
+    dependencies?: string[];
+    languages?: string[];
+    frameworks?: string[];
+  };
+  query?: string;
+}) {
+  try {
+    const { codebaseDataset } = await import('@/ai/tools/codebase-dataset');
+    return await codebaseDataset({
+      operation: input.operation,
+      fileSystemTree: input.fileSystemTree,
+      openFiles: input.openFiles,
+      projectContext: input.projectContext,
+      query: input.query,
+    });
+  } catch (error: any) {
+    logDetailedError("manageCodebaseDatasetServer", error);
+    throw new Error(formatErrorForClient("Failed to manage codebase dataset.", error));
+  }
+}
+
+// Advanced Codebase Indexer with Smart Code Placement
+export async function smartCodePlacementServer(input: {
+  operation: 'index' | 'retrieve' | 'evaluate' | 'analyze';
+  fileSystemTree: string;
+  openFiles?: Array<{
+    path: string;
+    content: string;
+    language?: string;
+  }>;
+  query?: {
+    type: 'function' | 'component' | 'class' | 'interface' | 'utility' | 'service' | 'hook' | 'general';
+    name?: string;
+    description: string;
+    language?: string;
+    dependencies?: string[];
+  };
+  currentFilePath?: string;
+  codeToAdd?: string;
+}) {
+  try {
+    const { codebaseIndexer } = await import('@/ai/tools/codebase-indexer');
+    return await codebaseIndexer({
+      operation: input.operation,
+      fileSystemTree: input.fileSystemTree,
+      openFiles: input.openFiles,
+      query: input.query,
+      currentFilePath: input.currentFilePath,
+      codeToAdd: input.codeToAdd,
+    });
+  } catch (error: any) {
+    logDetailedError("smartCodePlacementServer", error);
+    throw new Error(formatErrorForClient("Failed to perform smart code placement analysis.", error));
+  }
+}
+
+// Enhanced File Operations that can actually execute operations
+export async function executeActualFileOperationServer(input: {
+  operation: 'create' | 'delete' | 'rename' | 'move' | 'list';
+  targetPath?: string;
+  newName?: string;
+  destinationPath?: string;
+  content?: string;
+  fileType?: 'file' | 'folder';
+  fileSystemTree: string;
+  confirmed?: boolean;
+}) {
+  try {
+    // First get the suggestion/validation from our executor
+    const { fileSystemExecutor } = await import('@/ai/tools/file-system-executor');
+    const result = await fileSystemExecutor({
+      operation: input.operation,
+      targetPath: input.targetPath,
+      newName: input.newName,
+      destinationPath: input.destinationPath,
+      content: input.content,
+      fileType: input.fileType,
+      currentFileSystemTree: input.fileSystemTree,
+    });
+
+    // Return the result with execution capability
+    return {
+      ...result,
+      canExecute: result.success,
+      readyForExecution: input.confirmed === true,
+      executionInstructions: result.success ? {
+        operation: input.operation,
+        targetPath: input.targetPath,
+        newName: input.newName,
+        destinationPath: input.destinationPath,
+        content: input.content,
+        fileType: input.fileType,
+      } : undefined,
+    };
+  } catch (error: any) {
+    logDetailedError("executeActualFileOperationServer", error);
+    throw new Error(formatErrorForClient("Failed to execute file operation.", error));
+  }
+}
+
+// Enhanced Terminal Operations
+export async function executeActualTerminalCommandServer(input: {
+  command: string;
+  context: string;
+  requiresConfirmation?: boolean;
+  isBackground?: boolean;
+  confirmed?: boolean;
+}) {
+  try {
+    const { terminalOperations } = await import('@/ai/tools/terminal-operations');
+    const result = await terminalOperations({
+      command: input.command,
+      context: input.context,
+      requiresConfirmation: input.requiresConfirmation ?? true,
+      isBackground: input.isBackground ?? false,
+    });
+
+    // Return enhanced result with execution capability
+    return {
+      ...result,
+      canExecute: true,
+      readyForExecution: input.confirmed === true,
+      supportedCommands: [
+        'echo', 'clear', 'help', 'date', 'ls', 'cd', 'pwd', 'mkdir', 'touch', 'rm'
+      ],
+      executionInstructions: {
+        command: input.command,
+        context: input.context,
+        isBackground: input.isBackground,
+      }
+    };
+  } catch (error: any) {
+    logDetailedError("executeActualTerminalCommandServer", error);
+    throw new Error(formatErrorForClient("Failed to execute terminal command.", error));
+  }
+}
+
+// AI-Powered Filename Suggestion
+export async function suggestFilenameServer(input: {
+  fileContent: string;
+  currentFileName?: string;
+  context?: string;
+  projectStructure?: string;
+}) {
+  try {
+    const { filenameSuggester } = await import('@/ai/tools/filename-suggester');
+    const result = await filenameSuggester({
+      fileContent: input.fileContent,
+      currentFileName: input.currentFileName,
+      fileType: 'file',
+      context: input.context,
+      projectStructure: input.projectStructure,
+    });
+
+    return {
+      success: true,
+      suggestions: result.suggestions,
+      analysis: result.analysis,
+      topSuggestion: result.suggestions[0] || null,
+    };
+  } catch (error: any) {
+    logDetailedError("suggestFilenameServer", error);
+    throw new Error(formatErrorForClient("Failed to generate filename suggestions.", error));
+  }
+}
+
+// Smart Content Insertion
+export async function smartContentInsertionServer(input: {
+  existingContent: string;
+  newContent: string;
+  filePath: string;
+  insertionContext: string;
+}) {
+  try {
+    const { smartContentInsertion } = await import('@/ai/tools/smart-content-insertion');
+    const result = await smartContentInsertion({
+      existingContent: input.existingContent,
+      newContent: input.newContent,
+      filePath: input.filePath,
+      insertionContext: input.insertionContext,
+      preserveExisting: true,
+    });
+
+    return {
+      success: result.success,
+      mergedContent: result.mergedContent,
+      insertionPoint: result.insertionPoint,
+      insertionType: result.insertionType,
+      reasoning: result.reasoning,
+    };
+  } catch (error: any) {
+    logDetailedError("smartContentInsertionServer", error);
+    throw new Error(formatErrorForClient("Failed to perform smart content insertion.", error));
+  }
+}

@@ -57,10 +57,94 @@ export interface CodeQuality {
   estimatedComplexity: 'low' | 'medium' | 'high';
 }
 
+export interface UsageAnalysisData {
+  symbolInfo: {
+    name: string;
+    type: 'function' | 'class' | 'variable' | 'interface' | 'type' | 'component' | 'unknown';
+    definition?: {
+      filePath: string;
+      line: number;
+      code: string;
+    };
+  };
+  usages: {
+    filePath: string;
+    line: number;
+    context: string;
+    usageType: 'call' | 'import' | 'instantiation' | 'reference' | 'assignment';
+  }[];
+  relatedSymbols?: {
+    name: string;
+    relationship: 'extends' | 'implements' | 'imports' | 'exports' | 'calls' | 'overrides';
+    filePath: string;
+  }[];
+  summary: {
+    totalUsages: number;
+    filesWithUsages: number;
+    mostUsedIn?: string;
+    unusedFiles?: string[];
+  };
+}
+
+export interface FileOperationExecutionData {
+  operation: 'create' | 'delete' | 'rename' | 'move' | 'list';
+  success: boolean;
+  targetPath?: string;
+  newPath?: string;
+  newName?: string;
+  destinationPath?: string;
+  content?: string;
+  filesFound?: string[];
+  message: string;
+  requiresConfirmation: boolean;
+  confirmationMessage?: string;
+  executionTime?: number;
+}
+
+export interface TerminalCommandExecutionData {
+  command: string;
+  status: 'pending' | 'executing' | 'completed' | 'failed' | 'cancelled';
+  output?: string;
+  error?: string;
+  context: string;
+  requiresConfirmation: boolean;
+  isBackground: boolean;
+  executionTime?: number;
+  exitCode?: number;
+}
+
+export interface SmartCodePlacementData {
+  suggestedFiles: Array<{
+    filePath: string;
+    fileName: string;
+    reason: string;
+    confidence: number;
+    location: 'top' | 'bottom' | 'after-imports' | 'before-exports' | 'best-fit';
+    contextMatch: {
+      languageMatch: boolean;
+      typeMatch: boolean;
+      namePatternMatch: boolean;
+      dependencyMatch: boolean;
+      structureMatch: boolean;
+    };
+  }>;
+  currentActiveFile?: string;
+  codeToAdd: string;
+  codeType: 'function' | 'component' | 'class' | 'interface' | 'utility' | 'service' | 'hook' | 'general';
+  analysis: {
+    totalRelevantFiles: number;
+    topSuggestion?: {
+      filePath: string;
+      fileName: string;
+      confidence: number;
+    };
+  };
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  type: 'text' | 'generatedCode' | 'refactorSuggestion' | 'codeExamples' | 'error' | 'loading' | 'newFileSuggestion' | 'enhancedCodeGeneration' | 'fileOperationSuggestion' | 'progressUpdate' | 'errorValidation' | 'usageAnalysis';
+  type: 'text' | 'generatedCode' | 'refactorSuggestion' | 'codeExamples' | 'error' | 'loading' | 'newFileSuggestion' | 'enhancedCodeGeneration' | 'fileOperationSuggestion' | 'progressUpdate' | 'errorValidation' | 'usageAnalysis' | 'fileOperationExecution' | 'terminalCommandExecution' | 'smartCodePlacement' | 'filenameSuggestion';
   content: string; // For text, error messages, or descriptions
   code?: string; // For generatedCode, newFileSuggestion, enhancedCodeGeneration
   suggestion?: AiSuggestion; // For refactorSuggestion (singular)
@@ -74,6 +158,10 @@ export interface ChatMessage {
   progressData?: ProgressData; // For progress updates
   errorValidationData?: ErrorValidationData; // For error validation results
   usageAnalysisData?: UsageAnalysisData; // For usage analysis results
+  fileOperationData?: FileOperationExecutionData; // For actual file operations
+  terminalCommandData?: TerminalCommandExecutionData; // For terminal command execution
+  smartPlacementData?: SmartCodePlacementData; // For smart code placement suggestions
+  filenameSuggestionData?: FilenameSuggestionData; // For AI-powered filename suggestions
 }
 
 export interface ProgressData {
@@ -112,33 +200,28 @@ export interface ErrorValidationData {
   };
 }
 
-export interface UsageAnalysisData {
-  symbolInfo: {
-    name: string;
-    type: 'function' | 'class' | 'variable' | 'interface' | 'type' | 'component' | 'unknown';
-    definition?: {
-      filePath: string;
-      line: number;
-      code: string;
-    };
-  };
-  usages: {
-    filePath: string;
-    line: number;
-    context: string;
-    usageType: 'call' | 'import' | 'instantiation' | 'reference' | 'assignment';
-  }[];
-  relatedSymbols?: {
-    name: string;
-    relationship: 'extends' | 'implements' | 'imports' | 'exports' | 'calls' | 'overrides';
-    filePath: string;
-  }[];
-  summary: {
-    totalUsages: number;
-    filesWithUsages: number;
-    mostUsedIn?: string;
-    unusedFiles?: string[];
-  };
+export interface FilenameSuggestion {
+  filename: string;
+  reasoning: string;
+  confidence: number;
+  category: 'descriptive' | 'conventional' | 'functional' | 'contextual';
+}
+
+export interface FilenameAnalysis {
+  detectedLanguage: string;
+  codeType: string;
+  mainFunctions: string[];
+  hasExports: boolean;
+  isComponent: boolean;
+  suggestedExtension: string;
+}
+
+export interface FilenameSuggestionData {
+  suggestions: FilenameSuggestion[];
+  analysis: FilenameAnalysis;
+  topSuggestion: FilenameSuggestion | null;
+  currentFileName?: string;
+  targetPath?: string;
 }
 
 export interface IdeState {
