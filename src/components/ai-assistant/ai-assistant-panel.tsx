@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,7 +26,7 @@ interface AttachedFile {
   content: string;
 }
 
-const MAX_ATTACHED_FILES = 4; // Updated to 4
+const MAX_ATTACHED_FILES = 4;
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
@@ -89,7 +89,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     return list;
   }, []);
 
-  const allFilesForSelector = React.useMemo(() => flattenFileSystem(fileSystem).sort((a,b) => a.label.localeCompare(b.label)), [fileSystem, flattenFileSystem]);
+  const allFilesForSelector = useMemo(() => flattenFileSystem(fileSystem).sort((a,b) => a.label.localeCompare(b.label)), [fileSystem, flattenFileSystem]);
 
 
   useEffect(() => {
@@ -614,14 +614,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           
           <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
             <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-1 right-2 h-4 w-4 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                title="Attach file for context"
-              >
-                <Paperclip className="h-2 w-2" />
-              </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-1 right-2 h-4 w-4 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                    title="Attach file for context"
+                >
+                    <Paperclip className="h-2 w-2 shrink-0" />
+                </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
               <Command>
@@ -650,12 +650,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <Button
             type="submit"
             size="icon"
-            className={cn(
-              "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent",
-              (isLoading || (!prompt.trim() && attachedFiles.length === 0))
-                ? "text-muted-foreground"
-                : "text-primary hover:bg-transparent" 
-            )}
+            className="absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent text-primary hover:bg-transparent"
             disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
             onClick={handleSendMessage}
             title="Send message"
