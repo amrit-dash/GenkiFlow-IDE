@@ -1,4 +1,4 @@
-# 🚀 GenkiFlow IDE
+# GenkiFlow IDE
 
 <div align="center">
 
@@ -20,22 +20,26 @@
 
 GenkiFlow IDE is an innovative web-based Integrated Development Environment that leverages Google Genkit's AI capabilities to enhance the coding experience. Built with modern web technologies, it provides an intuitive interface for code editing, AI-assisted development, and project management.
 
-### Key Highlights
+### 🌟 Key Highlights
 
 - **AI-Powered Development:** Intelligent code suggestions and refactoring powered by Google Genkit
 - **Modern Web Stack:** Built with Next.js, React, and TypeScript for a responsive and maintainable codebase
 - **Developer-Focused:** Clean, intuitive interface designed for efficient coding workflows
 - **Extensible Architecture:** Modular design allowing for easy feature additions and improvements
 
-![GenkiFlow-IDE Screenshot](https://i.ibb.co/sdW4TcRn/image-2025-06-09-062711110.png)
+## 🖼️ Screenshot
+
+<div align="center">
+  <img src="https://i.ibb.co/vCMfpZN0/image-2025-06-09-065033058.png" alt="GenkiFlow IDE Screenshot" width="800"/>
+</div>
 
 <div align="center">
   <a href="https://studio--genkiflow-ide.us-central1.hosted.app/ide">
-    <img src="https://img.shields.io/badge/🚀%20Try%20GenkiFlow%20IDE%20Live%20Demo-2ea44f?style=for-the-badge&logo=rocket&logoColor=white" alt="Live Demo" width="400"/>
+    <img src="https://img.shields.io/badge/TRY%20GENKIFLOW%20IDE%20LIVE%20DEMO-2ea44f?style=for-the-badge&logo=rocket&logoColor=white" alt="Live Demo" width="400"/>
   </a>
 </div>
 
-## Features
+## 🚦 Features
 
 * **Multi-file Support:** Work with multiple files within a single IDE instance
 * **AI Code Assistant:** Get intelligent suggestions and code generation powered by Google Genkit
@@ -45,20 +49,20 @@ GenkiFlow IDE is an innovative web-based Integrated Development Environment that
 * **Edit File Tool:** Directly edit your project files with a robust code editor
 * **Code Analysis:** Basic code analysis and refactoring suggestions
 
-## Technology Stack
+## 🛠️ Technology Stack
 
 * **Frontend:** Next.js, React, TypeScript, Tailwind CSS
 * **AI Backend:** Google Genkit
 * **Hosting:** Firebase App Hosting
 * **Development:** Local storage for file system management
 
-## Getting Started
+## 🚀 Getting Started
 
 GenkiFlow IDE is a web-based application that you can start using right away. Simply visit our [Live Demo](https://studio--genkiflow-ide.us-central1.hosted.app/ide) to experience the power of AI-assisted development.
 
 For developers interested in the project's architecture and design decisions, you can find detailed specifications in the `docs/blueprint.md` file, which outlines our core features and style guidelines.
 
-## Project Structure
+## 📁 Project Structure
 
 * `/src/app`: Contains the main application pages and routes, including the IDE layout and core pages.
 * `/src/components`: Reusable React components for the UI, including the AI assistant panel, code editor, and file explorer.
@@ -69,25 +73,19 @@ For developers interested in the project's architecture and design decisions, yo
 * `/.idx`: Development environment configurations.
 * `/.vscode`: VS Code settings.
 
-## Contributing
+## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
-## License
+## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Security
+## 🔒 Security
 
 Please report any security issues to our security team. See our [Security Policy](SECURITY.md) for more information.
 
-## Contact
+## 📬 Contact
 
 - Developer: [https://amritdash.web.app](https://amritdash.web.app)
 - Live Demo: [https://studio--genkiflow-ide.us-central1.hosted.app/ide](https://studio--genkiflow-ide.us-central1.hosted.app/ide)
-
-## Acknowledgments
-
-- Thanks to all contributors who have helped shape this project
-- Special thanks to the Google Genkit team for their amazing AI capabilities
-- Inspired by modern IDEs and the need for AI-powered development tools
