@@ -163,31 +163,26 @@ export function CodeEditorPanel() {
 
   useEffect(() => {
     if (activeFilePath) {
-      // Ensure the DOM is updated before trying to find the element
       requestAnimationFrame(() => {
         const activeTabTrigger = document.querySelector(
-          // CSS.escape is used for file paths that might contain special characters
           `.editor-tabs-scroll-area button[role="tab"][value="${CSS.escape(activeFilePath)}"]`
         );
-        // The viewport is a div with data-radix-scroll-area-viewport attribute inside the .editor-tabs-scroll-area
         const scrollViewport = document.querySelector('.editor-tabs-scroll-area div[data-radix-scroll-area-viewport]');
 
         if (activeTabTrigger && scrollViewport) {
           const triggerRect = activeTabTrigger.getBoundingClientRect();
           const viewportRect = scrollViewport.getBoundingClientRect();
 
-          // Check if the tab is not fully visible horizontally
           if (triggerRect.left < viewportRect.left || triggerRect.right > viewportRect.right) {
             activeTabTrigger.scrollIntoView({
-              behavior: 'smooth',
-              inline: 'nearest', // Primarily for horizontal scrolling
-              block: 'nearest',  // Ensures vertical alignment if tabs ever wrap (though not current design)
+              inline: 'nearest',
+              block: 'nearest',
             });
           }
         }
       });
     }
-  }, [activeFilePath, openedFiles]); // Re-run when activeFilePath or openedFiles change
+  }, [activeFilePath, openedFiles]);
 
   const handleTextareaContextMenu = (event: React.MouseEvent<HTMLTextAreaElement>) => {
     event.preventDefault();
