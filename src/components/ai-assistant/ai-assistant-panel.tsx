@@ -578,7 +578,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         {attachedFiles.length > 0 && (
           <div className="grid grid-cols-2 gap-1.5">
             {attachedFiles.map(file => (
-              <div key={file.path} className="flex items-center justify-between text-xs bg-muted p-1.5 rounded-md">
+              <div key={file.path} className="flex items-center justify-between text-xs bg-muted p-1 rounded-md">
                 <div className="flex items-center gap-1.5 text-muted-foreground truncate">
                   <Pin className="h-3.5 w-3.5 shrink-0 text-primary" />
                   <span className="truncate" title={file.path}>{file.name}</span>
@@ -602,7 +602,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             placeholder="Chat with AI Assistant..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-1 pr-[40px] themed-scrollbar"
+            className="flex-1 min-h-[80px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-1 pr-[40px] themed-scrollbar"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -651,8 +651,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             type="submit"
             size="icon"
             className={cn(
-                "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent hover:bg-transparent",
-                (isLoading || (!prompt.trim() && attachedFiles.length === 0)) ? "text-primary opacity-50" : "text-primary"
+                "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent text-primary hover:bg-transparent",
+                (isLoading || (!prompt.trim() && attachedFiles.length === 0)) && "opacity-50"
             )}
             disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
             onClick={handleSendMessage}
