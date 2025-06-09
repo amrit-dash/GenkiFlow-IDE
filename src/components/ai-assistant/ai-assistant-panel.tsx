@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Sparkles, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
 import type { AiSuggestion, ChatMessage, FileSystemNode } from '@/lib/types';
@@ -345,7 +345,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     <div className="w-full border-l border-border bg-sidebar flex flex-col h-full">
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-primary" />
+          <Brain className="w-6 h-6 text-primary" />
           <h2 className="text-lg font-headline font-semibold">AI Assistant</h2>
         </div>
         <Button variant="ghost" size="icon" onClick={handleNewChat} title="Start New Chat">
@@ -650,10 +650,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               type="submit" 
               size="icon" 
               className={cn(
-                "h-7 w-7 rounded-md transition-colors",
+                "h-7 w-7 rounded-md transition-colors bg-transparent",
                 isLoading || (!prompt.trim() && attachedFiles.length === 0)
-                  ? "bg-transparent text-muted-foreground"
-                  : "bg-transparent text-primary hover:bg-transparent"
+                  ? "text-muted-foreground"
+                  : "text-primary hover:bg-transparent" 
               )}
               disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
               onClick={handleSendMessage}
