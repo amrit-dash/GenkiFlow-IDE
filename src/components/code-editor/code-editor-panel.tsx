@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useIde } from '@/contexts/ide-context';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ScrollBar } from '@/components/ui/scroll-area'; // ScrollBar might still be needed for horizontal tab scrolling
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { XIcon, Loader2, Save, Wand2 } from 'lucide-react';
@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { refactorCodeServer } from '@/app/(ide)/actions';
+import { ScrollArea } from '@/components/ui/scroll-area'; // Keep for TabsList
 
 export function CodeEditorPanel() {
   const { 
@@ -349,16 +350,14 @@ export function CodeEditorPanel() {
                 value={activeFilePath}
                 className="flex-1 flex flex-col p-0 m-0 overflow-hidden min-h-0"
               >
-                <ScrollArea className="flex-1 w-full min-h-0"> {/* Added w-full here */}
-                  <Textarea
-                    value={currentContent}
-                    onChange={handleContentChange}
-                    onContextMenu={handleTextareaContextMenu}
-                    className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
-                    placeholder="Select a file to view its content or start typing..."
-                    spellCheck="false"
-                  />
-                </ScrollArea>
+                <Textarea
+                  value={currentContent}
+                  onChange={handleContentChange}
+                  onContextMenu={handleTextareaContextMenu}
+                  className="w-full h-full p-4 font-code text-sm bg-background border-0 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none overflow-y-auto"
+                  placeholder="Select a file to view its content or start typing..."
+                  spellCheck="false"
+                />
             </TabsContent>
           )}
         </Tabs>
