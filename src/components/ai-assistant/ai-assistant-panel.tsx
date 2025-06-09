@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
-import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer } from '@/app/(ide)/actions';
+import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer, intelligentCodeMergerServer } from '@/app/(ide)/actions';
 import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
 import type { AiSuggestion, ChatMessage, FileSystemNode } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -118,32 +118,54 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       const targetNode = getFileSystemNode(path);
       if (targetNode && !Array.isArray(targetNode)) {
         const existingContent = openedFiles.get(path)?.content || targetNode.content || '';
+        const fileName = targetNode.name;
+        const fileExtension = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
         
         try {
-          // Use smart content insertion to merge the new code with existing content
-          const insertionResult = await smartContentInsertionServer({
+          // Use intelligent code merger for smart content integration
+          const mergerResult = await intelligentCodeMergerServer({
             existingContent,
-            newContent: codeToApply,
-            filePath: path,
-            insertionContext: insertionContext || 'Generated code insertion',
+            generatedContent: codeToApply,
+            fileName,
+            fileExtension,
+            userInstruction: insertionContext || 'Generated code insertion',
+            insertionContext: insertionContext || 'AI assistant code application',
           });
 
-          if (insertionResult.success) {
-            updateFileContent(path, insertionResult.mergedContent);
-            const targetFileName = targetNode.name;
+          if (mergerResult.success && mergerResult.confidence > 0.7) {
+            updateFileContent(path, mergerResult.mergedContent);
+            const operationSummary = mergerResult.operations.map((op: any) => op.type).join(', ');
             toast({ 
-              title: "Code Applied Intelligently", 
-              description: `${insertionResult.insertionPoint} in ${targetFileName}. ${insertionResult.reasoning}`
+              title: "Code Merged Intelligently", 
+              description: `${mergerResult.summary} (${operationSummary}) - Confidence: ${Math.round(mergerResult.confidence * 100)}%`
             });
+            
+            // Show warnings if any
+            if (mergerResult.warnings.length > 0) {
+              console.warn('Merge warnings:', mergerResult.warnings);
+            }
+            
+            if (!actionAppliedStates[buttonKey]) {
+              setButtonAppliedState(buttonKey);
+            }
+          } else if (mergerResult.success && mergerResult.confidence <= 0.7) {
+            // Low confidence merge - offer both options
+            updateFileContent(path, mergerResult.mergedContent);
+            toast({ 
+              title: "Code Merged (Low Confidence)", 
+              description: `${mergerResult.summary} - Confidence: ${Math.round(mergerResult.confidence * 100)}%. Review changes carefully.`,
+              variant: "default"
+            });
+            
             if (!actionAppliedStates[buttonKey]) {
               setButtonAppliedState(buttonKey);
             }
           } else {
-            // Fallback to simple replacement if smart insertion fails
+            // Fallback to simple replacement if intelligent merger fails
             updateFileContent(path, codeToApply);
             toast({ 
-              title: "Code Applied", 
-              description: `Changes applied to ${targetNode.name} (fallback mode).`,
+              title: "Code Applied (Fallback)", 
+              description: `Full content replacement in ${fileName}. Intelligent merging was not possible.`,
               variant: "destructive"
             });
             if (!actionAppliedStates[buttonKey]) {
@@ -151,12 +173,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             }
           }
         } catch (error) {
-          console.error('Smart insertion failed:', error);
+          console.error('Intelligent code merger failed:', error);
           // Fallback to simple replacement
           updateFileContent(path, codeToApply);
           toast({ 
-            title: "Code Applied", 
-            description: `Changes applied to ${targetNode.name} (fallback mode).`,
+            title: "Code Applied (Error Fallback)", 
+            description: `Full content replacement in ${fileName} due to merger error.`,
             variant: "destructive"
           });
           if (!actionAppliedStates[buttonKey]) {
@@ -426,6 +448,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 requiresConfirmation: false,
               }
             };
+            // After deletion, remove from attachments if present
+            if (result?.success) {
+              setAttachedFiles(prev => prev.filter(f => f.path !== fileToDelete));
+            }
           }
         } else {
           aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify which file to delete or attach a file." };
@@ -474,7 +500,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   id: generateId(),
                   role: 'assistant',
                   type: 'filenameSuggestion',
-                  content: `🤖 **AI Analysis Complete!** Based on the file content, I found ${suggestionResult.analysis.mainFunctions.length > 0 ? `functions: ${suggestionResult.analysis.mainFunctions.join(', ')}` : 'code patterns'} in ${suggestionResult.analysis.detectedLanguage}.\n\nHere are my **3 intelligent filename suggestions**:`,
+                  content: `🤖 **AI Analysis Complete!** Based on the file content, I found ${suggestionResult.analysis.mainFunctions.length > 0 ? `functions: ${suggestionResult.analysis.mainFunctions.join(', ')}` : 'code patterns'} in ${suggestionResult.analysis.detectedLanguage}.`,
                   targetPath: fileToRename,
                   filenameSuggestionData: {
                     ...suggestionResult,
@@ -719,149 +745,234 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
   // File Operation Handlers
   const handleFileOperation = async (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => {
+    console.log('🔧 FILE OPERATION STARTED:', operation, operationData);
     const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
     
     try {
-      const result = await executeActualFileOperationServer({
-        operation,
-        targetPath: operationData.targetPath,
-        newName: operationData.newName,
-        destinationPath: operationData.destinationPath,
-        content: operationData.content,
-        fileType: operationData.fileType,
-        fileSystemTree,
-        confirmed: true,
+      console.log('🌳 Current file system tree:', fileSystemTree);
+      console.log('📁 Available files:', flattenFileSystem(fileSystem).map(f => f.value));
+      
+      // Skip the server validation and directly execute the operation
+      let success = false;
+      let message = '';
+
+      switch (operation) {
+        case 'delete':
+          if (operationData.targetPath) {
+            console.log('🗑️ Attempting to delete file:', operationData.targetPath);
+            
+            // Try to find the node with different path variations
+            let nodeToDelete = getFileSystemNode(operationData.targetPath);
+            console.log('🔍 Found node (first try):', nodeToDelete);
+            
+            if (!nodeToDelete || Array.isArray(nodeToDelete)) {
+              // Try without leading slash if present
+              const altPath = operationData.targetPath.startsWith('/') ? operationData.targetPath.slice(1) : '/' + operationData.targetPath;
+              nodeToDelete = getFileSystemNode(altPath);
+              console.log('🔍 Found node (alt path:', altPath, '):', nodeToDelete);
+            }
+            
+            if (!nodeToDelete || Array.isArray(nodeToDelete)) {
+              // Try finding by name in the flat list
+              const allFiles = flattenFileSystem(fileSystem);
+              console.log('🔍 All available files:', allFiles.map(f => ({ label: f.label, value: f.value })));
+              
+              const targetFileName = operationData.targetPath.split('/').pop();
+              const foundFile = allFiles.find(f => f.label.includes(targetFileName) || f.value.includes(targetFileName));
+              console.log('🔍 Found by name search:', foundFile);
+              
+              if (foundFile) {
+                nodeToDelete = getFileSystemNode(foundFile.value);
+                console.log('🔍 Node from name search:', nodeToDelete);
+              }
+            }
+            
+            if (nodeToDelete && !Array.isArray(nodeToDelete)) {
+              console.log('✅ Node found for deletion:', nodeToDelete);
+              
+              // Close file if it's open and wait a bit for the close to complete
+              if (openedFiles.has(nodeToDelete.path)) {
+                console.log('📄 Closing opened file:', nodeToDelete.path);
+                closeFile(nodeToDelete.path);
+                // Wait a bit for the close operation to complete
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+              
+              console.log('🗑️ Calling deleteNode with ID:', nodeToDelete.id);
+              success = deleteNode(nodeToDelete.id);
+              console.log('🗑️ Delete result:', success);
+              
+              // If delete failed, try again after a short delay
+              if (!success) {
+                console.log('🔄 First delete attempt failed, retrying...');
+                await new Promise(resolve => setTimeout(resolve, 200));
+                success = deleteNode(nodeToDelete.id);
+                console.log('🗑️ Retry delete result:', success);
+              }
+              
+              // Double-check if the file actually got deleted even if deleteNode returned false
+              if (!success) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                const nodeStillExists = getFileSystemNode(nodeToDelete.path);
+                if (!nodeStillExists) {
+                  console.log('✅ File was actually deleted despite deleteNode returning false');
+                  success = true;
+                }
+              }
+              
+              message = success 
+                ? `Successfully deleted ${nodeToDelete.name}` 
+                : `Failed to delete ${nodeToDelete.name}. The file may be in use or protected.`;
+                
+              console.log('📝 Final message:', message);
+              // After deletion, remove from attachments if present
+              if (success) {
+                setAttachedFiles(prev => prev.filter(f => f.path !== nodeToDelete.path));
+              }
+            } else {
+              success = false;
+              const allFiles = flattenFileSystem(fileSystem);
+              message = `File not found at path: ${operationData.targetPath}. Available files: ${allFiles.map(f => f.value).join(', ')}`;
+              console.log('❌ File not found. Available files:', allFiles.map(f => f.value));
+            }
+          } else {
+            success = false;
+            message = 'No target path specified for delete operation';
+            console.log('❌ No target path provided');
+          }
+          break;
+
+        case 'rename':
+          if (operationData.targetPath && operationData.newName) {
+            console.log('🏷️ Attempting to rename file:', operationData.targetPath, 'to', operationData.newName);
+            
+            // Try to find the node with different path variations
+            let nodeToRename = getFileSystemNode(operationData.targetPath);
+            console.log('🔍 Found node (first try):', nodeToRename);
+            
+            if (!nodeToRename || Array.isArray(nodeToRename)) {
+              const altPath = operationData.targetPath.startsWith('/') ? operationData.targetPath.slice(1) : '/' + operationData.targetPath;
+              nodeToRename = getFileSystemNode(altPath);
+              console.log('🔍 Found node (alt path:', altPath, '):', nodeToRename);
+            }
+            
+            if (!nodeToRename || Array.isArray(nodeToRename)) {
+              // Try finding by name in the flat list
+              const allFiles = flattenFileSystem(fileSystem);
+              console.log('🔍 All available files:', allFiles.map(f => ({ label: f.label, value: f.value })));
+              
+              const targetFileName = operationData.targetPath.split('/').pop();
+              const foundFile = allFiles.find(f => f.label.includes(targetFileName) || f.value.includes(targetFileName));
+              console.log('🔍 Found by name search:', foundFile);
+              
+              if (foundFile) {
+                nodeToRename = getFileSystemNode(foundFile.value);
+                console.log('🔍 Node from name search:', nodeToRename);
+              }
+            }
+            
+            if (nodeToRename && !Array.isArray(nodeToRename)) {
+              console.log('✅ Node found for rename:', nodeToRename);
+              console.log('🏷️ Calling renameNode with ID:', nodeToRename.id, 'new name:', operationData.newName);
+              
+              success = renameNode(nodeToRename.id, operationData.newName);
+              console.log('🏷️ Rename result:', success);
+              
+              // If rename failed, try again after a short delay
+              if (!success) {
+                console.log('🔄 First rename attempt failed, retrying...');
+                await new Promise(resolve => setTimeout(resolve, 200));
+                success = renameNode(nodeToRename.id, operationData.newName);
+                console.log('🏷️ Retry rename result:', success);
+              }
+              
+              // Double-check if the file actually got renamed even if renameNode returned false
+              if (!success) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                const oldNodeExists = getFileSystemNode(nodeToRename.path);
+                const newPath = nodeToRename.path.replace(nodeToRename.name, operationData.newName);
+                const newNodeExists = getFileSystemNode(newPath);
+                if (!oldNodeExists && newNodeExists) {
+                  console.log('✅ File was actually renamed despite renameNode returning false');
+                  success = true;
+                }
+              }
+              
+              message = success 
+                ? `Successfully renamed to ${operationData.newName}` 
+                : `Failed to rename ${operationData.targetPath}`;
+                
+              console.log('📝 Final message:', message);
+            } else {
+              success = false;
+              const allFiles = flattenFileSystem(fileSystem);
+              message = `File not found at path: ${operationData.targetPath}. Available files: ${allFiles.map(f => f.value).join(', ')}`;
+              console.log('❌ File not found. Available files:', allFiles.map(f => f.value));
+            }
+          } else {
+            success = false;
+            message = 'Target path and new name are required for rename operation';
+            console.log('❌ Missing target path or new name');
+          }
+          break;
+
+        case 'move':
+          if (operationData.targetPath && operationData.destinationPath) {
+            const nodeToMove = getFileSystemNode(operationData.targetPath);
+            const destinationNode = getFileSystemNode(operationData.destinationPath);
+            if (nodeToMove && !Array.isArray(nodeToMove) && destinationNode && !Array.isArray(destinationNode)) {
+              moveNode(nodeToMove.id, destinationNode.id);
+              success = true;
+              message = `Successfully moved ${operationData.targetPath} to ${operationData.destinationPath}`;
+            } else {
+              message = `Failed to move file - source or destination not found`;
+            }
+          }
+          break;
+
+        case 'create':
+          if (operationData.fileName && operationData.fileType) {
+            const parentPath = operationData.parentPath || '/';
+            const parentNode = parentPath === '/' ? null : getFileSystemNode(parentPath);
+            const parentId = parentNode && !Array.isArray(parentNode) ? parentNode.id : null;
+            
+            const newNode = addNode(parentId, operationData.fileName, operationData.fileType, parentPath);
+            if (newNode) {
+              if (operationData.content && operationData.fileType === 'file') {
+                updateFileContent(newNode.path, operationData.content);
+              }
+              if (operationData.openInIDE && operationData.fileType === 'file') {
+                openFile(newNode.path, newNode);
+              }
+              success = true;
+              message = `Successfully created ${operationData.fileType}: ${operationData.fileName}`;
+            } else {
+              message = `Failed to create ${operationData.fileType}: ${operationData.fileName}`;
+            }
+          }
+          break;
+
+        case 'list':
+          // Return list of files
+          const files = flattenFileSystem(fileSystem);
+          success = true;
+          message = `Found ${files.length} files in the project`;
+          break;
+      }
+
+      console.log('🏁 Operation completed. Success:', success, 'Message:', message);
+
+      // Only show toast notification after operation is complete
+      toast({ 
+        title: success ? "Operation Successful" : "Operation Failed", 
+        description: message,
+        variant: success ? "default" : "destructive"
       });
 
-      // Execute the actual operation through IDE context
-      if (result.canExecute && result.readyForExecution) {
-        let success = false;
-        let message = '';
+      return { success, message };
 
-        switch (operation) {
-          case 'delete':
-            if (operationData.targetPath) {
-              console.log('Attempting to delete file:', operationData.targetPath);
-              let nodeToDelete = getFileSystemNode(operationData.targetPath);
-              if (!nodeToDelete || Array.isArray(nodeToDelete)) {
-                // Try without leading slash if present
-                const altPath = operationData.targetPath.startsWith('/') ? operationData.targetPath.slice(1) : '/' + operationData.targetPath;
-                nodeToDelete = getFileSystemNode(altPath);
-                console.log('Tried alternate path:', altPath, 'Result:', nodeToDelete);
-              }
-              const allFiles = flattenFileSystem(fileSystem);
-              console.log('All files in FS:', allFiles.map(f => ({ name: f.label, value: f.value })));
-              if (nodeToDelete && !Array.isArray(nodeToDelete)) {
-                if (openedFiles.has(operationData.targetPath)) {
-                  closeFile(operationData.targetPath);
-                }
-                success = deleteNode(nodeToDelete.id);
-                message = success 
-                  ? `Successfully deleted ${nodeToDelete.name}` 
-                  : `Failed to delete ${nodeToDelete.name}. The file may be in use or protected.`;
-                if (!success) {
-                  window.alert(message);
-                }
-              } else {
-                success = false;
-                message = `File not found at path: ${operationData.targetPath}. Available files: ${allFiles.map(f => f.value).join(', ')}`;
-                console.log('File not found. Available files:', allFiles.map(f => f.value));
-                window.alert(message);
-              }
-            } else {
-              success = false;
-              message = 'No target path specified for delete operation';
-              window.alert(message);
-            }
-            break;
-
-          case 'rename':
-            if (operationData.targetPath && operationData.newName) {
-              console.log('Attempting to rename file:', operationData.targetPath, 'to', operationData.newName);
-              let nodeToRename = getFileSystemNode(operationData.targetPath);
-              if (!nodeToRename || Array.isArray(nodeToRename)) {
-                const altPath = operationData.targetPath.startsWith('/') ? operationData.targetPath.slice(1) : '/' + operationData.targetPath;
-                nodeToRename = getFileSystemNode(altPath);
-                console.log('Tried alternate path:', altPath, 'Result:', nodeToRename);
-              }
-              const allFiles = flattenFileSystem(fileSystem);
-              console.log('All files in FS:', allFiles.map(f => ({ name: f.label, value: f.value })));
-              if (nodeToRename && !Array.isArray(nodeToRename)) {
-                success = renameNode(nodeToRename.id, operationData.newName);
-                message = success 
-                  ? `Successfully renamed to ${operationData.newName}` 
-                  : `Failed to rename ${operationData.targetPath}`;
-                if (!success) {
-                  window.alert(message);
-                }
-              } else {
-                success = false;
-                message = `File not found at path: ${operationData.targetPath}. Available files: ${allFiles.map(f => f.value).join(', ')}`;
-                console.log('File not found. Available files:', allFiles.map(f => f.value));
-                window.alert(message);
-              }
-            } else {
-              success = false;
-              message = 'Target path and new name are required for rename operation';
-              window.alert(message);
-            }
-            break;
-
-          case 'move':
-            if (operationData.targetPath && operationData.destinationPath) {
-              const nodeToMove = getFileSystemNode(operationData.targetPath);
-              const destinationNode = getFileSystemNode(operationData.destinationPath);
-              if (nodeToMove && !Array.isArray(nodeToMove) && destinationNode && !Array.isArray(destinationNode)) {
-                moveNode(nodeToMove.id, destinationNode.id);
-                success = true;
-                message = `Successfully moved ${operationData.targetPath} to ${operationData.destinationPath}`;
-              } else {
-                message = `Failed to move file - source or destination not found`;
-              }
-            }
-            break;
-
-          case 'create':
-            if (operationData.fileName && operationData.fileType) {
-              const parentPath = operationData.parentPath || '/';
-              const parentNode = parentPath === '/' ? null : getFileSystemNode(parentPath);
-              const parentId = parentNode && !Array.isArray(parentNode) ? parentNode.id : null;
-              
-              const newNode = addNode(parentId, operationData.fileName, operationData.fileType, parentPath);
-              if (newNode) {
-                if (operationData.content && operationData.fileType === 'file') {
-                  updateFileContent(newNode.path, operationData.content);
-                }
-                if (operationData.openInIDE && operationData.fileType === 'file') {
-                  openFile(newNode.path, newNode);
-                }
-                success = true;
-                message = `Successfully created ${operationData.fileType}: ${operationData.fileName}`;
-              } else {
-                message = `Failed to create ${operationData.fileType}: ${operationData.fileName}`;
-              }
-            }
-            break;
-
-          case 'list':
-            // Return list of files
-            const files = flattenFileSystem(fileSystem);
-            success = true;
-            message = `Found ${files.length} files in the project`;
-            break;
-        }
-
-        // Show toast notification
-        toast({ 
-          title: success ? "Operation Successful" : "Operation Failed", 
-          description: message,
-          variant: success ? "default" : "destructive"
-        });
-
-        return { success, message };
-      }
     } catch (error) {
-      console.error('File operation error:', error);
+      console.error('💥 File operation error:', error);
       toast({ 
         title: "Operation Failed", 
         description: "An error occurred while performing the file operation",
@@ -1585,28 +1696,29 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           <div className="whitespace-pre-wrap font-medium text-sm mb-2">
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                           </div>
+                          
+                          {/* Functions Found Section - Moved Above Main Box */}
+                          {msg.filenameSuggestionData.analysis.mainFunctions.length > 0 && (
+                            <div className="p-2 bg-purple-100/50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800">
+                              <div className="text-xs font-medium text-purple-800 dark:text-purple-200">
+                                📝 Functions Found: {msg.filenameSuggestionData.analysis.mainFunctions.join(', ')}
+                              </div>
+                            </div>
+                          )}
+
                           <Card className="bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800">
                             <CardContent className="p-3">
-                              <div className="flex items-center gap-2 mb-3">
+                              <div className="flex items-center gap-2 mb-2">
                                 <Brain className="h-4 w-4 text-purple-600" />
                                 <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
                                   AI Filename Analysis
                                 </span>
-                                <span className="text-xs text-purple-600 dark:text-purple-400">
-                                  {msg.filenameSuggestionData.analysis.detectedLanguage} • {msg.filenameSuggestionData.analysis.codeType}
-                                </span>
                               </div>
-                              {msg.filenameSuggestionData.analysis.mainFunctions.length > 0 && (
-                                <div className="mb-3 p-2 bg-purple-100/50 dark:bg-purple-900/20 rounded">
-                                  <div className="text-xs font-medium text-purple-800 dark:text-purple-200 mb-1">
-                                    📝 Functions Found: {msg.filenameSuggestionData.analysis.mainFunctions.join(', ')}
-                                  </div>
-                                </div>
-                              )}
+                              <div className="text-xs text-purple-600 dark:text-purple-400 mb-3">
+                                {msg.filenameSuggestionData.analysis.detectedLanguage} • {msg.filenameSuggestionData.analysis.codeType}
+                              </div>
+                              
                               <div className="space-y-2">
-                                <div className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-2">
-                                  Suggested Filenames:
-                                </div>
                                 {msg.filenameSuggestionData.suggestions.slice(0, 3).map((suggestion, idx) => {
                                   const buttonKey = `${msg.id}-rename-${idx}`;
                                   const isApplied = actionAppliedStates[buttonKey];
@@ -1619,12 +1731,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 px-2 py-1 rounded">
                                             {Math.round(suggestion.confidence * 100)}%
                                           </span>
-                                          <span className="text-xs text-muted-foreground capitalize">
-                                            {suggestion.category}
-                                          </span>
                                         </div>
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                          {suggestion.reasoning}
+                                        <div className="text-xs text-muted-foreground mt-1 capitalize">
+                                          {suggestion.category}
                                         </div>
                                       </div>
                                       <button

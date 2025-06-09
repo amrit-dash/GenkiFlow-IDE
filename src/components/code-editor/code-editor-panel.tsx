@@ -227,7 +227,7 @@ export function CodeEditorPanel() {
   }
 
   const showSaveButton = activeFileHasUnsavedChanges && !isSaving; // Simplified save button logic
-  const showSaveAllButton = unsavedFilesCount > 1 && !isSaving; // Show save all if more than 1 unsaved
+  const showSaveAllButton = unsavedFilesCount > 0 && !isSaving; // Show save all if any file is unsaved
 
 
   return (

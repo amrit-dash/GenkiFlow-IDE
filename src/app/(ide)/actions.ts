@@ -470,3 +470,38 @@ export async function smartContentInsertionServer(input: {
     throw new Error(formatErrorForClient("Failed to perform smart content insertion.", error));
   }
 }
+
+// Intelligent Code Merger - Advanced content merging with AI analysis
+export async function intelligentCodeMergerServer(input: {
+  existingContent: string;
+  generatedContent: string;
+  fileName: string;
+  fileExtension: string;
+  userInstruction?: string;
+  insertionContext?: string;
+}) {
+  try {
+    const { intelligentCodeMerger } = await import('@/ai/tools/intelligent-code-merger');
+    const result = await intelligentCodeMerger({
+      existingContent: input.existingContent,
+      generatedContent: input.generatedContent,
+      fileName: input.fileName,
+      fileExtension: input.fileExtension,
+      userInstruction: input.userInstruction,
+      insertionContext: input.insertionContext,
+    });
+
+    return {
+      success: true,
+      mergedContent: result.mergedContent,
+      operations: result.operations,
+      summary: result.summary,
+      confidence: result.confidence,
+      warnings: result.warnings || [],
+      preservedSections: result.preservedSections || [],
+    };
+  } catch (error: any) {
+    logDetailedError("intelligentCodeMergerServer", error);
+    throw new Error(formatErrorForClient("Failed to perform intelligent code merging.", error));
+  }
+}

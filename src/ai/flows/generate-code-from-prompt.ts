@@ -51,9 +51,11 @@ File Content:
 {{{currentFileContent}}}
 \`\`\`
 
-{{#if attachedFiles.length}}
-ATTACHED FILES CONTEXT:
+{{#if attachedFiles}}
 {{#each attachedFiles}}
+{{#if @first}}
+ATTACHED FILES CONTEXT:
+{{/if}}
 File: {{this.path}}
 Content:
 \`\`\`

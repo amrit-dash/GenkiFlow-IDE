@@ -18,3 +18,4 @@ import '@/ai/tools/codebase-dataset.ts';
 import '@/ai/tools/codebase-indexer.ts';
 import '@/ai/tools/filename-suggester.ts';
 import '@/ai/tools/smart-content-insertion.ts';
+import '@/ai/tools/intelligent-code-merger.ts';
