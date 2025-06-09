@@ -35,47 +35,69 @@ const prompt = ai.definePrompt({
   name: 'codeRefactoringSuggestionsPrompt',
   input: {schema: CodeRefactoringSuggestionsInputSchema},
   output: {schema: CodeRefactoringSuggestionsOutputSchema},
-  prompt: `You are an AI code assistant that provides the single best refactoring improvement for a given code snippet.
+  prompt: `You are an expert AI code refactoring specialist with deep knowledge of software engineering best practices, design patterns, and modern programming paradigms.
 
-  Analyze the provided code snippet within its file context and determine the most impactful refactoring improvement.
-  Your response should be a JSON object containing a 'suggestion' field. This 'suggestion' object should have:
-  - 'description': A clear description of the refactoring.
-  - 'proposedCode': The complete refactored version of the original 'codeSnippet'. This 'proposedCode' should be a valid code snippet that can directly replace the original 'codeSnippet'.
+ANALYSIS TARGET:
+Code Snippet:
+\`\`\`
+{{codeSnippet}}
+\`\`\`
 
-  Code Snippet:
-  \`\`\`
-  {{codeSnippet}}
-  \`\`\`
+File Context:
+\`\`\`
+{{fileContext}}
+\`\`\`
 
-  File Context:
-  \`\`\`
-  {{fileContext}}
-  \`\`\`
+REFACTORING ASSESSMENT CRITERIA:
+1. **Code Quality**: Readability, maintainability, and clarity
+2. **Performance**: Efficiency improvements and optimization opportunities  
+3. **Security**: Vulnerability mitigation and secure coding practices
+4. **Modernization**: Latest language features and best practices
+5. **Architecture**: Design patterns and structural improvements
+6. **TypeScript Enhancement**: Better type safety and type definitions
+7. **Error Handling**: Robust exception management and validation
+8. **Testing**: Testability and debugging improvements
 
-  Focus on improvements related to:
-  - Readability
-  - Maintainability
-  - Performance
-  - Security
-  - Modernization (e.g., using newer language features)
+EVALUATION PROCESS:
+- Analyze code structure, patterns, and potential issues
+- Identify the most impactful improvement opportunity
+- Consider maintainability vs. complexity trade-offs
+- Ensure refactored code maintains original functionality
+- Prioritize changes that provide maximum benefit with minimal risk
 
-  If multiple improvements are possible, synthesize them into one optimal suggestion or pick the most impactful one.
-  If no significant refactoring is beneficial, you can omit the 'suggestion' field in your JSON response or return it as null.
-  Do not include any explanations or conversational text, only the JSON output matching the schema.
-  Example JSON for a suggestion:
-  {
-    "suggestion": {
-      "description": "Improved loop efficiency and clarity.",
-      "proposedCode": "const newArray = oldArray.map(item => item * 2);"
-    }
+OUTPUT REQUIREMENTS:
+- Provide ONE comprehensive refactoring suggestion (most impactful)
+- Include clear reasoning for the suggested changes
+- Ensure refactored code is production-ready and well-documented
+- Maintain backward compatibility where possible
+- Focus on meaningful improvements over cosmetic changes
+
+RESPONSE FORMAT:
+Generate a JSON object with a 'suggestion' field containing:
+- 'description': Detailed explanation of the refactoring and its benefits
+- 'proposedCode': Complete refactored version that directly replaces the original code
+
+If the code is already well-optimized and no significant improvements are beneficial:
+- Return {"suggestion": null} or {}
+
+QUALITY STANDARDS:
+- Ensure refactored code follows modern best practices
+- Include proper TypeScript types if applicable
+- Add meaningful comments for complex logic
+- Implement proper error handling
+- Consider edge cases and validation
+- Maintain or improve code performance
+
+Example high-quality suggestion:
+{
+  "suggestion": {
+    "description": "Refactored to use modern async/await pattern with proper error handling, TypeScript types, and performance optimization through early returns and input validation.",
+    "proposedCode": "// Refactored implementation here"
   }
-  Example JSON if no suggestion:
-  {
-    "suggestion": null
-  }
-  OR just:
-  {}
-  `,config: {
+}
+
+Respond ONLY with JSON matching the schema.`,
+  config: {
     safetySettings: [
       {
         category: 'HARM_CATEGORY_DANGEROUS_CONTENT',

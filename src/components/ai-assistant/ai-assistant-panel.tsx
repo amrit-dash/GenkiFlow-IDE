@@ -7,7 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
-import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer } from '@/app/(ide)/actions';
+import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer } from '@/app/(ide)/actions';
+import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
 import type { AiSuggestion, ChatMessage, FileSystemNode } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -72,7 +73,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
 
   const currentCode = activeFilePath ? openedFiles.get(activeFilePath)?.content : undefined;
-  const currentFileName = activeFilePath ? getFileSystemNode(activeFilePath)?.name : undefined;
+  const currentFileNode = activeFilePath ? getFileSystemNode(activeFilePath) : undefined;
+  const currentFileName = (currentFileNode && !Array.isArray(currentFileNode)) ? currentFileNode.name : undefined;
 
   const flattenFileSystem = useCallback((nodes: FileSystemNode[], basePath: string = ''): { label: string, value: string, path: string }[] => {
     let list: { label: string, value: string, path: string }[] = [];
@@ -109,7 +111,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
     if (path) {
       updateFileContent(path, codeToApply);
-      toast({ title: "Code Applied", description: `Changes applied to ${getFileSystemNode(path)?.name || 'the editor'}.`});
+      const targetNode = getFileSystemNode(path);
+      const targetFileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'the editor';
+      toast({ title: "Code Applied", description: `Changes applied to ${targetFileName}.`});
       if (!actionAppliedStates[buttonKey]) {
         setButtonAppliedState(buttonKey);
       }
@@ -257,43 +261,155 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } else {
             aiResponse = { id: generateId(), role: 'assistant', type: 'text', content: `No examples found for "${query}".` };
         }
-      } else {
-        let effectivePrompt = currentPromptValue;
-        const historyForContext = currentChatHistory.slice(0, -1);
-        if (historyForContext.length > 0) {
-            const lastMessages = historyForContext
-                .slice(-3)
-                .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`)
-                .join('\n\n');
-            effectivePrompt = `${lastMessages}\n\nUser: ${currentPromptValue}`;
+      } else if (lowerCasePrompt.includes("find usage") || lowerCasePrompt.includes("where is") || lowerCasePrompt.includes("how is") && lowerCasePrompt.includes("used")) {
+        // Usage analysis
+        const symbolMatch = currentPromptValue.match(/(?:find usage|where is|how is)\s+(?:of\s+)?([a-zA-Z_$][a-zA-Z0-9_$]*)/i);
+        const symbolName = symbolMatch ? symbolMatch[1] : currentPromptValue.split(' ').find(word => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(word));
+        
+        if (symbolName) {
+          const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
+          const result = await analyzeCodeUsageServer({
+            symbolName,
+            searchScope: 'workspace',
+            currentFilePath: activeFilePath || undefined,
+            includeDefinitions: true,
+            includeReferences: true,
+            fileSystemTree,
+          });
+          
+          aiResponse = {
+            id: generateId(),
+            role: 'assistant',
+            type: 'usageAnalysis',
+            content: `Here's the usage analysis for "${symbolName}":`,
+            usageAnalysisData: result,
+          };
+        } else {
+          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify a valid symbol name to analyze (e.g., 'find usage of Button' or 'where is useState used')." };
         }
+      } else if (lowerCasePrompt.includes("validate") || lowerCasePrompt.includes("check") && (lowerCasePrompt.includes("error") || lowerCasePrompt.includes("issue"))) {
+        // Error validation
+        const codeToValidate = firstAttachedFile ? firstAttachedFile.content : currentCode;
+        const filePathForValidation = firstAttachedFile ? firstAttachedFile.path : activeFilePath;
+        
+        if (!codeToValidate || !filePathForValidation) {
+          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "No active file or content to validate. Please open a file or attach one." };
+        } else {
+          const result = await validateCodeServer({
+            code: codeToValidate,
+            filePath: filePathForValidation,
+            projectContext: `Project has ${analyzeFileSystemStructure(fileSystem).totalFiles} files`,
+          });
+          
+          aiResponse = {
+            id: generateId(),
+            role: 'assistant',
+            type: 'errorValidation',
+            content: result.hasErrors ? 
+              `Found ${result.errors.length} issue(s) in the code:` : 
+              "Great! No errors found in the code.",
+            errorValidationData: result,
+          };
+        }
+      } else {
+        // Use enhanced code generation with full context
+        const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
+        const projectAnalysis = analyzeFileSystemStructure(fileSystem);
+        
+        const historyForContext = currentChatHistory.slice(0, -1);
+        const chatHistoryForAI = historyForContext.slice(-6).map(msg => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          timestamp: new Date().toISOString(),
+        }));
 
-        const result = await generateCodeServer({
+        try {
+          const result = await enhancedGenerateCodeServer({
+            prompt: currentPromptValue,
+            currentFilePath: activeFilePath || undefined,
+            currentFileContent: currentCode,
+            currentFileName: currentFileName,
+            attachedFiles: currentAttachedFiles.map(f => ({ path: f.path, content: f.content })),
+            fileSystemTree,
+            chatHistory: chatHistoryForAI,
+            projectContext: {
+              hasPackageJson: projectAnalysis.hasPackageJson,
+              hasReadme: projectAnalysis.hasReadme,
+              hasSrcFolder: projectAnalysis.hasSrcFolder,
+              hasTestFolder: projectAnalysis.hasTestFolder,
+              totalFiles: projectAnalysis.totalFiles,
+              totalFolders: projectAnalysis.totalFolders,
+            },
+          });
+
+          if (result.isNewFile && result.suggestedFileName) {
+            aiResponse = {
+              id: generateId(),
+              role: 'assistant',
+              type: 'newFileSuggestion',
+              content: `${result.explanation || 'I\'ve generated code for a new file.'} Suggested name: ${result.suggestedFileName}`,
+              code: result.code,
+              suggestedFileName: result.suggestedFileName,
+              explanation: result.explanation,
+              fileOperationSuggestion: result.fileOperationSuggestion,
+              alternativeOptions: result.alternativeOptions,
+              codeQuality: result.codeQuality,
+            };
+          } else {
+            const defaultTargetPath = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
+            aiResponse = {
+              id: generateId(),
+              role: 'assistant',
+              type: 'enhancedCodeGeneration',
+              content: result.explanation || "Here's the generated code:",
+              code: result.code,
+              targetPath: result.targetPath || defaultTargetPath || undefined,
+              explanation: result.explanation,
+              fileOperationSuggestion: result.fileOperationSuggestion,
+              alternativeOptions: result.alternativeOptions,
+              codeQuality: result.codeQuality,
+            };
+          }
+        } catch (enhancedError) {
+          // Fallback to regular code generation if enhanced fails
+          console.warn('Enhanced code generation failed, falling back to regular generation:', enhancedError);
+          
+          let effectivePrompt = currentPromptValue;
+          if (historyForContext.length > 0) {
+            const lastMessages = historyForContext
+              .slice(-3)
+              .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}`)
+              .join('\n\n');
+            effectivePrompt = `${lastMessages}\n\nUser: ${currentPromptValue}`;
+          }
+
+          const result = await generateCodeServer({
             prompt: effectivePrompt,
             currentFilePath: activeFilePath || undefined,
             currentFileContent: currentCode,
             attachedFiles: currentAttachedFiles.map(f => ({ path: f.path, content: f.content }))
-        });
+          });
 
-        if (result.isNewFile && result.suggestedFileName) {
+          if (result.isNewFile && result.suggestedFileName) {
             aiResponse = {
-                id: generateId(),
-                role: 'assistant',
-                type: 'newFileSuggestion',
-                content: `I've generated code for a new file. Suggested name: ${result.suggestedFileName}`,
-                code: result.code,
-                suggestedFileName: result.suggestedFileName
+              id: generateId(),
+              role: 'assistant',
+              type: 'newFileSuggestion',
+              content: `I've generated code for a new file. Suggested name: ${result.suggestedFileName}`,
+              code: result.code,
+              suggestedFileName: result.suggestedFileName
             };
-        } else {
+          } else {
             const defaultTargetPath = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
-             aiResponse = {
-                id: generateId(),
-                role: 'assistant',
-                type: 'generatedCode',
-                content: "Here's the generated code:",
-                code: result.code,
-                targetPath: result.targetPath! || defaultTargetPath!
+            aiResponse = {
+              id: generateId(),
+              role: 'assistant',
+              type: 'generatedCode',
+              content: "Here's the generated code:",
+              code: result.code,
+              targetPath: result.targetPath! || defaultTargetPath!
             };
+          }
         }
       }
 
@@ -358,7 +474,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <MessageSquare className="w-12 h-12 text-primary opacity-70 mb-2" />
           <h3 className="text-lg font-semibold text-foreground">GenkiFlow AI Assistant</h3>
           <p className="text-xs text-muted-foreground max-w-xs">
-            Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below.
+            Your intelligent coding partner with project context awareness. I analyze your file structure, chat history, and provide enhanced suggestions.
             {attachedFiles.length > 0 ? ` Using ${attachedFiles.map(f=>f.name).join(', ')} as context.` : ` Attach up to ${MAX_ATTACHED_FILES} files for specific context.`}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full max-w-md pt-3">
@@ -371,7 +487,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             <HintCard
               icon={Code2}
               title="Generate Code"
-              description="Describe any code you need (e.g., a function, a component, a script), and I'll generate it."
+              description="Describe any code you need with full context awareness. I'll analyze your project structure and suggest the best placement."
               onActivate={() => { setPrompt("Generate a Python function that takes a list of numbers and returns their sum."); textareaRef.current?.focus(); }}
             />
             <HintCard
@@ -411,7 +527,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                       {msg.type === 'text' && <p className="whitespace-pre-wrap">{msg.content}</p>}
                       {msg.type === 'error' && <p className="text-destructive whitespace-pre-wrap">{msg.content}</p>}
 
-                      {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion') && msg.code && (
+                      {(msg.type === 'generatedCode' || msg.type === 'newFileSuggestion' || msg.type === 'enhancedCodeGeneration') && msg.code && (
                         <div className="space-y-2">
                           <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
                           <div className="relative bg-muted p-2 rounded-md group themed-scrollbar">
@@ -454,7 +570,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               )}
                             </div>
                           )}
-                          {msg.type === 'generatedCode' && (
+                          {(msg.type === 'generatedCode' || msg.type === 'enhancedCodeGeneration') && (
                              <div className="flex items-center gap-2">
                                <Button
                                  size="sm"
@@ -465,7 +581,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                  {actionAppliedStates[applyGeneratedCodeKey] ? (
                                    <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
                                  ) : (
-                                   <><Edit className="mr-1.5 h-4 w-4" /> { (msg.targetPath || activeFilePath) ? `Insert into ${getFileSystemNode(msg.targetPath || activeFilePath!)?.name || 'Editor'}` : 'Insert (No file open)'}</>
+                                   <><Edit className="mr-1.5 h-4 w-4" /> { (() => {
+                                     const targetPath = msg.targetPath || activeFilePath;
+                                     if (!targetPath) return 'Insert (No file open)';
+                                     const targetNode = getFileSystemNode(targetPath);
+                                     const fileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'Editor';
+                                     return `Insert into ${fileName}`;
+                                   })()}</>
                                  )}
                                </Button>
                                {actionAppliedStates[applyGeneratedCodeKey] && (msg.targetPath || activeFilePath) && (
@@ -481,6 +603,81 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                  </Button>
                                )}
                              </div>
+                          )}
+
+                          {/* Enhanced Code Generation Features */}
+                          {msg.type === 'enhancedCodeGeneration' && (
+                            <div className="mt-3 space-y-2">
+                              {/* File Operation Suggestion */}
+                              {msg.fileOperationSuggestion && msg.fileOperationSuggestion.type !== 'none' && (
+                                <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                                  <CardContent className="p-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <FilePlus2 className="h-4 w-4 text-blue-600" />
+                                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                        File Operation Suggestion
+                                      </span>
+                                      <span className="text-xs text-blue-600 dark:text-blue-400">
+                                        ({Math.round(msg.fileOperationSuggestion.confidence * 100)}% confidence)
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-blue-700 dark:text-blue-300">{msg.fileOperationSuggestion.reasoning}</p>
+                                  </CardContent>
+                                </Card>
+                              )}
+
+                              {/* Alternative Options */}
+                              {msg.alternativeOptions && msg.alternativeOptions.length > 0 && (
+                                <Card className="bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+                                  <CardContent className="p-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <RotateCcw className="h-4 w-4 text-amber-600" />
+                                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                        Alternative Options
+                                      </span>
+                                    </div>
+                                    <div className="space-y-1">
+                                      {msg.alternativeOptions.slice(0, 2).map((option, idx) => (
+                                        <div key={idx} className="text-xs text-amber-700 dark:text-amber-300">
+                                          • {option.description}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
+
+                              {/* Code Quality Assessment */}
+                              {msg.codeQuality && (
+                                <Card className="bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800">
+                                  <CardContent className="p-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <Check className="h-4 w-4 text-green-600" />
+                                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                                        Code Quality
+                                      </span>
+                                      <span className="text-xs text-green-600 dark:text-green-400 capitalize">
+                                        ({msg.codeQuality.estimatedComplexity} complexity)
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1 text-xs">
+                                      <div className={cn("flex items-center gap-1", msg.codeQuality.followsBestPractices ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        {msg.codeQuality.followsBestPractices ? "✓" : "○"} Best Practices
+                                      </div>
+                                      <div className={cn("flex items-center gap-1", msg.codeQuality.isTypeScriptCompatible ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        {msg.codeQuality.isTypeScriptCompatible ? "✓" : "○"} TypeScript
+                                      </div>
+                                      <div className={cn("flex items-center gap-1", msg.codeQuality.hasProperErrorHandling ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        {msg.codeQuality.hasProperErrorHandling ? "✓" : "○"} Error Handling
+                                      </div>
+                                      <div className={cn("flex items-center gap-1", msg.codeQuality.isWellDocumented ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        {msg.codeQuality.isWellDocumented ? "✓" : "○"} Documented
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}

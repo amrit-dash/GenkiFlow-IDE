@@ -1,4 +1,3 @@
-
 "use server";
 
 import { 
@@ -21,6 +20,11 @@ import {
   type FindCodebaseExamplesInput, 
   type FindCodebaseExamplesOutput 
 } from '@/ai/flows/find-codebase-examples';
+import { 
+  enhancedGenerateCode, 
+  type EnhancedGenerateCodeInput, 
+  type EnhancedGenerateCodeOutput 
+} from '@/ai/flows/enhanced-code-generation';
 
 function logDetailedError(actionName: string, error: any) {
   const timestamp = new Date().toISOString();
@@ -111,5 +115,78 @@ export async function findExamplesServer(input: FindCodebaseExamplesInput): Prom
   } catch (error: any) {
     logDetailedError("findExamplesServer", error);
     throw new Error(formatErrorForClient("Failed to find codebase examples.", error));
+  }
+}
+
+export async function enhancedGenerateCodeServer(input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> {
+  try {
+    return await enhancedGenerateCode(input);
+  } catch (error: any) {
+    logDetailedError("enhancedGenerateCodeServer", error);
+    throw new Error(formatErrorForClient("Failed to generate enhanced code.", error));
+  }
+}
+
+// New server actions for enhanced AI tools
+export async function validateCodeServer(input: { code: string; filePath: string; language?: string; projectContext?: string }) {
+  try {
+    const { errorValidation } = await import('@/ai/tools/error-validation');
+    return await errorValidation({
+      code: input.code,
+      filePath: input.filePath,
+      language: input.language,
+      projectContext: input.projectContext,
+    });
+  } catch (error: any) {
+    logDetailedError("validateCodeServer", error);
+    throw new Error(formatErrorForClient("Failed to validate code.", error));
+  }
+}
+
+export async function analyzeCodeUsageServer(input: { 
+  symbolName: string; 
+  searchScope?: 'workspace' | 'current-file' | 'directory';
+  currentFilePath?: string;
+  includeDefinitions?: boolean;
+  includeReferences?: boolean;
+  fileSystemTree?: string;
+}) {
+  try {
+    const { codeUsageAnalysis } = await import('@/ai/tools/code-usage-analysis');
+    return await codeUsageAnalysis({
+      symbolName: input.symbolName,
+      searchScope: input.searchScope,
+      currentFilePath: input.currentFilePath,
+      includeDefinitions: input.includeDefinitions,
+      includeReferences: input.includeReferences,
+      fileSystemTree: input.fileSystemTree,
+    });
+  } catch (error: any) {
+    logDetailedError("analyzeCodeUsageServer", error);
+    throw new Error(formatErrorForClient("Failed to analyze code usage.", error));
+  }
+}
+
+export async function trackOperationProgressServer(input: {
+  operation: string;
+  stage: 'starting' | 'analyzing' | 'processing' | 'validating' | 'completing' | 'error';
+  progress: number;
+  details?: string;
+  estimatedTimeRemaining?: number;
+  context?: any;
+}) {
+  try {
+    const { operationProgress } = await import('@/ai/tools/operation-progress');
+    return await operationProgress({
+      operation: input.operation,
+      stage: input.stage,
+      progress: input.progress,
+      details: input.details,
+      estimatedTimeRemaining: input.estimatedTimeRemaining,
+      context: input.context,
+    });
+  } catch (error: any) {
+    logDetailedError("trackOperationProgressServer", error);
+    throw new Error(formatErrorForClient("Failed to track operation progress.", error));
   }
 }
