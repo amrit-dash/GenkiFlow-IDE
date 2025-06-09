@@ -203,7 +203,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const currentAttachedFiles = [...attachedFiles]; 
 
     setPrompt("");
-    // Do not clear attachments here for follow-up questions.
+    // Do not clear attachments for follow-up
     setIsLoading(true);
 
     const loadingMessageId = generateId();
@@ -286,7 +286,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 suggestedFileName: result.suggestedFileName
             };
         } else {
-            const defaultTargetPath = currentAttachedFiles.length === 1 ? currentAttachedFiles[0].path : activeFilePath;
+            const defaultTargetPath = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
              aiResponse = { 
                 id: generateId(), 
                 role: 'assistant', 
@@ -576,7 +576,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
       <div className="p-4 border-t border-sidebar-border mt-auto space-y-2">
         {attachedFiles.length > 0 && (
-           <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
             {attachedFiles.map(file => (
               <div key={file.path} className="flex items-center justify-between text-xs bg-muted p-1.5 rounded-md">
                 <div className="flex items-center gap-1.5 text-muted-foreground truncate">
@@ -649,7 +649,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             <Button 
               type="submit" 
               size="icon" 
-              className="h-7 w-7 rounded-md bg-primary hover:bg-primary/90" 
+              className={cn(
+                "h-7 w-7 rounded-md transition-colors",
+                isLoading || (!prompt.trim() && attachedFiles.length === 0)
+                  ? "bg-transparent text-muted-foreground"
+                  : "bg-transparent text-primary hover:bg-transparent"
+              )}
               disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
               onClick={handleSendMessage}
               title="Send message"
