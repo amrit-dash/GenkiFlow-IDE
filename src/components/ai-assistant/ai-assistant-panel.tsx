@@ -26,7 +26,7 @@ interface AttachedFile {
   content: string;
 }
 
-const MAX_ATTACHED_FILES = 3;
+const MAX_ATTACHED_FILES = 4; // Updated to 4
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
@@ -286,9 +286,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 suggestedFileName: result.suggestedFileName
             };
         } else {
-            // If code is generated based on attached files, targetPath might need to be smarter
-            // For now, if multiple files attached, applying directly is ambiguous.
-            // Defaulting to activeFilePath or the first attached if only one.
             const defaultTargetPath = currentAttachedFiles.length === 1 ? currentAttachedFiles[0].path : activeFilePath;
              aiResponse = { 
                 id: generateId(), 
@@ -358,12 +355,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       </div>
       
       {chatHistory.length === 0 && !isLoading ? (
-        <div className="flex-1 p-4 flex flex-col items-center justify-center text-center space-y-3 overflow-y-auto">
+        <div className="flex-1 p-4 flex flex-col items-center justify-center text-center space-y-3 overflow-y-auto themed-scrollbar">
           <MessageSquare className="w-12 h-12 text-primary opacity-70 mb-2" />
           <h3 className="text-lg font-semibold text-foreground">GenkiFlow AI Assistant</h3>
           <p className="text-xs text-muted-foreground max-w-xs">
             Your intelligent coding partner. How can I assist you today? Try one of these, or type your own request below. 
-            {attachedFiles.length > 0 ? ` Using ${attachedFiles.map(f=>f.name).join(', ')} as context.` : " Attach up to 3 files for specific context."}
+            {attachedFiles.length > 0 ? ` Using ${attachedFiles.map(f=>f.name).join(', ')} as context.` : ` Attach up to ${MAX_ATTACHED_FILES} files for specific context.`}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full max-w-md pt-3">
             <HintCard 
@@ -393,7 +390,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           </div>
         </div>
       ) : (
-        <ScrollArea ref={scrollAreaRef} className="flex-1 p-1">
+        <ScrollArea ref={scrollAreaRef} className="flex-1 p-1 themed-scrollbar">
           <div className="p-3 space-y-4">
             {chatHistory.map((msg) => {
               const applyEditorKey = `${msg.id}-apply-editor`;
@@ -419,7 +416,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                         <div className="space-y-2">
                           <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
                           <div className="relative bg-muted p-2 rounded-md group">
-                            <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code"><code>{msg.code}</code></pre>
+                            <pre className="text-xs overflow-x-auto whitespace-pre-wrap max-h-60 font-code themed-scrollbar"><code>{msg.code}</code></pre>
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -498,7 +495,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             </CardHeader>
                             <CardContent className="p-2 pt-0">
                               <div className="relative bg-background/70 p-1.5 rounded-md group mb-1.5">
-                                <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{msg.suggestion.proposedCode}</code></pre>
+                                <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code themed-scrollbar"><code>{msg.suggestion.proposedCode}</code></pre>
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
@@ -549,7 +546,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           <p className="whitespace-pre-wrap text-muted-foreground mb-1">{msg.content}</p>
                           {msg.examples.map((ex, i) => (
                             <div key={i} className="relative bg-muted p-2 rounded-md group">
-                              <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code"><code>{ex}</code></pre>
+                              <pre className="text-xs overflow-x-auto max-h-40 whitespace-pre-wrap font-code themed-scrollbar"><code>{ex}</code></pre>
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
@@ -579,7 +576,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
       <div className="p-4 border-t border-sidebar-border mt-auto space-y-2">
         {attachedFiles.length > 0 && (
-          <div className="space-y-1 max-h-20 overflow-y-auto pr-1">
+           <div className="grid grid-cols-2 gap-1.5">
             {attachedFiles.map(file => (
               <div key={file.path} className="flex items-center justify-between text-xs bg-muted p-1.5 rounded-md">
                 <div className="flex items-center gap-1.5 text-muted-foreground truncate">
@@ -593,13 +590,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2">
+        <div className="relative">
           <Textarea
             ref={textareaRef}
             placeholder="Chat with AI Assistant..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary"
+            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pr-[70px] themed-scrollbar"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -608,52 +605,55 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             }}
             rows={1}
           />
-          <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
-            <PopoverTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-10 w-10 text-muted-foreground hover:text-primary hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                title="Attach file for context"
-              >
-                <Paperclip className="h-5 w-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0 mb-1" side="top" align="end">
-              <Command>
-                <CommandInput placeholder="Search files to attach..." />
-                <CommandList>
-                  <CommandEmpty>No files found.</CommandEmpty>
-                  <CommandGroup heading="Workspace Files">
-                    <ScrollArea className="h-[200px]">
-                      {allFilesForSelector.map((file) => (
-                        <CommandItem
-                          key={file.value}
-                          value={file.value}
-                          onSelect={() => handleFileSelect(file.path)}
-                          className="text-xs cursor-pointer"
-                        >
-                          {file.label}
-                        </CommandItem>
-                      ))}
-                    </ScrollArea>
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
-          <Button 
-            type="submit" 
-            size="icon" 
-            className="h-10 w-10 rounded-md bg-primary hover:bg-primary/90" 
-            disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
-            onClick={handleSendMessage}
-            title="Send message"
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          <div className="absolute bottom-2.5 right-2 flex items-center gap-1">
+            <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                  title="Attach file for context"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 mb-1" side="top" align="end">
+                <Command>
+                  <CommandInput placeholder="Search files to attach..." />
+                  <CommandList>
+                    <CommandEmpty>No files found.</CommandEmpty>
+                    <CommandGroup heading="Workspace Files">
+                      <ScrollArea className="h-[200px] themed-scrollbar">
+                        {allFilesForSelector.map((file) => (
+                          <CommandItem
+                            key={file.value}
+                            value={file.value}
+                            onSelect={() => handleFileSelect(file.path)}
+                            className="text-xs cursor-pointer"
+                          >
+                            {file.label}
+                          </CommandItem>
+                        ))}
+                      </ScrollArea>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <Button 
+              type="submit" 
+              size="icon" 
+              className="h-7 w-7 rounded-md bg-primary hover:bg-primary/90" 
+              disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
+              onClick={handleSendMessage}
+              title="Send message"
+            >
+              {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
