@@ -616,7 +616,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             <PopoverTrigger asChild>
                 <Button
                     variant="ghost"
-                    className="absolute top-1.5 right-[12px] h-[0.5rem] w-[0.5rem] text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="absolute top-1.5 right-[10px] h-[0.5rem] w-[0.5rem] text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                     title="Attach file for context"
                 >
                     <Paperclip className="h-px w-px shrink-0" />
@@ -650,13 +650,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             type="submit"
             size="icon"
             className={cn(
-                "absolute bottom-2 right-2 h-8 w-8 rounded-md transition-colors bg-transparent hover:bg-transparent text-primary"
+                "absolute bottom-2 right-2 h-8 w-8 rounded-md transition-colors bg-transparent hover:bg-transparent text-primary" 
             )}
             disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
             onClick={handleSendMessage}
             title="Send message"
           >
-            {isLoading ? <Loader2 className="h-7 w-7 animate-spin" /> : <Send className="h-7 w-7" />}
+            {isLoading ? <Loader2 className="h-8 w-8 animate-spin" /> : <Send className="h-8 w-8" />}
           </Button>
         </div>
       </div>
