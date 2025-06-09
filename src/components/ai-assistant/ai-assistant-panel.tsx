@@ -20,7 +20,7 @@ interface AiAssistantPanelProps {
   onToggleVisibility: () => void;
 }
 
-interface AttachedFile {
+interface AttachedFileUIData {
   path: string;
   name: string;
   content: string;
@@ -69,7 +69,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const [actionAppliedStates, setActionAppliedStates] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFileUIData[]>([]);
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
 
   const currentCode = activeFilePath ? openedFiles.get(activeFilePath)?.content : undefined;
@@ -602,7 +602,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             placeholder="Chat with AI Assistant..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-2 pr-[40px] themed-scrollbar"
+            className="flex-1 min-h-[60px] bg-input resize-none rounded-lg focus:ring-1 focus:ring-primary pl-2 py-1 pr-[40px] themed-scrollbar"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -617,10 +617,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-1 right-2 h-4 w-4 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="absolute top-1 right-3 h-[0.6rem] w-[0.6rem] text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                     title="Attach file for context"
                 >
-                    <Paperclip className="h-2 w-2 shrink-0" />
+                    <Paperclip className="h-[0.3rem] w-[0.3rem] shrink-0" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
@@ -650,7 +650,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <Button
             type="submit"
             size="icon"
-            className="absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent text-primary hover:bg-transparent"
+            className={cn(
+                "absolute bottom-2 right-2 h-7 w-7 rounded-md transition-colors bg-transparent hover:bg-transparent",
+                (isLoading || (!prompt.trim() && attachedFiles.length === 0)) ? "text-primary opacity-50" : "text-primary"
+            )}
             disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
             onClick={handleSendMessage}
             title="Send message"
