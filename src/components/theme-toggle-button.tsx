@@ -16,12 +16,17 @@ export function ThemeToggleButton() {
     setMounted(true)
   }, [])
 
-  const cycleTheme = () => {
-    if (theme === "light") {
+  const toggleTheme = () => {
+    // Only toggle between light and dark
+    // If current theme is system, consider its resolved value for the first toggle.
+    // Or, more simply, if it's light or system, go to dark. Otherwise, go to light.
+    const currentEffectiveTheme = theme === "system"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+      : theme;
+
+    if (currentEffectiveTheme === "light") {
       setTheme("dark")
-    } else if (theme === "dark") {
-      setTheme("system")
-    } else {
+    } else { // currentEffectiveTheme is "dark"
       setTheme("light")
     }
   }
@@ -32,16 +37,18 @@ export function ThemeToggleButton() {
   }
 
   let IconToRender;
-  let title = "Toggle theme";
+  let title;
 
-  if (theme === "light") {
+  // Determine current effective theme for display purposes
+  const displayTheme = theme === "system" 
+    ? window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" 
+    : theme;
+
+  if (displayTheme === "light") {
     IconToRender = Sun;
     title = "Switch to Dark Mode";
-  } else if (theme === "dark") {
+  } else { // displayTheme is "dark"
     IconToRender = Moon;
-    title = "Switch to System Preference";
-  } else { // system
-    IconToRender = Laptop;
     title = "Switch to Light Mode";
   }
 
@@ -49,7 +56,7 @@ export function ThemeToggleButton() {
     <Button
       size="icon"
       variant="ghost"
-      onClick={cycleTheme}
+      onClick={toggleTheme}
       title={title}
       className={cn(
         "rounded-md shadow-lg h-8 w-8", // Standardized size

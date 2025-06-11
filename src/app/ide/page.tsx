@@ -2,18 +2,16 @@
 "use client"; 
 
 import { useEffect, useState } from 'react';
-import { Sidebar, SidebarInset, SidebarRail } from "@/components/ui/sidebar";
+import { Sidebar, SidebarInset, SidebarRail, SidebarFooter } from "@/components/ui/sidebar"; // Added SidebarFooter
 import { FileExplorer } from "@/components/file-explorer/file-explorer";
 import { CodeEditorPanel } from "@/components/code-editor/code-editor-panel";
 import { AiAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useIde } from '@/contexts/ide-context';
-import { Button } from '@/components/ui/button';
-import { Bot, TerminalSquare, Settings2, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { ManageWorkspaceModal } from '@/components/manage-workspace-modal';
-import { ThemeToggleButton } from '@/components/theme-toggle-button'; // Added import
+import { GlobalControls } from '@/components/global-controls'; // New import
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
@@ -49,8 +47,23 @@ export default function IdePage() {
 
   return (
     <div className="flex h-full w-full relative">
-      <Sidebar collapsible="icon" side="left" variant="sidebar" className="min-w-[250px] max-w-[400px] data-[collapsible=icon]:min-w-[var(--sidebar-width-icon)] data-[collapsible=icon]:max-w-[var(--sidebar-width-icon)]">
-        <FileExplorer />
+      <Sidebar 
+        collapsible="icon" 
+        side="left" 
+        variant="sidebar" 
+        className="min-w-[250px] max-w-[400px] data-[collapsible=icon]:min-w-[var(--sidebar-width-icon)] data-[collapsible=icon]:max-w-[var(--sidebar-width-icon)] flex flex-col" // Added flex flex-col to allow footer to stick to bottom
+      >
+        <FileExplorer /> {/* FileExplorer should take up available space */}
+        {/* Global toggle buttons moved here, inside SidebarFooter */}
+        <SidebarFooter className="p-0 border-t-0 mt-auto"> {/* Override default padding of SidebarFooter and remove its top border, mt-auto pushes it down */}
+            <GlobalControls 
+                showAiPanel={showAiPanel}
+                toggleAiPanel={toggleAiPanel}
+                showTerminalPanel={showTerminalPanel}
+                toggleTerminalPanel={toggleTerminalPanel}
+                onManageWorkspace={() => setShowManageWorkspaceModal(true)}
+            />
+        </SidebarFooter>
       </Sidebar>
       <SidebarRail /> 
       
@@ -80,50 +93,7 @@ export default function IdePage() {
         </ResizablePanelGroup>
       </SidebarInset>
       
-      {/* Global toggle buttons in bottom left corner */}
-      <div className="absolute bottom-4 left-4 z-50 flex flex-row gap-2">
-        <Button
-          size="icon"
-          onClick={toggleAiPanel}
-          title={showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}
-          className={cn(
-            "rounded-md shadow-lg transition-colors duration-150 ease-in-out h-8 w-8", // Standardized size
-            showAiPanel
-              ? "bg-accent text-accent-foreground hover:bg-accent/90" 
-              : "bg-card text-card-foreground hover:bg-muted border border-border" 
-          )}
-        >
-          <Bot className="h-4 w-4"/> {/* Standardized icon size */}
-           <span className="sr-only">{showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}</span>
-        </Button>
-        <Button
-          size="icon"
-          onClick={toggleTerminalPanel}
-          title={showTerminalPanel ? "Hide Terminal" : "Show Terminal"}
-          className={cn(
-            "rounded-md shadow-lg transition-colors duration-150 ease-in-out h-8 w-8", // Standardized size
-            showTerminalPanel
-              ? "bg-accent text-accent-foreground hover:bg-accent/90"
-              : "bg-card text-card-foreground hover:bg-muted border border-border"
-          )}
-        >
-          <TerminalSquare className="h-4 w-4"/> {/* Standardized icon size */}
-          <span className="sr-only">{showTerminalPanel ? "Hide Terminal" : "Show Terminal"}</span>
-        </Button>
-        <Button
-          size="icon"
-          onClick={() => setShowManageWorkspaceModal(true)}
-          title="Manage Workspace"
-          className={cn(
-            "rounded-md shadow-lg transition-colors duration-150 ease-in-out h-8 w-8", // Standardized size
-            "bg-card text-card-foreground border border-border hover:bg-accent hover:text-accent-foreground"
-          )}
-        >
-          <Settings2 className="h-4 w-4"/> {/* Standardized icon size */}
-          <span className="sr-only">Manage Workspace</span>
-        </Button>
-        <ThemeToggleButton /> {/* Added Theme Toggle Button */}
-      </div>
+      {/* Manage Workspace Modal remains the same */}
       {showManageWorkspaceModal && (
         <ManageWorkspaceModal
           isOpen={showManageWorkspaceModal}
