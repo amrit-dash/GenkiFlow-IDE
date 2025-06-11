@@ -24,7 +24,7 @@ export function GlobalControls({
   // This div will be hidden when the parent sidebar is in icon-only (collapsed) mode
   // by using the group-data variant from the Sidebar component.
   return (
-    <div className="flex flex-row items-center justify-end gap-2 p-2 group-data-[collapsible=icon]:hidden">
+    <div className="flex flex-row items-center justify-start gap-2 p-2 group-data-[collapsible=icon]:hidden">
       <Button
         size="icon"
         onClick={toggleAiPanel}
