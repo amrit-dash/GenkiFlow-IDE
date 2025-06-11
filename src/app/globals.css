@@ -37,7 +37,7 @@
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 270 70% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent: 240 5.9% 90%; /* Updated from 240 4.8% 95.9% to match border */
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 270 70% 65%;
@@ -149,3 +149,4 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--border)) transparent; /* thumb color, track color */
 }
+
