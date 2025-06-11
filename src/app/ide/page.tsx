@@ -10,10 +10,10 @@ import { TerminalPanel } from "@/components/terminal/terminal-panel";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useIde } from '@/contexts/ide-context';
 import { Button } from '@/components/ui/button';
-import { Bot, TerminalSquare, Settings2, Loader2 } from 'lucide-react'; // Added Loader2
+import { Bot, TerminalSquare, Settings2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ManageWorkspaceModal } from '@/components/manage-workspace-modal';
-import { useToast } from '@/hooks/use-toast';
+import { ThemeToggleButton } from '@/components/theme-toggle-button'; // Added import
 
 export default function IdePage() {
   const [isClient, setIsClient] = useState(false);
@@ -87,13 +87,13 @@ export default function IdePage() {
           onClick={toggleAiPanel}
           title={showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}
           className={cn(
-            "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
+            "rounded-md shadow-lg transition-colors duration-150 ease-in-out h-8 w-8", // Standardized size
             showAiPanel
               ? "bg-accent text-accent-foreground hover:bg-accent/90" 
               : "bg-card text-card-foreground hover:bg-muted border border-border" 
           )}
         >
-          <Bot className="h-5 w-5"/>
+          <Bot className="h-4 w-4"/> {/* Standardized icon size */}
            <span className="sr-only">{showAiPanel ? "Hide AI Assistant" : "Show AI Assistant"}</span>
         </Button>
         <Button
@@ -101,13 +101,13 @@ export default function IdePage() {
           onClick={toggleTerminalPanel}
           title={showTerminalPanel ? "Hide Terminal" : "Show Terminal"}
           className={cn(
-            "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
+            "rounded-md shadow-lg transition-colors duration-150 ease-in-out h-8 w-8", // Standardized size
             showTerminalPanel
               ? "bg-accent text-accent-foreground hover:bg-accent/90"
               : "bg-card text-card-foreground hover:bg-muted border border-border"
           )}
         >
-          <TerminalSquare className="h-5 w-5"/>
+          <TerminalSquare className="h-4 w-4"/> {/* Standardized icon size */}
           <span className="sr-only">{showTerminalPanel ? "Hide Terminal" : "Show Terminal"}</span>
         </Button>
         <Button
@@ -115,13 +115,14 @@ export default function IdePage() {
           onClick={() => setShowManageWorkspaceModal(true)}
           title="Manage Workspace"
           className={cn(
-            "rounded-md shadow-lg transition-colors duration-150 ease-in-out",
+            "rounded-md shadow-lg transition-colors duration-150 ease-in-out h-8 w-8", // Standardized size
             "bg-card text-card-foreground border border-border hover:bg-accent hover:text-accent-foreground"
           )}
         >
-          <Settings2 className="h-5 w-5"/>
+          <Settings2 className="h-4 w-4"/> {/* Standardized icon size */}
           <span className="sr-only">Manage Workspace</span>
         </Button>
+        <ThemeToggleButton /> {/* Added Theme Toggle Button */}
       </div>
       {showManageWorkspaceModal && (
         <ManageWorkspaceModal
@@ -132,4 +133,3 @@ export default function IdePage() {
     </div>
   );
 }
-
