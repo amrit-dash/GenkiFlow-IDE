@@ -12,10 +12,33 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 const FS_STORAGE_KEY = 'genkiflowIdeFileSystem';
 const OPENED_FILES_STORAGE_KEY = 'genkiflowIdeOpenedFiles';
 const ACTIVE_FILE_STORAGE_KEY = 'genkiflowIdeActiveFile';
+const ACCENT_COLOR_STORAGE_KEY = 'genkiflowIdeAccentColor'; // New key for accent color
 
 const MAX_HISTORY_LENGTH = 50;
+const DEFAULT_ACCENT_COLOR_HSL = "270 70% 55%"; // Default Purple
 
 const IdeContext = createContext<IdeStateInterface | undefined>(undefined);
+
+function applyAccentColorToDocument(hslColor: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const [h, s, l] = hslColor.split(" ").map(val => parseInt(val.replace('%', ''), 10));
+    if (isNaN(h) || isNaN(s) || isNaN(l)) {
+      console.warn("Invalid HSL string for accent color:", hslColor);
+      return;
+    }
+    const primaryLightness = l;
+    const ringLightness = Math.min(100, Math.max(0, primaryLightness + 10)); // L + 10%, capped
+
+    document.documentElement.style.setProperty('--primary', `${h} ${s}% ${primaryLightness}%`);
+    document.documentElement.style.setProperty('--accent', `${h} ${s}% ${primaryLightness}%`);
+    document.documentElement.style.setProperty('--ring', `${h} ${s}% ${ringLightness}%`);
+
+  } catch (error) {
+    console.error("Failed to parse or apply accent color:", hslColor, error);
+  }
+}
+
 
 export function IdeProvider({ children }: { children: React.ReactNode }) {
   const [fileSystem, setFileSystemState] = useState<FileSystemNode[]>([]);
@@ -23,6 +46,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
   const [activeFilePath, setActiveFilePathState] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(true);
   const [nodeToAutoRenameId, setNodeToAutoRenameIdState] = useState<string | null>(null);
+  const [accentColor, setAccentColorState] = useState<string>(DEFAULT_ACCENT_COLOR_HSL);
+
 
   useEffect(() => {
     setIsBusy(true);
@@ -39,7 +64,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       } else {
         loadedFs = mockFileSystem;
       }
-      // Ensure all file nodes in fileSystem have initial history representing saved state
       const initializeFsHistory = (nodes: FileSystemNode[]): FileSystemNode[] => {
         return nodes.map(node => {
           if (node.type === 'file') {
@@ -69,7 +93,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                 const liveHistoryIndex = node.historyIndex !== undefined && node.historyIndex < liveContentHistory.length ? node.historyIndex : Math.max(0, liveContentHistory.length - 1);
                 initializedOpenedFiles.set(path, {...node, content: liveContentHistory[liveHistoryIndex] || '', contentHistory: liveContentHistory, historyIndex: liveHistoryIndex });
             } else {
-                initializedOpenedFiles.set(path, node); // Should not happen for opened files, but defensively
+                initializedOpenedFiles.set(path, node); 
             }
         });
         setOpenedFilesState(initializedOpenedFiles);
@@ -84,7 +108,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             }
             return false;
          }
-         const currentFsForActiveCheck = storedFs ? JSON.parse(storedFs) : mockFileSystem; // Use initially loaded FS for check
+         const currentFsForActiveCheck = storedFs ? JSON.parse(storedFs) : mockFileSystem; 
          if (fileExistsInFs(currentFsForActiveCheck, storedActiveFile)) {
             const loadedOpenedFiles = storedOpenedFiles ? new Map<string, FileSystemNode>(JSON.parse(storedOpenedFiles)) : new Map();
             if (loadedOpenedFiles.has(storedActiveFile)) {
@@ -99,9 +123,15 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       } else {
         setActiveFilePathState(null);
       }
+
+      // Load and apply accent color
+      const storedAccentColor = localStorage.getItem(ACCENT_COLOR_STORAGE_KEY);
+      const initialAccentColor = storedAccentColor || DEFAULT_ACCENT_COLOR_HSL;
+      setAccentColorState(initialAccentColor);
+      applyAccentColorToDocument(initialAccentColor);
+
     } catch (error) {
       console.error("Error loading from localStorage:", error);
-      // Fallback: ensure mockFileSystem also has history initialized
       const initializeMockFsHistory = (nodes: FileSystemNode[]): FileSystemNode[] => {
         return nodes.map(node => {
           if (node.type === 'file') {
@@ -117,6 +147,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       setFileSystemState(initializeMockFsHistory(mockFileSystem));
       setOpenedFilesState(new Map());
       setActiveFilePathState(null);
+      setAccentColorState(DEFAULT_ACCENT_COLOR_HSL);
+      applyAccentColorToDocument(DEFAULT_ACCENT_COLOR_HSL);
     }
     setIsBusy(false);
   }, []);
@@ -124,19 +156,17 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isBusy) return;
     try {
-      // fileSystem is saved with its content representing the last saved state
       localStorage.setItem(FS_STORAGE_KEY, JSON.stringify(fileSystem));
-      // openedFiles are saved with their live editing history
       localStorage.setItem(OPENED_FILES_STORAGE_KEY, JSON.stringify(Array.from(openedFiles.entries())));
       localStorage.setItem(ACTIVE_FILE_STORAGE_KEY, activeFilePath || "null");
+      localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, accentColor); // Save accent color
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
-  }, [fileSystem, openedFiles, activeFilePath, isBusy]);
+  }, [fileSystem, openedFiles, activeFilePath, accentColor, isBusy]);
 
 
   const replaceWorkspace = useCallback((newNodes: FileSystemNode[], newActiveFilePath: string | null = null) => {
-    // Ensure newNodes for fileSystem have their history initialized to represent saved state
     const initializeFsHistory = (nodes: FileSystemNode[]): FileSystemNode[] => {
         return nodes.map(node => {
           if (node.type === 'file') {
@@ -159,6 +189,12 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error clearing workspace state from localStorage:", error);
     }
+  }, []);
+
+  const setAccentColor = useCallback((newColorHsl: string) => {
+    setAccentColorState(newColorHsl);
+    applyAccentColorToDocument(newColorHsl);
+    localStorage.setItem(ACCENT_COLOR_STORAGE_KEY, newColorHsl);
   }, []);
 
 
@@ -184,7 +220,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     };
     if (pathOrId === '/') {
         const rootNodeCandidate = findNode(fileSystem, pathOrId);
-        // If looking for root '/', return array of root nodes if no single root folder named '/' exists
         return rootNodeCandidate && rootNodeCandidate.type === 'folder' && rootNodeCandidate.path === '/' ? rootNodeCandidate : fileSystem;
     }
     return findNode(fileSystem, pathOrId);
@@ -192,7 +227,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
   const openFile = useCallback((filePath: string, nodeToOpen?: FileSystemNode) => {
     if (openedFiles.has(filePath) && activeFilePath === filePath) { 
-      setActiveFilePathState(filePath); // Ensure active state is set even if already open and active (e.g. after refresh)
+      setActiveFilePathState(filePath); 
       return;
     }
     if (openedFiles.has(filePath)) { 
@@ -211,10 +246,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     }
     
     if (fileNodeFromSystem) {
-      // When opening a file, its state in `openedFiles` should reflect its last saved state from `fileSystem`.
-      // The `contentHistory` for the live edit buffer starts from this saved state.
       const savedContent = fileNodeFromSystem.content || '';
-      const liveEditingHistory = [savedContent]; // Start history with the saved content
+      const liveEditingHistory = [savedContent]; 
       
       setOpenedFilesState(prev => new Map(prev).set(filePath, { 
         ...fileNodeFromSystem, 
@@ -243,7 +276,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     setActiveFilePathState(path);
   }, []);
 
-  // updateFileContent only updates the live buffer in openedFiles and its history
   const updateFileContent = useCallback((filePath: string, newContent: string) => {
     setOpenedFilesState(prevMap => {
       const newMap = new Map(prevMap);
@@ -278,7 +310,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         const updateNodeInFS = (nodes: FileSystemNode[]): FileSystemNode[] => {
             return nodes.map(node => {
                 if (node.path === filePath && node.type === 'file') {
-                    // Persist the content. The history for the saved state is just this content.
                     return { 
                         ...node, 
                         content: contentToSave, 
@@ -294,8 +325,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         };
         return updateNodeInFS(prevFs);
     });
-    // No need to update openedFiles' history here; its history is for live edits.
-    // The unsaved indicator will naturally clear because fileSystem[path].content now matches openedFiles[path].content.
   }, []);
 
 
@@ -363,7 +392,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
           extension = baseName.substring(lastDotIndex); 
           baseName = baseName.substring(0, lastDotIndex); 
         } else if (lastDotIndex === -1 && baseName !== "") {
-            // extension = defaultExtension; // Let's not add default extension if not provided
+            // extension = defaultExtension; 
         }
       }
       let finalName = type === 'file' ? (baseName.startsWith('.') ? baseName : baseName + extension) : baseName;
@@ -378,7 +407,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
       let tempFinalName = finalName;
       while (nameExists(tempFinalName)) { 
         if (type === 'file') {
-            if (baseName.startsWith('.')) { // for hidden files like .env
+            if (baseName.startsWith('.')) { 
                 tempFinalName = `${baseName}(${counter})`;
             } else {
                 tempFinalName = `${baseName}(${counter})${extension}`;
@@ -402,7 +431,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         content: initialContent
       };
       if (type === 'file') {
-        // New file in fileSystem gets initial saved history
         addedNodeInstance.contentHistory = [initialContent || ''];
         addedNodeInstance.historyIndex = 0;
       }
@@ -457,8 +485,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             const childName = child.path.substring(child.path.lastIndexOf('/') + 1);
             child.path = (newParentPathForChildren === '/' ? '' : newParentPathForChildren) + '/' + childName;
             if (child.path.startsWith('//')) child.path = child.path.substring(1);
-            // The contentHistory and historyIndex for children nodes in fileSystem are for their saved state,
-            // which doesn't change just because a parent folder is renamed.
             updateChildrenPathsRecursive(child, _oldParentPath + '/' + childName, child.path);
           });
         }
@@ -474,7 +500,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             node.path = (parentPathSegment === '' || parentPathSegment === '/' ? '' : parentPathSegment) + '/' + cleanNewNameInput;
             if (node.path.startsWith('//')) node.path = node.path.substring(1);
             newPath = node.path;
-            // content, contentHistory, historyIndex of the renamed node (in fileSystem) refer to its *saved* state, which doesn't change on rename.
             if (node.type === 'folder' && node.children) { updateChildrenPathsRecursive(node, oldPath, newPath); }
             success = true; return true; 
           }
@@ -492,7 +517,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         const newOpenedMap = new Map<string, FileSystemNode>(); let newActiveFilePath = activeFilePath;
         prevOpened.forEach((openedNodeValue, openedNodeKey) => {
           if (openedNodeKey === oldPath) { 
-            // When renaming a file that's open, its live editing history and content are preserved under the new path.
             const updatedNode = { ...openedNodeValue, name: cleanNewNameInput, path: newPath }; 
             newOpenedMap.set(newPath, updatedNode); 
             if (activeFilePath === oldPath) newActiveFilePath = newPath;
@@ -609,7 +633,6 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             const nodeName = nodeToUpdate.name; 
             nodeToUpdate.path = (newPathPrefix === '/' || newPathPrefix === '' ? '' : newPathPrefix) + '/' + nodeName;
             if (nodeToUpdate.path.startsWith('//')) nodeToUpdate.path = nodeToUpdate.path.substring(1);
-            // contentHistory/historyIndex of moved node (in fileSystem) are for its *saved* state, which is preserved.
             if (nodeToUpdate.type === 'folder' && nodeToUpdate.children) {
                 nodeToUpdate.children.forEach(child => updatePathsRecursive(child, nodeToUpdate.path));
             }
@@ -634,19 +657,16 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
             prevOpened.forEach((openedNodeValue, openedNodeKey) => {
                 if (movedNodeReference?.type === 'file' && openedNodeKey === oldPathForDraggedNode) {
-                    // If the moved file was open, update its path and name in openedFiles, preserving its live history.
                     const updatedOpenedFile = { ...openedNodeValue, path: newPathForDraggedNode, name: movedNodeReference.name };
                     newOpenedMap.set(newPathForDraggedNode, updatedOpenedFile);
                     if (activeFilePath === oldPathForDraggedNode) newActiveFilePathStateCandidate = newPathForDraggedNode;
                 } else if (movedNodeReference?.type === 'folder' && openedNodeKey.startsWith(oldPathForDraggedNode + '/')) {
-                    // If files within the moved folder were open, update their paths, preserving their live history.
                     const relativePath = openedNodeKey.substring(oldPathForDraggedNode.length);
                     const newChildPath = newPathForDraggedNode + relativePath;
                     const updatedOpenedFile = { ...openedNodeValue, path: newChildPath };
                     newOpenedMap.set(newChildPath, updatedOpenedFile);
                     if (activeFilePath === openedNodeKey) newActiveFilePathStateCandidate = newChildPath;
                 } else {
-                    // Keep other opened files as they are.
                     newOpenedMap.set(openedNodeKey, openedNodeValue);
                 }
             });
@@ -661,16 +681,18 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
   const contextValue = useMemo(() => ({
     fileSystem, openedFiles, activeFilePath, setActiveFilePath, openFile, closeFile, 
-    updateFileContent, saveFile, // Added saveFile
+    updateFileContent, saveFile, 
     getFileSystemNode, addNode, deleteNode, renameNode, moveNode, replaceWorkspace,
     isBusy, nodeToAutoRenameId, setNodeToAutoRenameId,
     undoContentChange, redoContentChange,
+    accentColor, setAccentColor, // Added accent color state and setter
   }), [
     fileSystem, openedFiles, activeFilePath, setActiveFilePath, openFile, closeFile, 
-    updateFileContent, saveFile, // Added saveFile
+    updateFileContent, saveFile, 
     getFileSystemNode, addNode, deleteNode, renameNode, moveNode, replaceWorkspace,
     isBusy, nodeToAutoRenameId, setNodeToAutoRenameId,
     undoContentChange, redoContentChange,
+    accentColor, setAccentColor, // Added accent color state and setter
   ]);
 
   return <IdeContext.Provider value={contextValue}>{children}</IdeContext.Provider>;

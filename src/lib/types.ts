@@ -24,13 +24,23 @@ export interface GenerateCodeInput {
   currentFilePath?: string;
   currentFileContent?: string;
   attachedFiles?: AttachedFileContext[]; // Updated to array
+  fileSystemTree?: string; // Added for contextual enrichment
+  chatHistory?: Array<{role: 'user' | 'assistant', content: string}>; // Added for chat history
 }
 
 export interface GenerateCodeOutput {
   code: string;
   isNewFile: boolean;
   suggestedFileName?: string;
-  targetPath?: string; 
+  targetPath?: string;
+  explanation?: string; // Added for better explanations
+  fileOperation?: { // Added for AI to suggest file operations
+    type: 'create' | 'delete' | 'rename' | 'none';
+    targetPath?: string; // e.g., parent directory for create, or file to delete/rename
+    newName?: string; // For rename or suggested name for create
+    fileType?: 'file' | 'folder'; // Added to specify type for creation
+    reasoning?: string; // Why this operation is suggested
+  };
 }
 
 
@@ -40,6 +50,7 @@ export interface FileOperationSuggestion {
   targetPath?: string;
   newName?: string;
   confidence: number;
+  fileType?: 'file' | 'folder';
 }
 
 export interface AlternativeOption {
@@ -99,6 +110,7 @@ export interface FileOperationExecutionData {
   requiresConfirmation: boolean;
   confirmationMessage?: string;
   executionTime?: number;
+  fileType?: 'file' | 'folder';
 }
 
 export interface TerminalCommandExecutionData {
@@ -277,6 +289,8 @@ export interface IdeState {
   setNodeToAutoRenameId: (id: string | null) => void;
   undoContentChange: (filePath: string) => void;
   redoContentChange: (filePath: string) => void;
+  accentColor: string; // HSL string, e.g., "270 70% 55%"
+  setAccentColor: (color: string) => void;
 }
 
 // Add other shared types here
