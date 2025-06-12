@@ -26,9 +26,7 @@ type ProcessingStep = 'idle' | 'confirmUnsupported' | 'confirmOverwrite' | 'conf
 const ACCENT_COLOR_PALETTE = [
   { name: 'Default Purple', value: '270 70% 55%', cssColor: 'hsl(270, 70%, 55%)' },
   { name: 'Vibrant Blue', value: '210 70% 55%', cssColor: 'hsl(210, 70%, 55%)' },
-  // { name: 'Forest Green', value: '145 60% 45%', cssColor: 'hsl(145, 60%, 45%)' }, // Removed
   { name: 'Sunset Orange', value: '30 80% 55%', cssColor: 'hsl(30, 80%, 55%)' },
-  // { name: 'Ruby Red', value: '0 70% 50%', cssColor: 'hsl(0, 70%, 50%)' }, // Removed
   { name: 'Hot Pink', value: '330 80% 60%', cssColor: 'hsl(330, 80%, 60%)' },
   { name: 'Teal Aqua', value: '180 60% 45%', cssColor: 'hsl(180, 60%, 45%)' },
 ];
@@ -143,7 +141,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
   const handleAccentColorChange = (newColorHsl: string) => {
     setAccentColor(newColorHsl);
-    toast({ title: "Accent Color Updated", description: "The UI accent color has been changed." });
+    // Removed toast for accent color change
   };
 
   return (
@@ -159,7 +157,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-grow pr-2 -mr-2"> {/* Added ScrollArea for content */}
+        <ScrollArea className="flex-grow pr-2 -mr-2"> 
           <div className="space-y-6 py-1">
             {/* Accent Color Section */}
             <section>
@@ -175,7 +173,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                       variant="outline"
                       size="icon"
                       className={cn(
-                        "h-10 w-10 rounded-full border-2 transition-all duration-150 ease-in-out", // Changed to rounded-full
+                        "h-10 w-10 rounded-full border-2 transition-all duration-150 ease-in-out", 
                         accentColor === color.value 
                           ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground dark:ring-background'
                           : 'hover:scale-110'
