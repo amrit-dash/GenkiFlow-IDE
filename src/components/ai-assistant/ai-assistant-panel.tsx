@@ -597,9 +597,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       } else if (lowerCasePrompt.includes("delete") || lowerCasePrompt.includes("remove")) {
         let fileToDelete = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
         
-        // Attempt to find a file/folder based on prompt keywords if no attachment/active file
         if (!fileToDelete) {
-            const potentialTargetName = currentPromptValue.split(" ").pop(); // crude
+            const potentialTargetName = currentPromptValue.split(" ").pop(); 
             if (potentialTargetName) {
                 const foundNode = findNodeByPath(potentialTargetName) || findNodeByPath(`/${potentialTargetName}`);
                 if (foundNode) fileToDelete = foundNode.path;
@@ -646,7 +645,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           const nodeToRename = getFileSystemNode(itemToRename);
           const currentItemTypeForSuggestion = nodeToRename && !Array.isArray(nodeToRename) ? nodeToRename.type : 'file';
 
-          if (newName) { // User provided a new name
+          if (newName) { 
             const result = await handleFileOperation('rename', { targetPath: itemToRename, newName });
             aiResponse = {
               id: generateId(),
@@ -662,7 +661,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 requiresConfirmation: false,
               }
             };
-          } else { // AI needs to suggest a name
+          } else { 
             try {
               const itemNode = getFileSystemNode(itemToRename);
               const itemContent = itemNode && !Array.isArray(itemNode) && itemNode.type === 'file' ? (itemNode.content || '') : `This is a ${currentItemTypeForSuggestion}. User wants to rename it based on context: ${currentPromptValue}`;
@@ -670,9 +669,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
               
               const suggestionResult = await suggestFilenameServer({
-                fileContent: itemContent, // For folders, this might be context or empty
+                fileContent: itemContent, 
                 currentFileName: currentItemNameForSuggestion,
-                fileType: currentItemTypeForSuggestion, // Pass file or folder type
+                fileType: currentItemTypeForSuggestion, 
                 context: currentPromptValue,
                 projectStructure: fileSystemTree,
               });
@@ -1035,7 +1034,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     context += `Total direct items: ${folderNode.children.length}\n\n`;
     
     context += "Direct Children:\n";
-    folderNode.children.slice(0, 10).forEach(child => { // Limit to first 10 direct children for brevity
+    folderNode.children.slice(0, 10).forEach(child => { 
         context += `- ${child.name} (${child.type})\n`;
     });
     if (folderNode.children.length > 10) {
@@ -1412,20 +1411,20 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   };
 
   const getFileOrFolderIcon = (label: string, itemType?: 'file' | 'folder') => {
-    if (itemType === 'folder' || label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-primary" />;
-    return <FileText className="inline h-4 w-4 mr-1 text-primary" />;
+    if (itemType === 'folder' || label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-primary shrink-0" />;
+    return <FileText className="inline h-4 w-4 mr-1 text-primary shrink-0" />;
   };
   
   const getDisplayName = (label: string, itemType?: 'file' | 'folder') => {
     let name = label;
     if (itemType === 'folder' || label.endsWith('/')) {
-      name = label.slice(0, -1); // Remove trailing slash for folders
+      name = label.slice(0, -1); 
     }
-    return name.split('/').pop() || name; // Get last part of path
+    return name.split('/').pop() || name; 
   };
 
   const cleanFolderName = (name: string): string => {
-    let base = name.split('.')[0]; // Remove extension if any
+    let base = name.split('.')[0]; 
     base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
     return base.charAt(0).toUpperCase() + base.slice(1);
   };
@@ -1900,39 +1899,38 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             <p className="whitespace-pre-wrap">{msg.content}</p>
                             <Card className={cn("border-2", msg.fileOperationData.success ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800")}>
                                 <CardContent className="p-3">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        {msg.fileOperationData.success ? <Check className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-                                        <span className="text-sm font-medium capitalize">
-                                            {msg.fileOperationData.operation} Operation
-                                        </span>
-                                        
+                                    <div className="flex items-start gap-2 mb-2">
+                                        {msg.fileOperationData.success ? <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" /> : <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />}
+                                        <div className="flex-grow">
+                                          <span className="text-sm font-medium capitalize">
+                                              {msg.fileOperationData.operation} Operation
+                                          </span>
+                                          {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mt-0.5"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
+                                          {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mt-0.5"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
+                                        </div>
                                         {msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && (
-                                          <div className="ml-auto">
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                                onClick={() => {
-                                                    const recentOp = undoStack.find(op => 
-                                                        op.type === 'rename' && 
-                                                        op.data.newPath === msg.fileOperationData?.targetPath && 
-                                                        op.data.originalName === msg.fileOperationData?.newName
-                                                    );
-                                                    if (recentOp) { 
-                                                        executeUndo(recentOp); 
-                                                        setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
-                                                    } else { 
-                                                        toast({title: "Undo Failed", description: "Could not find matching rename operation to undo. Check console for details.", variant: "destructive"}); 
-                                                        console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
-                                                    }
-                                                }}
-                                                title={`Undo rename to ${msg.fileOperationData.newName}`}
-                                            >
-                                                <Undo2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                          </div>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
+                                              onClick={() => {
+                                                  const recentOp = undoStack.find(op => 
+                                                      op.type === 'rename' && 
+                                                      op.data.newPath === msg.fileOperationData?.targetPath && 
+                                                      op.data.originalName === msg.fileOperationData?.newName 
+                                                  );
+                                                  if (recentOp) { 
+                                                      executeUndo(recentOp); 
+                                                      setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
+                                                  } else { 
+                                                      toast({title: "Undo Failed", description: "Could not find matching rename operation. Check console.", variant: "destructive"}); 
+                                                      console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
+                                                  }
+                                              }}
+                                              title={`Undo rename to ${msg.fileOperationData.newName}`}
+                                          >
+                                              <Undo2 className="h-3.5 w-3.5" />
+                                          </Button>
                                         )}
                                     </div>
                                     
-                                    {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mb-1"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
-                                    {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mb-1"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
                                     {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
 
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
@@ -2151,23 +2149,23 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                     <div key={idx} className="relative flex items-center justify-between p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <div className="flex-1 truncate">
+                                          <div className="flex-1 truncate min-w-0"> {/* Added min-w-0 for proper truncation in flex */}
                                             <div className="flex items-center gap-2">
                                                 <span className="font-mono text-sm font-medium truncate" title={suggestion.filename}>
                                                   {displayName}
                                                 </span>
-                                              <span className={cn("text-xs px-2 py-1 rounded", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
-                                                {Math.round(suggestion.confidence * 100)}%
-                                              </span>
                                             </div>
-                                            <div className="text-xs text-muted-foreground mt-1 capitalize truncate" title={suggestion.reasoning}>
-                                              {suggestion.category}: {suggestion.reasoning}
+                                            <div className="text-xs text-muted-foreground mt-1 capitalize flex items-center">
+                                                <span>{suggestion.category.charAt(0).toUpperCase() + suggestion.category.slice(1)} Suggestion</span>
+                                                <span className="ml-2 text-primary/80">({Math.round(suggestion.confidence * 100)}%)</span>
                                             </div>
                                           </div>
                                         </TooltipTrigger>
                                         <TooltipContent side="top" align="start">
                                           <p>Full suggested name: {suggestion.filename}</p>
-                                          <p>Reason: {suggestion.reasoning}</p>
+                                          <p>Category: {suggestion.category}</p>
+                                          <p>Confidence: {Math.round(suggestion.confidence * 100)}%</p>
+                                          <p>Detailed Reason: {suggestion.reasoning}</p>
                                         </TooltipContent>
                                       </Tooltip>
                                       <button
@@ -2177,7 +2175,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
                                         disabled={isLoading || (anyApplied && !isApplied)}
                                         onClick={async () => {
-                                          if (msg.filenameSuggestionData?.targetPath) {
+                                          if (msg.filenameSuggestionData?.targetPath && !(anyApplied && !isApplied)) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
                                               const nameToApply = msg.filenameSuggestionData.itemType === 'folder' 
@@ -2193,7 +2191,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                   title: "Item Renamed",
                                                   description: `Successfully renamed to \"${nameToApply}\"`,
                                                 });
-                                                // Mark all suggestions for this message as applied
+                                                
                                                 setActionAppliedStates(prev => {
                                                   const newState = { ...prev };
                                                   Object.keys(newState).forEach(k => {
@@ -2201,7 +2199,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                   });
                                                   return newState;
                                                 });
-                                                // Add a follow-up message confirming the rename
+                                               
                                                 setChatHistory(prevHistory => [
                                                   ...prevHistory,
                                                   {
@@ -2280,8 +2278,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               <div className="grid grid-cols-2 gap-2">
                 {attachedFiles.map(file => (
                   <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1 py-0.5 rounded-md">
-                    <div className="flex items-center gap-1.5 text-muted-foreground truncate">
-                      {file.type === 'folder' ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-primary" /> }
+                    <div className="flex items-center gap-1.5 text-muted-foreground truncate min-w-0"> {/* Added min-w-0 */}
+                      <span className="shrink-0">{getFileOrFolderIcon(file.name, file.type)}</span>
                       <span className="truncate" title={file.path}>{file.name}</span>
                     </div>
                     <Button
@@ -2338,9 +2336,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 key={item.value}
                                 value={item.value}
                                 onSelect={() => handleFileSelect(item.path, item.type)}
-                                className="text-xs cursor-pointer"
+                                className="text-xs cursor-pointer flex items-center" 
                               >
-                                <span className="shrink-0">{getFileOrFolderIcon(item.label, item.type)}</span>
+                                <span className="shrink-0 mr-2">{getFileOrFolderIcon(item.label, item.type)}</span>
                                 <span className="flex-1 truncate min-w-0">{getDisplayName(item.label, item.type)}</span>
                               </CommandItem>
                             ))}
@@ -2418,6 +2416,3 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </TooltipProvider>
   );
 }
-
-
-    

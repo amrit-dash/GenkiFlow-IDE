@@ -48,29 +48,25 @@ export const filenameSuggester = ai.defineTool(
     const currentName = input.currentFileName;
     const fileType = input.fileType || 'file';
     
-    // Deep analyze the file content
-    const analysis = analyzeFileContentDeep(content, fileType);
+    const analysis = analyzeFileContentDeep(content, fileType, currentName);
     
-    // Generate exactly 3 intelligent, non-repetitive suggestions
-    let suggestions = generateIntelligentSuggestions(content, analysis, fileType, currentName, input.context);
+    let suggestions = generateIntelligentSuggestions(analysis, fileType, input.context);
     
     return {
-      suggestions: suggestions.slice(0, 3), // Ensure exactly 3 suggestions
+      suggestions: suggestions.slice(0, 3), 
       analysis,
     };
   }
 );
 
-// Helper to clean and capitalize folder names
 function cleanFolderName(name: string): string {
-  let base = name.split('.')[0]; // Remove any extension
-  // Capitalize first letter and ensure camelCase or PascalCase for multi-word names
+  let base = name.split('.')[0]; 
   base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
+  if (!base) return "NewFolder";
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-// Enhanced analysis function that deeply understands code structure
-function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder') {
+function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder', currentFileName?: string) {
   const lowerContent = content.toLowerCase();
   
   let detectedLanguage = 'Text';
@@ -78,13 +74,59 @@ function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder') {
 
   if (fileType === 'folder') {
     detectedLanguage = 'Folder';
-    suggestedExtension = ''; // No extension for folders
+    suggestedExtension = '';
   } else {
-    // Language and extension detection for files
-    if (content.includes('def ') && (content.includes('print(') || content.includes('import ') || content.includes('return')) && !lowerContent.includes('<script') && !lowerContent.includes('function')) {
+    let extFromCurrentName = '';
+    if (currentFileName && currentFileName.includes('.')) {
+        const parts = currentFileName.split('.');
+        if (parts.length > 1 && parts[0] !== "") {
+            extFromCurrentName = '.' + parts.pop();
+        } else if (parts.length === 1 && parts[0].startsWith('.')) {
+            // Dotfile like .env, no specific extension part to pop
+        }
+    }
+
+    if (extFromCurrentName === '.gs') {
+        detectedLanguage = 'Google Apps Script';
+        suggestedExtension = '.gs';
+    } else if (extFromCurrentName === '.js' || extFromCurrentName === '.jsx' || extFromCurrentName === '.ts' || extFromCurrentName === '.tsx') {
+        if (content.includes('React') || extFromCurrentName === '.jsx' || extFromCurrentName === '.tsx' || /return\s*\([\s\S]*</.test(content)) {
+            detectedLanguage = (extFromCurrentName === '.tsx' || content.includes('interface ') || content.includes(': string') || content.includes('type ')) ? 'TypeScript (React)' : 'JavaScript (React)';
+            suggestedExtension = (extFromCurrentName === '.tsx' || detectedLanguage.includes('TypeScript')) ? '.tsx' : '.jsx';
+        } else if (extFromCurrentName === '.ts' || content.includes('interface ') || content.includes('type ') || content.includes(': string') || content.includes(': number')) {
+            detectedLanguage = 'TypeScript';
+            suggestedExtension = '.ts';
+        } else {
+            detectedLanguage = 'JavaScript';
+            suggestedExtension = extFromCurrentName || '.js';
+        }
+    } else if (extFromCurrentName === '.py') {
+        detectedLanguage = 'Python';
+        suggestedExtension = '.py';
+    } else if (extFromCurrentName === '.java') {
+        detectedLanguage = 'Java';
+        suggestedExtension = '.java';
+    } else if (extFromCurrentName === '.cpp' || extFromCurrentName === '.cxx' || extFromCurrentName === '.h' || extFromCurrentName === '.hpp') {
+        detectedLanguage = 'C++';
+        suggestedExtension = extFromCurrentName || '.cpp';
+    } else if (extFromCurrentName === '.html' || extFromCurrentName === '.htm') {
+        detectedLanguage = 'HTML';
+        suggestedExtension = extFromCurrentName || '.html';
+    } else if (extFromCurrentName === '.css') {
+        detectedLanguage = 'CSS';
+        suggestedExtension = '.css';
+    } else if (extFromCurrentName === '.json') {
+        detectedLanguage = 'JSON';
+        suggestedExtension = '.json';
+    } else if (extFromCurrentName === '.md' || extFromCurrentName === '.markdown') {
+        detectedLanguage = 'Markdown';
+        suggestedExtension = extFromCurrentName || '.md';
+    }
+    // Fallback content-based detection if extension didn't give a clear signal or was missing
+    else if (content.includes('def ') && (content.includes('import ') || content.includes('return')) && !lowerContent.includes('<script') && !lowerContent.includes('function')) {
       detectedLanguage = 'Python';
       suggestedExtension = '.py';
-    } else if (content.includes('function') || content.includes('const ') || content.includes('let ') || content.includes('=>') || content.includes('class ') && (content.includes('React') || content.includes('render()'))) {
+    } else if (content.includes('function') || content.includes('const ') || content.includes('let ') || content.includes('=>') || content.includes('class ')) {
       if (content.includes('React') || content.includes('jsx') || content.includes('tsx') || /return\s*\([\s\S]*</.test(content)) {
         detectedLanguage = content.includes('interface ') || content.includes(': string') || content.includes('type ') ? 'TypeScript (React)' : 'JavaScript (React)';
         suggestedExtension = detectedLanguage.includes('TypeScript') ? '.tsx' : '.jsx';
@@ -93,7 +135,7 @@ function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder') {
         suggestedExtension = '.ts';
       } else {
         detectedLanguage = 'JavaScript';
-        suggestedExtension = '.js';
+        suggestedExtension = '.js'; // Default for JS-like content if no better ext found
       }
     } else if (content.includes('#include') || content.includes('std::') || content.includes('int main')) {
       detectedLanguage = 'C++';
@@ -104,10 +146,10 @@ function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder') {
     } else if (lowerContent.includes('<html>') || lowerContent.includes('<body>')) {
       detectedLanguage = 'HTML';
       suggestedExtension = '.html';
-    } else if (lowerContent.match(/[\.#\w-]+\s*\{[\s\S]*\}/)) { // Basic CSS pattern
+    } else if (lowerContent.match(/[\.#\w-]+\s*\{[\s\S]*\}/)) { 
       detectedLanguage = 'CSS';
       suggestedExtension = '.css';
-    } else if (lowerContent.startsWith('{') && lowerContent.endsWith('}') || lowerContent.startsWith('[') && lowerContent.endsWith(']')) {
+    } else if ((lowerContent.startsWith('{') && lowerContent.endsWith('}')) || (lowerContent.startsWith('[') && lowerContent.endsWith(']'))) {
         try { JSON.parse(content); detectedLanguage = 'JSON'; suggestedExtension = '.json'; } catch (e) { /* not JSON */ }
     } else if (lowerContent.includes('---') && (lowerContent.includes('layout:') || lowerContent.includes('title:'))) {
         detectedLanguage = 'Markdown (Frontmatter)';
@@ -159,20 +201,20 @@ function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder') {
 function hasMultipleMathFunctions(content: string): boolean {
   const mathPatterns = [
     /\b(sum|add|subtract|multiply|divide|calculate|compute|average|mean|median|total|product|power|sqrt|abs|round|floor|ceil|min|max)\b/gi,
-    /\b(Math\.\w+)\b/g, // Math.sqrt, Math.pow etc.
+    /\b(Math\.\w+)\b/g, 
   ];
   let count = 0;
   mathPatterns.forEach(pattern => {
     count += (content.match(pattern) || []).length;
   });
-  return count > 2; // At least 3 math-related terms or functions
+  return count > 2; 
 }
 
 function hasDataProcessingPatterns(content: string): boolean {
   const dataPatterns = [
     /\b(filter|map|reduce|sort|find|forEach|some|every|group|transform|process|parse|extract|load|save)\b/gi,
     /\b(data|array|list|object|collection|item|record|entry|json|csv|xml)\b/gi,
-    /\.(forEach|filter|map|reduce|sort|find)\b/g, // Array methods
+    /\.(forEach|filter|map|reduce|sort|find)\b/g, 
   ];
   let count = 0;
   dataPatterns.forEach(pattern => {
@@ -190,16 +232,15 @@ function hasUtilityPatterns(content: string): boolean {
   utilPatterns.forEach(pattern => {
     count += (content.match(pattern) || []).length;
   });
-  // Needs multiple utility-like functions or exports
   return count > 2 && (content.match(/export\s+(function|const|let|var|class)/gi) || []).length > 1;
 }
 
 function hasApiPatterns(content: string): boolean {
   const apiPatterns = [
     /\b(fetch|axios|request|response|endpoint|http|https|url|api|client|query|mutation)\b/gi,
-    /\b(get|post|put|delete|patch)\s*\(/gi, // Common HTTP methods as functions
+    /\b(get|post|put|delete|patch)\s*\(/gi, 
     /\/api\//gi,
-    /\.(get|post|put|delete|patch)\s*\(/gi, // Chained methods like client.get()
+    /\.(get|post|put|delete|patch)\s*\(/gi, 
   ];
   let count = 0;
   apiPatterns.forEach(pattern => {
@@ -210,7 +251,7 @@ function hasApiPatterns(content: string): boolean {
 
 function hasMultipleFunctions(content: string, language: string): boolean {
   let functionCount = 0;
-  if (language.includes('JavaScript') || language.includes('TypeScript')) {
+  if (language.includes('JavaScript') || language.includes('TypeScript') || language.includes('Google Apps Script')) {
     functionCount = (content.match(/\b(function|=>|class\s+\w+\s*\{[\s\S]*constructor)\b/g) || []).length;
     functionCount += (content.match(/^(?:export\s+)?(?:async\s+)?(?:function\*?\s+\w+|const\s+\w+\s*=\s*(?:async\s+)?\(|class\s+\w+)/gm) || []).length;
   } else if (language === 'Python') {
@@ -224,17 +265,17 @@ function extractMeaningfulFunctions(content: string, language: string): string[]
   const uniqueFunctions = new Set<string>();
 
   const patterns: RegExp[] = [];
-  if (language.includes('JavaScript') || language.includes('TypeScript')) {
+  if (language.includes('JavaScript') || language.includes('TypeScript') || language.includes('Google Apps Script')) {
     patterns.push(
-      /(?:export\s+)?(?:async\s+)?function\*?\s+([a-zA-Z_][a-zA-Z0-9_]*)/g, // function foo / export function foo
-      /(?:export\s+)?const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:async\s+)?(?:\([^)]*\))?\s*=>/g, // const foo = () => / export const foo = async () =>
-      /(?:export\s+default\s+)?class\s+([A-Z][a-zA-Z0-9_]*)/g, // class Foo / export default class Foo
-      /(?:export\s+)?(?:abstract\s+)?class\s+([A-Z][a-zA-Z0-9_]*)/g // export class Foo / abstract class Foo
+      /(?:export\s+)?(?:async\s+)?function\*?\s+([a-zA-Z_][a-zA-Z0-9_]*)/g, 
+      /(?:export\s+)?const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:async\s+)?(?:\([^)]*\))?\s*=>/g, 
+      /(?:export\s+default\s+)?class\s+([A-Z][a-zA-Z0-9_]*)/g, 
+      /(?:export\s+)?(?:abstract\s+)?class\s+([A-Z][a-zA-Z0-9_]*)/g 
     );
   } else if (language === 'Python') {
     patterns.push(
-      /^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gm, // def foo(
-      /^\s*class\s+([A-Z][a-zA-Z0-9_]*)\s*[\(:]/gm // class Foo: / class Foo(
+      /^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gm, 
+      /^\s*class\s+([A-Z][a-zA-Z0-9_]*)\s*[\(:]/gm 
     );
   }
 
@@ -250,9 +291,9 @@ function extractMeaningfulFunctions(content: string, language: string): string[]
       const funcName = match[1];
       if (funcName && 
           funcName.length > 2 && 
-          funcName.length < 30 && // Avoid overly long names
+          funcName.length < 30 && 
           !genericNames.has(funcName.toLowerCase()) &&
-          !/^[A-Z_0-9]+$/.test(funcName) && // Avoid CONSTANTS
+          !/^[A-Z_0-9]+$/.test(funcName) && 
           !uniqueFunctions.has(funcName)) {
         functions.push(funcName);
         uniqueFunctions.add(funcName);
@@ -264,98 +305,88 @@ function extractMeaningfulFunctions(content: string, language: string): string[]
 }
 
 function getMeaningfulnessScore(name: string): number {
-  let score = name.length; // Longer names are often more descriptive
-  if (/[A-Z]/.test(name) && /[a-z]/.test(name)) score += 5; // Camel/PascalCase bonus
-  if (name.includes('_')) score += 3; // Snake_case bonus
+  let score = name.length; 
+  if (/[A-Z]/.test(name) && /[a-z]/.test(name)) score += 5; 
+  if (name.includes('_')) score += 3; 
   
-  // Penalize if it looks like a variable name (all caps or starts with lowercase and no clear verb)
-  if (/^[A-Z_0-9]+$/.test(name)) score -= 10; // Likely a constant
+  if (/^[A-Z_0-9]+$/.test(name)) score -= 10; 
   if (/^[a-z]/.test(name) && !/\b(get|set|is|has|handle|create|update|delete|calculate|process|validate|format|convert|parse|render|build|generate|fetch|load|save)\b/i.test(name)) {
-      score -= 5; // Might be a variable rather than function/class
+      score -= 5; 
   }
   return score;
 }
 
-function generateIntelligentSuggestions(content: string, analysis: any, fileType: 'file' | 'folder', currentName?: string, context?: string) {
+function generateIntelligentSuggestions(
+    analysis: ReturnType<typeof analyzeFileContentDeep>, 
+    fileType: 'file' | 'folder', 
+    context?: string
+) {
   const suggestions: Array<{filename: string, reasoning: string, confidence: number, category: 'descriptive' | 'conventional' | 'functional' | 'contextual'}> = [];
   const usedNames = new Set<string>();
 
-  const addSuggestion = (name: string, reason: string, conf: number, cat: 'descriptive' | 'conventional' | 'functional' | 'contextual') => {
-    if (name && !usedNames.has(name.toLowerCase()) && suggestions.length < 3) {
-      suggestions.push({ filename: name, reasoning: reason, confidence: Math.min(0.95, Math.max(0.1, conf)), category: cat });
-      usedNames.add(name.toLowerCase());
+  const addSuggestion = (baseNameInput: string, reason: string, conf: number, cat: 'descriptive' | 'conventional' | 'functional' | 'contextual') => {
+    if (!baseNameInput || baseNameInput.trim() === "") return;
+
+    let finalName = baseNameInput;
+    if (fileType === 'folder') {
+      finalName = cleanFolderName(baseNameInput);
+    } else {
+      // For files, ensure baseNameInput is just the base, then add extension
+      const baseWithoutAnyExtension = baseNameInput.split('.')[0];
+      finalName = baseWithoutAnyExtension + analysis.suggestedExtension;
+    }
+    
+    if (finalName && !usedNames.has(finalName.toLowerCase()) && suggestions.length < 3) {
+      suggestions.push({ filename: finalName, reasoning: reason, confidence: Math.min(0.95, Math.max(0.1, conf)), category: cat });
+      usedNames.add(finalName.toLowerCase());
     }
   };
   
-  let baseName = '';
-
-  // Strategy 1: Primary function/class/component name
   if (analysis.mainFunctions.length > 0) {
-    baseName = analysis.mainFunctions[0];
-    let suggestedName = fileType === 'folder' ? cleanFolderName(baseName) : `${baseName}${analysis.suggestedExtension}`;
-    addSuggestion(suggestedName, `Based on the primary entity: ${baseName}`, 0.9, 'functional');
+    addSuggestion(analysis.mainFunctions[0], `Based on the primary entity: ${analysis.mainFunctions[0]}`, 0.9, 'functional');
   }
 
-  // Strategy 2: Code type based conventional naming
   if (analysis.codeType !== 'general' && analysis.codeType !== 'folder') {
-    let conventional = '';
-    if (analysis.codeType === 'component') conventional = baseName || 'NewComponent';
-    else if (analysis.codeType === 'hook') conventional = baseName || 'useNewHook';
-    else if (analysis.codeType === 'utility') conventional = 'utils';
-    else if (analysis.codeType === 'service') conventional = baseName ? `${baseName}Service` : 'apiService';
-    else if (analysis.codeType === 'types') conventional = 'types';
-    else if (analysis.codeType === 'math-operations') conventional = 'mathUtils';
-    else if (analysis.codeType === 'data-processor') conventional = 'dataProcessor';
-    else if (analysis.codeType === 'functions-module') conventional = baseName ? `${baseName}Module` : 'helpers';
+    let conventionalBase = '';
+    if (analysis.codeType === 'component') conventionalBase = analysis.mainFunctions[0] || 'NewComponent';
+    else if (analysis.codeType === 'hook') conventionalBase = analysis.mainFunctions[0] || 'useNewHook';
+    else if (analysis.codeType === 'utility') conventionalBase = 'utils';
+    else if (analysis.codeType === 'service') conventionalBase = analysis.mainFunctions[0] ? `${analysis.mainFunctions[0]}Service` : 'apiService';
+    else if (analysis.codeType === 'types') conventionalBase = 'types';
+    else if (analysis.codeType === 'math-operations') conventionalBase = 'mathUtils';
+    else if (analysis.codeType === 'data-processor') conventionalBase = 'dataProcessor';
+    else if (analysis.codeType === 'functions-module') conventionalBase = analysis.mainFunctions[0] ? `${analysis.mainFunctions[0]}Module` : 'helpers';
 
-
-    if (conventional) {
-       let suggestedName = fileType === 'folder' ? cleanFolderName(conventional) : `${conventional}${analysis.suggestedExtension}`;
-       addSuggestion(suggestedName, `Conventional name for a ${analysis.codeType}`, 0.8, 'conventional');
+    if (conventionalBase) {
+       addSuggestion(conventionalBase, `Conventional name for a ${analysis.codeType}`, 0.8, 'conventional');
     }
   }
   
-  // Strategy 3: Context from user prompt if available
   if (context) {
-    const contextWords = context.toLowerCase().match(/\b\w{4,}\b/g) || []; // Meaningful words
+    const contextWords = context.toLowerCase().match(/\b\w{4,}\b/g) || []; 
     if (contextWords.length > 0) {
-      let contextBase = contextWords.slice(0,2).join('_'); // e.g. "create_user" from "create user profile"
-      contextBase = contextBase.replace(/[^a-zA-Z0-9_]/g, ''); // Sanitize
-      let suggestedName = fileType === 'folder' ? cleanFolderName(contextBase) : `${contextBase}${analysis.suggestedExtension}`;
-      addSuggestion(suggestedName, `Based on your instruction: "${context}"`, 0.75, 'contextual');
+      let contextBase = contextWords.slice(0,2).join('_'); 
+      contextBase = contextBase.replace(/[^a-zA-Z0-9_]/g, ''); 
+      addSuggestion(contextBase, `Based on your instruction: "${context}"`, 0.75, 'contextual');
     }
   }
 
-  // Strategy 4: Descriptive name if others are weak or missing
   if (suggestions.length < 2 && analysis.codeType !== 'general') {
-    let descriptiveBase = analysis.codeType.replace(/-/g, '_'); // e.g. "math_operations"
-    if (analysis.mainFunctions.length > 1) descriptiveBase += `_${analysis.mainFunctions[1]}`; // Add secondary function
-    descriptiveBase = descriptiveBase.slice(0, 30); // Limit length
-    let suggestedName = fileType === 'folder' ? cleanFolderName(descriptiveBase) : `${descriptiveBase}${analysis.suggestedExtension}`;
-    addSuggestion(suggestedName, `Descriptive name for ${analysis.codeType}`, 0.7, 'descriptive');
+    let descriptiveBase = analysis.codeType.replace(/-/g, '_'); 
+    if (analysis.mainFunctions.length > 1) descriptiveBase += `_${analysis.mainFunctions[1]}`;
+    descriptiveBase = descriptiveBase.slice(0, 30); 
+    addSuggestion(descriptiveBase, `Descriptive name for ${analysis.codeType}`, 0.7, 'descriptive');
   }
 
-  // Fallback suggestions
   const fallbacks = fileType === 'folder' 
-    ? ['NewUtilities', 'SharedLogic', 'MyModule']
-    : ['app', 'core', 'utils', 'index', 'script'];
+    ? ['CommonUtils', 'SharedComponents', 'CoreLogic'] // Changed to more descriptive PascalCase for folders
+    : ['app', 'core', 'utils', 'index', 'script', 'module', 'handler']; // Added more file fallbacks
   
   let fallbackIndex = 0;
   while (suggestions.length < 3 && fallbackIndex < fallbacks.length) {
     let fallbackBase = fallbacks[fallbackIndex++];
-    let suggestedName = fileType === 'folder' ? cleanFolderName(fallbackBase) : `${fallbackBase}${analysis.suggestedExtension}`;
-    addSuggestion(suggestedName, 'General purpose fallback name', 0.5 - (suggestions.length * 0.1), 'descriptive');
+    addSuggestion(fallbackBase, 'General purpose fallback name', 0.5 - (suggestions.length * 0.1), 'descriptive');
   }
   
-  // Ensure first letter is capitalized for folders if not already handled by cleanFolderName
-  if (fileType === 'folder') {
-    suggestions.forEach(sugg => {
-        if (sugg.filename.length > 0 && sugg.filename[0] === sugg.filename[0].toLowerCase()) {
-            sugg.filename = sugg.filename.charAt(0).toUpperCase() + sugg.filename.slice(1);
-        }
-    });
-  }
-
   return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 3);
 }
-
