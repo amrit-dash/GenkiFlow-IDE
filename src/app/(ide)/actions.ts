@@ -1,3 +1,4 @@
+
 "use server";
 
 import { 
@@ -61,24 +62,17 @@ function logDetailedError(actionName: string, error: any) {
   console.error(`--- END OF DETAILED SERVER ERROR in ${actionName} at ${timestamp} ---`);
 }
 
-// Updated to return only the base message for the client, detailed logging on server
 function formatErrorForClient(baseMessage: string, error: any): string {
-  logDetailedError("Client-facing error formatting", error); // Log detailed error on server
-  // Check if the error has a message property that might be more specific (e.g., from Genkit validation)
-  if (error && error.message && typeof error.message === 'string' && error.message.length < 200) { // Avoid overly long messages
-    // Check if error message already contains known patterns we don't want to expose directly.
+  logDetailedError("Client-facing error formatting", error); 
+  if (error && error.message && typeof error.message === 'string' && error.message.length < 200) { 
     if (error.message.includes("Model") && error.message.includes("not found")) {
-        return baseMessage; // Keep it generic
+        return baseMessage; 
     }
-    // If it's a Zod validation error from Genkit, it might start with "Input validation failed"
     if (error.message.startsWith("Input validation failed") || error.message.startsWith("Output validation failed")) {
-        // Could attempt to parse error.cause for Zod issues if client, but simple message is safer
         return `${baseMessage} There was an issue with the data format.`;
     }
-    // For other relatively short messages, it might be safe to append.
-    // return `${baseMessage} Details: ${error.message}`; // Potentially exposing too much
   }
-  return baseMessage; // Default to simple base message
+  return baseMessage; 
 }
 
 export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInput): Promise<SummarizeCodeSnippetOutput> {
@@ -86,7 +80,7 @@ export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInpu
     return await summarizeCodeSnippet(input);
   } catch (error: any) {
     logDetailedError("summarizeCodeSnippetServer", error);
-    throw new Error(formatErrorForClient("Failed to summarize. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to summarize. Please check console for details.", error));
   }
 }
 
@@ -95,7 +89,7 @@ export async function generateCodeServer(input: GenerateCodeInput): Promise<Gene
     return await generateCode(input);
   } catch (error: any) {
     logDetailedError("generateCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to generate code. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to generate code. Please check console for details.", error));
   }
 }
 
@@ -104,7 +98,7 @@ export async function refactorCodeServer(input: CodeRefactoringSuggestionsInput)
     return await codeRefactoringSuggestions(input);
   } catch (error: any) {
     logDetailedError("refactorCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to get refactoring suggestions. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to get refactoring suggestions. Please check console for details.", error));
   }
 }
 
@@ -113,7 +107,7 @@ export async function findExamplesServer(input: FindCodebaseExamplesInput): Prom
     return await findCodebaseExamples(input);
   } catch (error: any) {
     logDetailedError("findExamplesServer", error);
-    throw new Error(formatErrorForClient("Failed to find codebase examples. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to find codebase examples. Please check console for details.", error));
   }
 }
 
@@ -122,11 +116,10 @@ export async function enhancedGenerateCodeServer(input: EnhancedGenerateCodeInpu
     return await enhancedGenerateCode(input);
   } catch (error: any) {
     logDetailedError("enhancedGenerateCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to generate enhanced code. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to generate enhanced code. Please check console for details.", error));
   }
 }
 
-// New server actions for enhanced AI tools
 export async function validateCodeServer(input: { code: string; filePath: string; language?: string; projectContext?: string }) {
   try {
     const { errorValidation } = await import('@/ai/tools/error-validation');
@@ -138,7 +131,7 @@ export async function validateCodeServer(input: { code: string; filePath: string
     });
   } catch (error: any) {
     logDetailedError("validateCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to validate code. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to validate code. Please check console for details.", error));
   }
 }
 
@@ -162,7 +155,7 @@ export async function analyzeCodeUsageServer(input: {
     });
   } catch (error: any) {
     logDetailedError("analyzeCodeUsageServer", error);
-    throw new Error(formatErrorForClient("Failed to analyze code usage. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to analyze code usage. Please check console for details.", error));
   }
 }
 
@@ -186,11 +179,10 @@ export async function trackOperationProgressServer(input: {
     });
   } catch (error: any) {
     logDetailedError("trackOperationProgressServer", error);
-    throw new Error(formatErrorForClient("Failed to track operation progress. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to track operation progress. Please check console for details.", error));
   }
 }
 
-// File System Operations Server Actions
 export async function executeFileSystemOperationServer(input: {
   operation: 'create' | 'delete' | 'rename' | 'move';
   targetPath?: string;
@@ -213,7 +205,7 @@ export async function executeFileSystemOperationServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeFileSystemOperationServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file system operation. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to execute file system operation. Please check console for details.", error));
   }
 }
 
@@ -239,7 +231,7 @@ export async function executeFileSystemCommandServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeFileSystemCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file system command. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to execute file system command. Please check console for details.", error));
   }
 }
 
@@ -259,7 +251,7 @@ export async function executeTerminalCommandServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeTerminalCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute terminal command. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to execute terminal command. Please check console for details.", error));
   }
 }
 
@@ -291,11 +283,10 @@ export async function manageCodebaseDatasetServer(input: {
     });
   } catch (error: any) {
     logDetailedError("manageCodebaseDatasetServer", error);
-    throw new Error(formatErrorForClient("Failed to manage codebase dataset. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to manage codebase dataset. Please check console for details.", error));
   }
 }
 
-// Advanced Codebase Indexer with Smart Code Placement
 export async function smartCodePlacementServer(input: {
   operation: 'index' | 'retrieve' | 'evaluate' | 'analyze';
   fileSystemTree: string;
@@ -326,11 +317,10 @@ export async function smartCodePlacementServer(input: {
     });
   } catch (error: any) {
     logDetailedError("smartCodePlacementServer", error);
-    throw new Error(formatErrorForClient("Failed smart code placement. Check console.", error));
+    throw new Error(formatErrorForClient("Failed smart code placement. Please check console for details.", error));
   }
 }
 
-// Enhanced File Operations that can actually execute operations
 export async function executeActualFileOperationServer(input: {
   operation: 'create' | 'delete' | 'rename' | 'move' | 'list';
   targetPath?: string;
@@ -342,7 +332,6 @@ export async function executeActualFileOperationServer(input: {
   confirmed?: boolean;
 }) {
   try {
-    // First get the suggestion/validation from our executor
     const { fileSystemExecutor } = await import('@/ai/tools/file-system-executor');
     const result = await fileSystemExecutor({
       operation: input.operation,
@@ -354,7 +343,6 @@ export async function executeActualFileOperationServer(input: {
       currentFileSystemTree: input.fileSystemTree,
     });
 
-    // Return the result with execution capability
     return {
       ...result,
       canExecute: result.success,
@@ -370,11 +358,10 @@ export async function executeActualFileOperationServer(input: {
     };
   } catch (error: any) {
     logDetailedError("executeActualFileOperationServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file operation. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to execute file operation. Please check console for details.", error));
   }
 }
 
-// Enhanced Terminal Operations
 export async function executeActualTerminalCommandServer(input: {
   command: string;
   context: string;
@@ -391,7 +378,6 @@ export async function executeActualTerminalCommandServer(input: {
       isBackground: input.isBackground ?? false,
     });
 
-    // Return enhanced result with execution capability
     return {
       ...result,
       canExecute: true,
@@ -407,15 +393,14 @@ export async function executeActualTerminalCommandServer(input: {
     };
   } catch (error: any) {
     logDetailedError("executeActualTerminalCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute terminal command. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to execute terminal command. Please check console for details.", error));
   }
 }
 
-// AI-Powered Filename Suggestion
 export async function suggestFilenameServer(input: {
   fileContent: string;
   currentFileName?: string;
-  fileType: 'file' | 'folder'; // Added fileType here
+  fileType: 'file' | 'folder'; 
   context?: string;
   projectStructure?: string;
 }) {
@@ -424,53 +409,27 @@ export async function suggestFilenameServer(input: {
     const result = await filenameSuggester({
       fileContent: input.fileContent,
       currentFileName: input.currentFileName,
-      fileType: input.fileType, // Pass fileType to the tool
+      fileType: input.fileType, 
       context: input.context,
       projectStructure: input.projectStructure,
     });
     
-    let suggestions = result.suggestions;
-    if (input.fileType === 'file') {
-        // Ensure all suggestions use the original extension for files if provided
-        let originalExt = '';
-        if (input.currentFileName && input.currentFileName.includes('.')) {
-          originalExt = '.' + input.currentFileName.split('.');
-        } else if (result.analysis.suggestedExtension) { // Fallback to AI suggested extension
-          originalExt = result.analysis.suggestedExtension;
-        }
-
-        if (originalExt) {
-            suggestions = result.suggestions.map(s => {
-                if (!s.filename.endsWith(originalExt)) {
-                    const base = s.filename.replace(/\.[^.]+$/, '');
-                    return { ...s, filename: base + originalExt };
-                }
-                return s;
-            });
-        }
-    } else { // For folders, ensure no extensions and proper capitalization
-        suggestions = result.suggestions.map(s => {
-            let base = s.filename.split('.')[0];
-            base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
-            return { ...s, filename: base.charAt(0).toUpperCase() + base.slice(1) };
-        });
-    }
-
-
+    // The filenameSuggester tool is now responsible for correct extensions and filtering.
+    // No need to modify suggestions here.
+    
     return {
       success: true,
-      suggestions,
+      suggestions: result.suggestions, // Use suggestions directly from the tool
       analysis: result.analysis,
-      topSuggestion: suggestions[0] || null,
-      itemType: input.fileType, // Pass back the itemType for UI to handle
+      topSuggestion: result.suggestions[0] || null,
+      itemType: input.fileType, 
     };
   } catch (error: any) {
     logDetailedError("suggestFilenameServer", error);
-    throw new Error(formatErrorForClient("Failed to generate filename suggestions. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to generate filename suggestions. Please check console for details.", error));
   }
 }
 
-// Smart Content Insertion
 export async function smartContentInsertionServer(input: {
   existingContent: string;
   newContent: string;
@@ -496,11 +455,10 @@ export async function smartContentInsertionServer(input: {
     };
   } catch (error: any) {
     logDetailedError("smartContentInsertionServer", error);
-    throw new Error(formatErrorForClient("Failed smart content insertion. Check console.", error));
+    throw new Error(formatErrorForClient("Failed smart content insertion. Please check console for details.", error));
   }
 }
 
-// Intelligent Code Merger - Advanced content merging with AI analysis
 export async function intelligentCodeMergerServer(input: {
   existingContent: string;
   generatedContent: string;
@@ -531,11 +489,10 @@ export async function intelligentCodeMergerServer(input: {
     };
   } catch (error: any) {
     logDetailedError("intelligentCodeMergerServer", error);
-    throw new Error(formatErrorForClient("Failed intelligent code merging. Check console.", error));
+    throw new Error(formatErrorForClient("Failed intelligent code merging. Please check console for details.", error));
   }
 }
 
-// File Context Analyzer - Analyzes file content to understand purpose and suitability
 export async function fileContextAnalyzerServer(input: {
   filePath: string;
   fileContent: string;
@@ -563,11 +520,10 @@ export async function fileContextAnalyzerServer(input: {
     };
   } catch (error: any) {
     logDetailedError("fileContextAnalyzerServer", error);
-    throw new Error(formatErrorForClient("Failed to analyze file context. Check console.", error));
+    throw new Error(formatErrorForClient("Failed to analyze file context. Please check console for details.", error));
   }
 }
 
-// Smart Folder Operations - Intelligent folder operations with context awareness
 export async function smartFolderOperationsServer(input: {
   operation: 'move' | 'rename' | 'delete' | 'analyze';
   targetPath: string;
@@ -608,6 +564,7 @@ export async function smartFolderOperationsServer(input: {
     };
   } catch (error: any) {
     logDetailedError("smartFolderOperationsServer", error);
-    throw new Error(formatErrorForClient("Failed smart folder operations. Check console.", error));
+    throw new Error(formatErrorForClient("Failed smart folder operations. Please check console for details.", error));
   }
 }
+

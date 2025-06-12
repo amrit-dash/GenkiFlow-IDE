@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, MessageSquarePlus, FileText, Wand2, SearchCode, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen, Cpu } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, MessageSquarePlus, FileText, Wand2, SearchCode, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen, Cpu, CheckCircle2 } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer, intelligentCodeMergerServer, smartFolderOperationsServer } from '@/app/(ide)/actions';
 import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
-import type { AiSuggestion, ChatMessage, FileSystemNode } from '@/lib/types';
+import type { AiSuggestion, ChatMessage, FileSystemNode, FilenameSuggestionData as FilenameSuggestionDataTypeFromTypes } from '@/lib/types'; // Renamed to avoid conflict
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -45,6 +45,12 @@ interface ConfirmationDialogData {
   operation: () => void;
   isDangerous?: boolean;
 }
+
+// Explicitly type FilenameSuggestionData here if it's different or more specific than the one from lib/types
+interface FilenameSuggestionDataForPanel extends FilenameSuggestionDataTypeFromTypes {
+  // Add any panel-specific properties if needed, though it seems the types one is sufficient
+}
+
 
 const MAX_ATTACHED_FILES = 4;
 const MAX_UNDO_OPERATIONS = 10;
@@ -147,6 +153,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               title: "Undo Successful", 
               description: `Renamed back to ${operation.data.originalName}`,
             });
+          } else {
+            toast({ title: "Undo Failed", description: `Could not find item at ${operation.data.newPath} to rename back. Please check console for details.`, variant: "destructive"});
+            console.warn("Undo rename: node not found at newPath", operation.data.newPath);
           }
           break;
           
@@ -176,7 +185,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     } catch (error) {
       toast({
         title: "Undo Failed",
-        description: "Could not undo. Check console for details.",
+        description: "Could not undo. Please check console for details.",
         variant: "destructive"
       });
       console.error("AI Assistant: Undo operation failed.", error);
@@ -330,7 +339,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } catch (error: any) {
           console.error("AI Assistant: Error applying/merging code.", error);
           updateFileContent(path, codeToApply); 
-          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. Merge error, see console for details.` });
+          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. Merge error, please check console for details.` });
           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
           setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
         }
@@ -438,12 +447,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     if (newNode) {
       openFile(newNode.path, newNode);
       updateFileContent(newNode.path, code);
-      toast({ title: "File Created", description: `"${newNode.name}" created with code.`});
+      toast({ title: "File Created", description: `"${newNode.name}" created with generated code.`});
       if (!actionAppliedStates[buttonKey]) {
         setButtonAppliedState(buttonKey);
       }
     } else {
-      toast({ variant: "destructive", title: "File Creation Failed", description: `Could not create "${suggestedFileName}". Check console for details.`});
+      toast({ variant: "destructive", title: "File Creation Failed", description: `Could not create "${suggestedFileName}". Please check console for details.`});
       console.error(`AI Assistant: Failed to create file ${suggestedFileName}`);
     }
     setIsLoading(false);
@@ -458,7 +467,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }, 2000);
     }).catch(err => {
       console.error("AI Assistant: Clipboard copy failed", err);
-      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy. Check console for details." });
+      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy code. Please check console for details." });
     });
   };
 
@@ -620,7 +629,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'fileOperationExecution',
-              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Delete operation failed. Check console for details.'}`,
+              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Delete operation failed. Please check console for details.'}`,
               fileOperationData: {
                 operation: 'delete',
                 success: result?.success || false,
@@ -638,7 +647,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         }
       } else if (lowerCasePrompt.includes("rename")) {
         const itemToRename = firstAttachedFile ? firstAttachedFile.path : activeFilePath;
-        const newNameMatch = currentPromptValue.match(/rename.*?(?:to|as)\s+([^\s.]+)/i); // Match word before extension
+        const newNameMatch = currentPromptValue.match(/rename.*?(?:to|as)\s+([^\s."']+)/i); // Match word before extension or quotes
         let newName = newNameMatch ? newNameMatch[1] : null;
         
         if (itemToRename) {
@@ -651,7 +660,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'fileOperationExecution',
-              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Rename operation failed. Check console for details.'}`,
+              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Rename operation failed. Please check console for details.'}`,
               fileOperationData: {
                 operation: 'rename',
                 success: result?.success || false,
@@ -689,7 +698,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                     currentFileName: currentItemNameForSuggestion,
                     targetPath: itemToRename,
                     itemType: currentItemTypeForSuggestion,
-                  }
+                  } as FilenameSuggestionDataForPanel // Explicit cast
                 };
               } else {
                 aiResponse = { 
@@ -741,7 +750,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   type: 'fileOperationExecution',
                   content: result?.success 
                     ? `✅ Successfully moved to ${smartResult.topSuggestion.folderName}! ${smartResult.reasoning}`
-                    : `❌ ${result?.message || 'Move operation failed. Check console for details.'}`,
+                    : `❌ ${result?.message || 'Move operation failed. Please check console for details.'}`,
                   fileOperationData: {
                     operation: 'move',
                     success: result?.success || false,
@@ -776,7 +785,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 id: generateId(),
                 role: 'assistant',
                 type: 'fileOperationExecution',
-                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed. Check console for details.'}`,
+                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed. Please check console for details.'}`,
                 fileOperationData: {
                   operation: 'move',
                   success: result?.success || false,
@@ -967,7 +976,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
   const handleFileSelect = (filePath: string, itemType: 'file' | 'folder') => {
     if (attachedFiles.length >= MAX_ATTACHED_FILES) {
-      toast({ variant: "destructive", title: "Attachment Limit", description: `Max ${MAX_ATTACHED_FILES} items.` });
+      toast({ variant: "destructive", title: "Attachment Limit Reached", description: `You can attach a maximum of ${MAX_ATTACHED_FILES} items.` });
       setFileSelectorOpen(false);
       return;
     }
@@ -985,7 +994,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         const folderContent = generateFolderContext(fileNode);
         attachedFile = {
           path: filePath,
-          name: fileNode.name + '/',
+          name: fileNode.name + '/', // Keep slash for folders in UI state if needed
           content: folderContent,
           type: 'folder'
         };
@@ -1094,7 +1103,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
               success = deleteNode(nodeToDelete.id);
-              message = success ? `Successfully deleted ${nodeToDelete.name}.` : `Failed to delete ${nodeToDelete.name}. Check console for details.`;
+              message = success ? `Successfully deleted ${nodeToDelete.name}.` : `Failed to delete ${nodeToDelete.name}. Please check console for details.`;
               if (success) {
                 setAttachedFiles(prev => prev.filter(f => f.path !== nodeToDelete.path));
                 if (undoOperation) addToUndoStack(undoOperation);
@@ -1118,7 +1127,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 description: `Renamed ${originalName} to ${operationData.newName}`
               };
               success = renameNode(nodeToRename.id, operationData.newName);
-              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist. Check console for details.`;
+              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist. Please check console for details.`;
               if (success) addToUndoStack(undoOperation); else { console.error(`AI Assistant: Rename for "${originalName}" to "${operationData.newName}" failed.`, {operationData, nodeToRename});}
             } else {
               message = `Item not found: ${operationData.targetPath}`;
@@ -1181,7 +1190,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               };
               addToUndoStack(undoOperation);
             } else {
-              message = `Failed to create. Name invalid or already exists. Check console for details.`;
+              message = `Failed to create. Name invalid or already exists. Please check console for details.`;
             }
           } else {
             message = 'File name and type are required for creation.';
@@ -1219,7 +1228,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       console.error(`AI Assistant: Error in ${operation} operation.`, error);
       toast({ 
         title: "Operation Error", 
-        description: "Unexpected error. Check console for details.",
+        description: "Unexpected error. Please check console for details.",
         variant: "destructive"
       });
       return { success: false, message: "Operation failed: unexpected error." };
@@ -1255,7 +1264,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }
     } catch (error: any) {
       console.error("AI Assistant: Error handling file op suggestion:", error);
-      toast({ title: "Action Failed", description: "Could not execute suggested file operation. Check console for details.", variant: "destructive" });
+      toast({ title: "Action Failed", description: "Could not execute suggested file operation. Please check console for details.", variant: "destructive" });
     }
     setLoadingStates(prev => ({...prev, [buttonKey]: false}));
   };
@@ -1270,15 +1279,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         confirmed: true, 
       });
       toast({ 
-        title: "Terminal Command Sent", 
-        description: `Command "${command}" processed. Check terminal.`,
+        title: "Terminal Command Processed", 
+        description: `Command "${command}" processed. Check terminal for output.`,
       });
       return result;
     } catch (error: any) {
       console.error('AI Assistant: Terminal command error:', error);
       toast({ 
         title: "Terminal Command Failed", 
-        description: "Failed to execute. Check console for details.",
+        description: "Failed to execute terminal command. Please check console for details.",
         variant: "destructive"
       });
       return { success: false, message: "Command execution failed" };
@@ -1417,18 +1426,17 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   
   const getDisplayName = (label: string) => {
     const parts = label.split('/');
-    let name = parts[parts.length - 1];
-    // For folders that might have a trailing slash in their `label` from flattenFileSystem
-    if (name === '' && parts.length > 1) {
-        name = parts[parts.length - 2] + '/'; // Keep the slash for display consistency if it was a folder
-    }
-    return name;
+    return parts[parts.length - 1];
   };
 
   const cleanFolderName = (name: string): string => {
     let base = name.split('.')[0]; 
     base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
-    return base.charAt(0).toUpperCase() + base.slice(1);
+    if (!base) return "NewFolder";
+    // Ensure PascalCase or similar, first letter uppercase
+    const cleaned = base.charAt(0).toUpperCase() + base.slice(1);
+    // Remove any trailing slashes if they accidentally got in
+    return cleaned.replace(/\/$/, '');
   };
 
   return (
@@ -1908,31 +1916,33 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                               {msg.fileOperationData.operation} Operation
                                           </span>
                                           {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mt-0.5"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
+                                          {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
                                         </div>
+                                         {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
+                                            onClick={() => {
+                                                const recentOp = undoStack.find(op => 
+                                                    op.type === 'rename' && 
+                                                    op.data.originalPath === msg.fileOperationData?.targetPath && 
+                                                    op.data.newName === msg.fileOperationData?.newName
+                                                );
+                                                if (recentOp) { 
+                                                    executeUndo(recentOp); 
+                                                    setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
+                                                } else { 
+                                                    toast({title: "Undo Failed", description: "Matching rename operation not found in undo history.", variant: "destructive"}); 
+                                                    console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
+                                                }
+                                            }}
+                                            title={`Undo rename to ${msg.fileOperationData.newName}`}
+                                          >
+                                            <Undo2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
                                     </div>
-                                    {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mb-1"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
+                                   
                                     {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
-                                    {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
-                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0 ml-auto mt-1"
-                                        onClick={() => {
-                                            const recentOp = undoStack.find(op => 
-                                                op.type === 'rename' && 
-                                                op.data.originalPath === msg.fileOperationData?.targetPath && 
-                                                op.data.newName === msg.fileOperationData?.newName
-                                            );
-                                            if (recentOp) { 
-                                                executeUndo(recentOp); 
-                                                setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
-                                            } else { 
-                                                toast({title: "Undo Failed", description: "Matching rename op not found.", variant: "destructive"}); 
-                                                console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
-                                            }
-                                        }}
-                                        title={`Undo rename to ${msg.fileOperationData.newName}`}
-                                      >
-                                        <Undo2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
+                                    
 
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
                                         <div className="text-xs"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
@@ -2040,10 +2050,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         </div>
                                       </div>
                                       <button
-                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
                                         title={isApplied ? 'Applied' : `Use this ${msg.smartFolderOperationData?.operation === 'move' ? 'destination' : 'name'}`}
-                                        disabled={isLoading || anyApplied}
+                                        disabled={isLoading || (anyApplied && !isApplied)}
                                         onClick={async () => {
+                                          if (anyApplied && !isApplied) return; // Explicitly prevent re-click if another button in group was clicked
                                           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                           const opName = msg.smartFolderOperationData?.operation || 'Operation';
                                           const opNameCap = opName.charAt(0).toUpperCase() + opName.slice(1);
@@ -2074,20 +2085,20 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                             } else {
                                               toast({
                                                 title: `${opNameCap} Failed`,
-                                                description: result?.message || `${opNameCap} operation failed. Check console for details.`,
+                                                description: result?.message || `${opNameCap} operation failed. Please check console for details.`,
                                                 variant: 'destructive',
                                               });
                                               console.error(`AI Assistant: Smart folder operation ${opName} failed.`, result);
-                                              setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
+                                              setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false })); // Re-enable if failed
                                             }
                                           } catch (error: any) {
                                             toast({
                                               title: `${opNameCap} Error`,
-                                              description: "An unexpected error occurred. Check console for details.",
+                                              description: "An unexpected error occurred. Please check console for details.",
                                               variant: 'destructive',
                                             });
                                             console.error(`AI Assistant: Smart folder operation ${opName} error.`, error);
-                                            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
+                                            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false })); // Re-enable on error
                                           }
                                         }}
                                       >
@@ -2109,7 +2120,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                       )}
 
                         {msg.type === 'filenameSuggestion' && msg.filenameSuggestionData && (
-                        <div className="space-y-3">
+                        <div className="space-y-3 overflow-x-hidden"> 
                           <div className="whitespace-pre-wrap font-medium text-sm mb-2">
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                           </div>
@@ -2123,7 +2134,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           )}
 
                           <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
-                            <CardContent className="p-3 overflow-hidden"> {/* Added overflow-hidden here */}
+                            <CardContent className="p-3 overflow-hidden">
                               <div className="flex items-center gap-2 mb-2">
                                 <Brain className="h-4 w-4 text-primary" />
                                 <span className="text-sm font-medium text-primary dark:text-primary">
@@ -2147,40 +2158,36 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   }
 
                                   return (
-                                    <div key={idx} className="relative flex items-center justify-between p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <div className="flex-1 truncate min-w-0"> 
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-mono text-sm font-medium truncate flex-shrink min-w-0" title={suggestion.filename}>
-                                                  {displayName}
-                                                </span>
-                                                <span className={cn("text-xs px-2 py-1 rounded shrink-0", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
-                                                    {Math.round(suggestion.confidence * 100)}%
-                                                </span>
-                                            </div>
-                                            <div className="text-xs text-muted-foreground mt-1 capitalize flex items-center">
-                                                <span>{suggestion.category} Suggestion ({Math.round(suggestion.confidence*100)}%)</span>
-                                            </div>
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" align="start">
-                                          <p>Full suggested name: {suggestion.filename}</p>
-                                          <p>Category: {suggestion.category}</p>
-                                          <p>Confidence: {Math.round(suggestion.confidence * 100)}%</p>
-                                          <p>Detailed Reason: {suggestion.reasoning}</p>
-                                        </TooltipContent>
-                                      </Tooltip>
+                                    <div key={idx} className="relative p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2 pr-10"> 
+                                      <div className="pr-2"> 
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="font-mono text-sm font-medium truncate block flex-shrink min-w-0" title={suggestion.filename}>
+                                              {displayName}
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top" align="start">
+                                            <p>Full suggested name: {suggestion.filename}</p>
+                                            <p>Category: {suggestion.category} ({Math.round(suggestion.confidence * 100)}% confidence)</p>
+                                            <p>Detailed Reason: {suggestion.reasoning}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                        <div className="text-xs text-muted-foreground mt-1 capitalize">
+                                            <span>{suggestion.category} Suggestion ({Math.round(suggestion.confidence * 100)}%)</span>
+                                        </div>
+                                      </div>
+
                                       <button
                                         className={cn(
-                                          "absolute bottom-2 right-2 rounded-full p-1 transition-colors shrink-0",
-                                          isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary',
-                                          (anyApplied && !isApplied) && 'opacity-50 pointer-events-none' 
+                                          "absolute bottom-1.5 right-1.5 rounded-full p-1 transition-colors shrink-0",
+                                          isApplied ? 'text-green-600' : 'text-muted-foreground hover:text-primary',
+                                          (isLoading || anyApplied) && 'opacity-50 pointer-events-none'
                                         )}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || (anyApplied && !isApplied)}
+                                        disabled={isLoading || anyApplied}
                                         onClick={async () => {
-                                          if (msg.filenameSuggestionData?.targetPath && !(anyApplied && !isApplied)) {
+                                          if (isLoading || anyApplied) return;
+                                          if (msg.filenameSuggestionData?.targetPath) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
                                               const nameToApply = msg.filenameSuggestionData.itemType === 'folder' 
@@ -2225,7 +2232,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                               } else {
                                                 toast({
                                                   title: "Action Failed",
-                                                  description: result?.message || 'Could not rename. Check console for details.',
+                                                  description: result?.message || 'Could not rename. Please check console for details.',
                                                   variant: 'destructive',
                                                 });
                                                 console.error(`AI Assistant: Rename failed for ${msg.filenameSuggestionData.targetPath} to ${nameToApply}. Message: ${result?.message}`);
@@ -2234,7 +2241,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                             } catch (error: any) {
                                               toast({
                                                 title: "Rename Error",
-                                                description: "An unexpected error occurred. Check console for details.",
+                                                description: "An unexpected error occurred. Please check console for details.",
                                                 variant: 'destructive',
                                               });
                                               console.error('AI Assistant: Rename error (suggestion path):', error);
@@ -2243,7 +2250,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           }
                                         }}
                                       >
-                                        {isApplied ? <Check className="h-5 w-5 text-green-600" /> : <Check className="h-5 w-5" />}
+                                        {isApplied ? <CheckCircle2 className="h-5 w-5" /> : <Check className="h-5 w-5" />}
                                       </button>
                                     </div>
                                   );
@@ -2251,11 +2258,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               </div>
                               <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
                                 <div className="text-xs text-primary/90 dark:text-primary/90">
-                                  💡 Current: {msg.filenameSuggestionData.currentFileName} → Suggested: {
-                                    msg.filenameSuggestionData.itemType === 'folder' 
-                                    ? cleanFolderName(msg.filenameSuggestionData.topSuggestion?.filename || '')
-                                    : msg.filenameSuggestionData.topSuggestion?.filename
-                                  }
+                                  <div>💡 Current: {msg.filenameSuggestionData.currentFileName}</div>
+                                  <div>→ Suggested: {
+                                      msg.filenameSuggestionData.topSuggestion 
+                                      ? (msg.filenameSuggestionData.itemType === 'folder'
+                                        ? cleanFolderName(msg.filenameSuggestionData.topSuggestion.filename)
+                                        : msg.filenameSuggestionData.topSuggestion.filename)
+                                      : 'N/A'
+                                    }
+                                  </div>
                                 </div>
                               </div>
                             </CardContent>
@@ -2285,7 +2296,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1 py-0.5 rounded-md">
                     <div className="flex items-center gap-1.5 text-muted-foreground truncate min-w-0"> 
                       <span className="shrink-0">{getFileOrFolderIcon(file.type)}</span>
-                      <span className="truncate" title={file.path}>{file.name}</span>
+                      <span className="flex-1 truncate min-w-0" title={file.path}>{getDisplayName(file.name)}</span>
                     </div>
                     <Button
                       variant="ghost"
@@ -2421,4 +2432,3 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </TooltipProvider>
   );
 }
-
