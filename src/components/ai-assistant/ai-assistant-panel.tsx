@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -442,7 +443,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         setButtonAppliedState(buttonKey);
       }
     } else {
-      toast({ variant: "destructive", title: "File Creation Failed", description: `Could not create "${suggestedFileName}". Check console.`});
+      toast({ variant: "destructive", title: "File Creation Failed", description: `Could not create "${suggestedFileName}". Check console for details.`});
       console.error(`AI Assistant: Failed to create file ${suggestedFileName}`);
     }
     setIsLoading(false);
@@ -1094,7 +1095,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
               success = deleteNode(nodeToDelete.id);
-              message = success ? `Successfully deleted ${nodeToDelete.name}.` : `Failed to delete ${nodeToDelete.name}.`;
+              message = success ? `Successfully deleted ${nodeToDelete.name}.` : `Failed to delete ${nodeToDelete.name}. Check console for details.`;
               if (success) {
                 setAttachedFiles(prev => prev.filter(f => f.path !== nodeToDelete.path));
                 if (undoOperation) addToUndoStack(undoOperation);
@@ -1118,7 +1119,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 description: `Renamed ${originalName} to ${operationData.newName}`
               };
               success = renameNode(nodeToRename.id, operationData.newName);
-              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist.`;
+              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist. Check console.`;
               if (success) addToUndoStack(undoOperation); else { console.error(`AI Assistant: Rename for "${originalName}" to "${operationData.newName}" failed.`, {operationData, nodeToRename});}
             } else {
               message = `Item not found: ${operationData.targetPath}`;
@@ -1181,7 +1182,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               };
               addToUndoStack(undoOperation);
             } else {
-              message = `Failed to create. Name invalid or already exists.`;
+              message = `Failed to create. Name invalid or already exists. Check console.`;
             }
           } else {
             message = 'File name and type are required for creation.';
@@ -1195,7 +1196,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }
 
       toast({ 
-        title: success ? "Operation Successful" : "Operation Failed", 
+        title: success ? "Operation Successful" : "Action Failed", 
         description: message,
         variant: success ? "default" : "destructive"
       });
@@ -1255,7 +1256,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }
     } catch (error: any) {
       console.error("AI Assistant: Error handling file op suggestion:", error);
-      toast({ title: "Operation Failed", description: "Could not execute suggested file operation. Check console.", variant: "destructive" });
+      toast({ title: "Action Failed", description: "Could not execute suggested file operation. Check console.", variant: "destructive" });
     }
     setLoadingStates(prev => ({...prev, [buttonKey]: false}));
   };
@@ -1904,34 +1905,35 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         <span className="text-sm font-medium capitalize">
                                             {msg.fileOperationData.operation} Operation
                                         </span>
+                                        
+                                        {msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && (
+                                          <div className="ml-auto">
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                onClick={() => {
+                                                    const recentOp = undoStack.find(op => 
+                                                        op.type === 'rename' && 
+                                                        op.data.newPath === msg.fileOperationData?.targetPath && 
+                                                        op.data.originalName === msg.fileOperationData?.newName
+                                                    );
+                                                    if (recentOp) { 
+                                                        executeUndo(recentOp); 
+                                                        setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
+                                                    } else { 
+                                                        toast({title: "Undo Failed", description: "Could not find matching rename operation to undo.", variant: "destructive"}); 
+                                                        console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
+                                                    }
+                                                }}
+                                                title={`Undo rename to ${msg.fileOperationData.newName}`}
+                                            >
+                                                <Undo2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </div>
+                                        )}
                                     </div>
                                     
                                     {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mb-1"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
                                     {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mb-1"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
                                     {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
-
-                                    {msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && (() => {
-                                        const opData = msg.fileOperationData;
-                                        const recentOp = undoStack.find(op => 
-                                            op.type === 'rename' &&
-                                            op.data.newPath === opData.targetPath && // The original target was the new path
-                                            op.data.originalName === opData.newName   // The original name was the new name
-                                        );
-                                        return (
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                                onClick={() => {
-                                                    const recentOp = undoStack.find(op => 
-                                                        op.type === 'rename' && op.data.newPath === opData.targetPath && op.data.originalName === opData.newName
-                                                    );
-                                                    if (recentOp) { executeUndo(recentOp); setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); } 
-                                                    else { toast({title: "Undo Failed", description: "Matching rename op not found.", variant: "destructive"}); }
-                                                }}
-                                                title={`Undo rename to ${opData.newName}`}
-                                            >
-                                                <Undo2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                        );
-                                    })()}
 
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
                                         <div className="text-xs"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
@@ -2041,7 +2043,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                       <button
                                         className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
                                         title={isApplied ? 'Applied' : `Use this ${msg.smartFolderOperationData?.operation === 'move' ? 'destination' : 'name'}`}
-                                        disabled={isLoading || (anyApplied && !isApplied)}
+                                        disabled={isLoading || anyApplied}
                                         onClick={async () => {
                                           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                           const opName = msg.smartFolderOperationData?.operation || 'Operation';
@@ -2169,9 +2171,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         </TooltipContent>
                                       </Tooltip>
                                       <button
-                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${
+                                          isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'
+                                        } ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || (anyApplied && !isApplied)}
+                                        disabled={isLoading || anyApplied}
                                         onClick={async () => {
                                           if (msg.filenameSuggestionData?.targetPath) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
@@ -2217,7 +2221,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                 ]);
                                               } else {
                                                 toast({
-                                                  title: "Rename Failed",
+                                                  title: "Action Failed",
                                                   description: result?.message || 'Could not rename. Check console.',
                                                   variant: 'destructive',
                                                 });
@@ -2413,3 +2417,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </TooltipProvider>
   );
 }
+
+
+    
