@@ -1,3 +1,4 @@
+
 "use client";
 
 import type React from 'react';
@@ -26,6 +27,16 @@ interface FileTreeItemProps {
 
 const HOVER_TO_OPEN_DELAY = 750; // ms
 
+// Define a mapping for accent colors to folder icon Tailwind classes
+const FOLDER_ICON_COLOR_MAP: Record<string, string> = {
+  '270 70% 55%': 'text-yellow-500', // Default Purple Accent -> Yellow Folder
+  '210 70% 55%': 'text-orange-500', // Vibrant Blue Accent -> Orange Folder
+  '30 80% 55%': 'text-sky-500',     // Sunset Orange Accent -> Sky Blue Folder
+  '330 80% 60%': 'text-teal-500',    // Hot Pink Accent -> Teal Folder
+  '180 60% 45%': 'text-rose-500',   // Teal Aqua Accent -> Rose Folder
+};
+const DEFAULT_FOLDER_ICON_COLOR = 'text-yellow-500';
+
 export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const [isOpen, setIsOpen] = useState(node.type === 'folder' ? (node.path === '/src' || node.path === '/') : false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -34,13 +45,16 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  const { openFile, activeFilePath, addNode, deleteNode, renameNode, nodeToAutoRenameId, setNodeToAutoRenameId, moveNode } = useIde();
+  const { openFile, activeFilePath, addNode, deleteNode, renameNode, nodeToAutoRenameId, setNodeToAutoRenameId, moveNode, accentColor } = useIde();
   const inputRef = useRef<HTMLInputElement>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isFolder = node.type === 'folder';
-  const Icon = isFolder ? Folder : FileText;
+  const FileIcon = FileText; // File icon will use text-primary by default
+  const FolderIcon = Folder;
   const ExpansionIcon = isOpen ? ChevronDown : ChevronRight;
+
+  const folderIconColorClass = FOLDER_ICON_COLOR_MAP[accentColor] || DEFAULT_FOLDER_ICON_COLOR;
 
   useEffect(() => {
     if (isRenaming && inputRef.current) {
@@ -65,7 +79,6 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   }, []);
 
   useEffect(() => {
-    // Cleanup timeout on unmount
     return () => {
       clearHoverTimeout();
     };
@@ -113,21 +126,19 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault(); 
     e.stopPropagation();
     const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
-    if (isFolder && node.id !== draggedNodeId) { // Can drop into a folder
+    if (isFolder && node.id !== draggedNodeId) { 
       setIsDraggingOver(true);
-       if (!isOpen && !hoverTimeoutRef.current) { // If folder is closed and no timeout is active
+       if (!isOpen && !hoverTimeoutRef.current) { 
         hoverTimeoutRef.current = setTimeout(() => {
-          if (isDraggingOver) { // Check if still dragging over this item
+          if (isDraggingOver) { 
             setIsOpen(true);
           }
           hoverTimeoutRef.current = null;
         }, HOVER_TO_OPEN_DELAY);
       }
-    } else if (!isFolder) { // Can drop ON files (for reordering, not implemented yet but allow visual cue)
-      // setIsDraggingOver(true); // No visual cue for dropping ON files for now
     }
   };
   
@@ -144,7 +155,6 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     e.preventDefault();
     e.stopPropagation();
     clearHoverTimeout();
-    // Check if the mouse is truly leaving the element, not just moving to a child
     const relatedTarget = e.relatedTarget as Node;
     if (!e.currentTarget.contains(relatedTarget)) {
         setIsDraggingOver(false);
@@ -159,19 +169,11 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
     
     if (draggedNodeId && draggedNodeId !== node.id) {
-      if (isFolder) { // Dropped onto a folder
+      if (isFolder) { 
         moveNode(draggedNodeId, node.id);
-      } else { // Dropped onto a file (or empty space sibling to a file)
-        // To drop "next to" a file, we need parentId.
-        // This requires getting parent info or handling at FileExplorer level for root drops.
-        // For now, assume a drop on a file means drop into its parent.
-        // This needs to be refined based on where exactly the drop happens.
-        // The current root drop logic is in FileExplorer.tsx
-        // console.log(`Dropped node ${draggedNodeId} onto file ${node.name} (parent drop not implemented here)`);
       }
     }
   };
-
 
   return (
     <div 
@@ -189,9 +191,9 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
         className={cn(
           "flex items-center py-1.5 px-2 rounded-md cursor-pointer",
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-          isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", // Visual cue for droppable folder
-          !isDraggingOver && isFolder && "hover:bg-sidebar-accent", // Standard hover for folder
-          !isFolder && "hover:bg-sidebar-accent" // Standard hover for file
+          isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
+          !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
+          !isFolder && "hover:bg-sidebar-accent" 
         )}
         style={{ paddingLeft: `${level * 1.25 + (isFolder ? 0 : 1.25) + (isRenaming ? 0.1 : 0.5)}rem` }}
         onClick={handleToggle}
@@ -206,7 +208,11 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
         {isFolder && (
           <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
         )}
-        <Icon className={cn("w-4 h-4 mr-2 shrink-0", isFolder ? "text-yellow-500" : "text-primary")} />
+        {isFolder ? (
+          <FolderIcon className={cn("w-4 h-4 mr-2 shrink-0", folderIconColorClass)} />
+        ) : (
+          <FileIcon className={cn("w-4 h-4 mr-2 shrink-0 text-primary")} />
+        )}
         
         {isRenaming ? (
           <Input
@@ -253,11 +259,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           )) : (
              <div 
                 className={cn(
-                    "pl-4 text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center", // min-h for drop target
-                    isDraggingOver && "bg-sidebar-accent/30" // Cue for dropping into empty folder
+                    "pl-4 text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center", 
+                    isDraggingOver && "bg-sidebar-accent/30" 
                 )}
                 style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25}rem` }}
-                // Drag handlers for empty folder area also needed
                 onDragOver={handleDragOver} 
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}

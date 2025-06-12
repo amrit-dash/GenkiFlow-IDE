@@ -328,7 +328,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } catch (error: any) {
           console.error("AI Assistant: Error applying to editor or merging code.", error);
           updateFileContent(path, codeToApply); // Fallback to full replace
-          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. An error occurred during merging. Check console.` });
+          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. An error occurred during merging. Check console for details.` });
           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
           setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
         }
@@ -459,7 +459,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }, 2000);
     }).catch(err => {
       console.error("AI Assistant: Clipboard copy failed", err);
-      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy to clipboard. Check console for details." });
+      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy to clipboard. Check console." });
     });
   };
 
@@ -648,12 +648,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'fileOperationExecution',
-              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Delete operation failed.'}`,
+              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Delete operation failed. Check console.'}`,
               fileOperationData: {
                 operation: 'delete',
                 success: result?.success || false,
                 targetPath: fileToDelete,
-                message: result?.message || 'Operation completed',
+                message: result?.message || 'Operation completed.',
                 requiresConfirmation: false,
               }
             };
@@ -676,13 +676,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'fileOperationExecution',
-              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Rename operation failed.'}`,
+              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Rename operation failed. Check console.'}`,
               fileOperationData: {
                 operation: 'rename',
                 success: result?.success || false,
                 targetPath: fileToRename,
                 newName,
-                message: result?.message || 'Operation completed',
+                message: result?.message || 'Operation completed.',
                 requiresConfirmation: false,
               }
             };
@@ -728,7 +728,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 id: generateId(), 
                 role: 'assistant', 
                 type: 'error', 
-                content: "Error generating filename suggestions. Please specify the new name manually. Check console for details." 
+                content: "Error generating filename suggestions. Please specify the new name manually. Check console." 
               };
             }
           }
@@ -764,13 +764,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   type: 'fileOperationExecution',
                   content: result?.success 
                     ? `✅ Successfully moved to ${smartResult.topSuggestion.folderName}! ${smartResult.reasoning}`
-                    : `❌ ${result?.message || 'Move operation failed.'}`,
+                    : `❌ ${result?.message || 'Move operation failed. Check console.'}`,
                   fileOperationData: {
                     operation: 'move',
                     success: result?.success || false,
                     targetPath: fileToMove,
                     destinationPath: smartResult.topSuggestion.folderPath,
-                    message: result?.message || 'Operation completed',
+                    message: result?.message || 'Operation completed.',
                     requiresConfirmation: false,
                   }
                 };
@@ -799,13 +799,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 id: generateId(),
                 role: 'assistant',
                 type: 'fileOperationExecution',
-                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed.'}`,
+                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed. Check console.'}`,
                 fileOperationData: {
                   operation: 'move',
                   success: result?.success || false,
                   targetPath: fileToMove,
                   destinationPath: destinationHint,
-                  message: result?.message || 'Operation completed',
+                  message: result?.message || 'Operation completed.',
                   requiresConfirmation: false,
                 }
               };
@@ -879,6 +879,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 ...result.fileOperationSuggestion,
                 targetPath: result.fileOperationSuggestion.targetPath || undefined,
                 newName: result.fileOperationSuggestion.newName || undefined,
+                fileType: result.fileOperationSuggestion.fileType,
               } : undefined,
               alternativeOptions: result.alternativeOptions?.map(option => ({
                 ...option,
@@ -912,6 +913,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 ...result.fileOperationSuggestion,
                 targetPath: result.fileOperationSuggestion.targetPath || undefined,
                 newName: result.fileOperationSuggestion.newName || undefined,
+                fileType: result.fileOperationSuggestion.fileType,
               } : undefined,
               alternativeOptions: result.alternativeOptions?.map(option => ({
                 ...option,
@@ -929,7 +931,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             };
           }
         } catch (enhancedError: any) {
-          console.warn('AI Assistant: Enhanced code generation failed, falling back to regular. Error:', enhancedError);
+          console.warn('AI Assistant: Enhanced code generation failed, falling back. Error:', enhancedError);
           
           let effectivePrompt = currentPromptValue;
           if (historyForContext.length > 0) {
@@ -1153,15 +1155,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
               success = deleteNode(nodeToDelete.id);
-              message = success ? `Successfully deleted ${nodeToDelete.name}` : `Failed to delete ${nodeToDelete.name}.`;
+              message = success ? `Successfully deleted ${nodeToDelete.name}.` : `Failed to delete ${nodeToDelete.name}.`;
               if (success) {
                 setAttachedFiles(prev => prev.filter(f => f.path !== nodeToDelete.path));
                 if (undoOperation) addToUndoStack(undoOperation);
-              }
+              } else { console.error(`AI Assistant: Delete operation for "${nodeToDelete.name}" reported failure by deleteNode.`); }
             } else {
               message = `File not found: ${operationData.targetPath}`;
             }
-          }
+          } else { message = "Target path is required for delete operation."; }
           break;
 
         case 'rename':
@@ -1177,8 +1179,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 description: `Renamed ${originalName} to ${operationData.newName}`
               };
               success = renameNode(nodeToRename.id, operationData.newName);
-              message = success ? `Successfully renamed to ${operationData.newName}` : `Failed to rename ${operationData.targetPath}. Name might be invalid or already exist.`;
-              if (success) addToUndoStack(undoOperation);
+              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist.`;
+              if (success) addToUndoStack(undoOperation); else { console.error(`AI Assistant: Rename operation for "${originalName}" to "${operationData.newName}" reported failure.`);}
             } else {
               message = `File not found: ${operationData.targetPath}`;
             }
@@ -1211,11 +1213,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   addToUndoStack(undoOperation);
                 } catch (error: any) {
                   console.error("AI Assistant: Move operation failed in context.", error);
-                  message = `Failed to move ${nodeToMove.name}. Error: ${error.message || 'Unknown error'}`;
+                  message = `Failed to move. Error: ${error.message || 'Unknown error'}`;
                 }
               }
             } else {
-              message = `Source or destination not found. Source: ${nodeToMove ? 'Found' : 'Not found'}, Dest: ${destinationNode ? 'Found' : 'Not found'}.`;
+              message = `Source or destination not found. Source: ${nodeToMove ? `Found (${nodeToMove.name})` : `Not found (${operationData.targetPath})`}, Dest: ${destinationNode ? `Found (${destinationNode.name})` : `Not found (${operationData.destinationPath})`}.`;
             }
           } else {
              message = 'Target path and destination path are required for move operation.';
@@ -1233,8 +1235,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               if (operationData.openInIDE && operationData.fileType === 'file') openFile(newNode.path, newNode);
               success = true;
               message = `Successfully created ${operationData.fileType}: ${operationData.fileName}.`;
+               undoOperation = {
+                type: 'create',
+                data: { name: newNode.name, path: newNode.path, type: newNode.type },
+                timestamp: Date.now(),
+                description: `Created ${newNode.type} ${newNode.name}`
+              };
+              addToUndoStack(undoOperation);
             } else {
-              message = `Failed to create ${operationData.fileType}: ${operationData.fileName}. Name might be invalid or already exist.`;
+              message = `Failed to create. Name might be invalid or already exist.`;
             }
           } else {
             message = 'File name and type are required for creation.';
@@ -1279,6 +1288,41 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     }
   };
 
+  const handleFileOperationSuggestionAction = async (
+    operationType: 'create' | 'rename' | 'delete' | 'move',
+    targetPath: string | undefined,
+    newName: string | undefined,
+    fileType: 'file' | 'folder' | undefined,
+    buttonKey: string,
+    destinationPath?: string
+  ) => {
+    setLoadingStates(prev => ({...prev, [buttonKey]: true}));
+    try {
+      let result;
+      if (operationType === 'create' && newName && fileType) {
+        // For create, targetPath is the parent directory, newName is the name of the new item
+        result = await performFileOperation('create', { parentPath: targetPath || '/', fileName: newName, fileType, openInIDE: true });
+      } else if (operationType === 'rename' && targetPath && newName) {
+        result = await performFileOperation('rename', { targetPath, newName });
+      } else if (operationType === 'delete' && targetPath) {
+        result = await performFileOperation('delete', { targetPath });
+      } else if (operationType === 'move' && targetPath && destinationPath) {
+        result = await performFileOperation('move', {targetPath, destinationPath});
+      }
+       else {
+        throw new Error("Invalid parameters for file operation suggestion.");
+      }
+
+      if (result?.success) {
+        setActionAppliedStates(prev => ({...prev, [buttonKey]: true}));
+      }
+    } catch (error: any) {
+      console.error("AI Assistant: Error handling file operation suggestion:", error);
+      toast({ title: "Operation Failed", description: "Failed to execute suggested file operation. Check console.", variant: "destructive" });
+    }
+    setLoadingStates(prev => ({...prev, [buttonKey]: false}));
+  };
+
   const handleTerminalCommand = async (command: string, context: string) => {
     try {
       const result = await executeActualTerminalCommandServer({
@@ -1286,7 +1330,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         context,
         requiresConfirmation: true,
         isBackground: false,
-        confirmed: true,
+        confirmed: true, // Auto-confirm for now, or implement confirmation flow
       });
       toast({ 
         title: "Terminal Command Sent", 
@@ -1297,7 +1341,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       console.error('AI Assistant: Terminal command error:', error);
       toast({ 
         title: "Terminal Command Failed", 
-        description: "Failed to execute terminal command. Check console for details.",
+        description: "Failed to execute terminal command. Check console.",
         variant: "destructive"
       });
       return { success: false, message: "Command execution failed" };
@@ -1382,7 +1426,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     const functionMatch = code.match(/(?:function\s+(\w+)|const\s+(\w+)\s*=|let\s+(\w+)\s*=|var\s+(\w+)\s*=|def\s+(\w+)|class\s+(\w+))/);
     if (functionMatch) return functionMatch[1] || functionMatch[2] || functionMatch[3] || functionMatch[4] || functionMatch[5] || functionMatch[6];
     if (codeType === 'component') {
-      const componentNameMatch = code.match(/<(?:[A-Z]\w*)/); // Basic check for PascalCase component
+      const componentNameMatch = code.match(/<(?:[A-Z]\w*)/); 
       if (componentNameMatch) return componentNameMatch[0].substring(1);
     }
     return undefined;
@@ -1394,15 +1438,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     for (const match of importMatches) dependencies.push(match[1]);
     if (code.includes('useState') || code.includes('useEffect')) dependencies.push('react');
     if (code.includes('axios')) dependencies.push('axios');
-    return Array.from(new Set(dependencies)); // Unique dependencies
+    return Array.from(new Set(dependencies)); 
   };
 
   const detectMainLanguage = (code: string): string => {
-    if (code.includes('import React') || code.includes('.tsx') || code.includes('.jsx')) return 'TypeScript'; // Assume TSX/JSX implies TS/JS
+    if (code.includes('import React') || code.includes('.tsx') || code.includes('.jsx')) return 'TypeScript'; 
     if (code.includes('def ') && code.includes(':') || code.includes('import ') && !code.includes('from')) return 'Python';
     if (code.includes('#include') || code.includes('std::')) return 'C++';
     if (code.includes('public class') || code.includes('System.out.println')) return 'Java';
-    return 'JavaScript'; // Default
+    return 'JavaScript'; 
   };
 
   const getDynamicCodeQuality = (codeQuality: any, code: string) => {
@@ -1430,7 +1474,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   };
 
   const getFileOrFolderIcon = (label: string) => {
-    if (label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-yellow-600" />;
+    if (label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-primary" />;
     return <FileText className="inline h-4 w-4 mr-1 text-primary" />;
   };
 
@@ -1607,34 +1651,54 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           {msg.type === 'enhancedCodeGeneration' && (
                             <div className="mt-3 space-y-2">
                               {msg.fileOperationSuggestion && msg.fileOperationSuggestion.type !== 'none' && (
-                                <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                                <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                                   <CardContent className="p-2">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <FilePlus2 className="h-4 w-4 text-blue-600" />
-                                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                      <FilePlus2 className="h-4 w-4 text-primary" />
+                                      <span className="text-xs font-medium text-primary dark:text-primary">
                                         File Operation Suggestion
                                       </span>
-                                      <span className="text-xs text-blue-600 dark:text-blue-400">
+                                      <span className="text-xs text-primary/80 dark:text-primary/90">
                                         ({Math.round(msg.fileOperationSuggestion.confidence * 100)}% confidence)
                                       </span>
                                     </div>
-                                    <p className="text-xs text-blue-700 dark:text-blue-300">{msg.fileOperationSuggestion.reasoning}</p>
+                                    <p className="text-xs text-primary/90 dark:text-primary/90">{msg.fileOperationSuggestion.reasoning}</p>
+                                     <Button 
+                                        size="sm" 
+                                        variant="outline" 
+                                        className="mt-2"
+                                        onClick={() => handleFileOperationSuggestionAction(
+                                            msg.fileOperationSuggestion!.type as 'create' | 'rename' | 'delete',
+                                            msg.fileOperationSuggestion!.targetPath,
+                                            msg.fileOperationSuggestion!.newName,
+                                            msg.fileOperationSuggestion!.fileType,
+                                            `${msg.id}-fos`,
+                                            (msg.fileOperationSuggestion as any).destinationPath
+                                        )}
+                                        disabled={isLoading || actionAppliedStates[`${msg.id}-fos`] || loadingStates[`${msg.id}-fos`]}
+                                        >
+                                         {loadingStates[`${msg.id}-fos`] ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : 
+                                          actionAppliedStates[`${msg.id}-fos`] ? <Check className="mr-1.5 h-4 w-4 text-green-500" /> : 
+                                          <Wand2 className="mr-1.5 h-4 w-4" />
+                                         }
+                                         {actionAppliedStates[`${msg.id}-fos`] ? 'Applied' : `Execute: ${msg.fileOperationSuggestion.type}`}
+                                     </Button>
                                   </CardContent>
                                 </Card>
                               )}
 
                               {msg.alternativeOptions && msg.alternativeOptions.length > 0 && (
-                                <Card className="bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+                                <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                                   <CardContent className="p-2">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <RotateCcw className="h-4 w-4 text-amber-600" />
-                                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                      <RotateCcw className="h-4 w-4 text-primary" />
+                                      <span className="text-xs font-medium text-primary dark:text-primary">
                                         Alternative Options
                                       </span>
                                     </div>
                                     <div className="space-y-1">
                                       {msg.alternativeOptions.slice(0, 2).map((option, idx) => (
-                                        <div key={idx} className="text-xs text-amber-700 dark:text-amber-300">
+                                        <div key={idx} className="text-xs text-primary/90 dark:text-primary/90">
                                           • {option.description}
                                         </div>
                                       ))}
@@ -1646,34 +1710,34 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               {msg.codeQuality && msg.code && (() => {
                                 const dynamicQuality = getDynamicCodeQuality(msg.codeQuality, msg.code);
                                 return (
-                                <Card className="bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800">
+                                <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                                   <CardContent className="p-2">
                                       <div className="flex items-center gap-2 mb-2">
-                                      <Check className="h-4 w-4 text-green-600" />
-                                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                                      <Check className="h-4 w-4 text-primary" />
+                                      <span className="text-xs font-medium text-primary dark:text-primary">
                                         Code Quality
                                       </span>
-                                      <span className="text-xs text-green-600 dark:text-green-400 capitalize">
+                                      <span className="text-xs text-primary/80 dark:text-primary/90 capitalize">
                                           ({dynamicQuality.complexity} complexity)
                                       </span>
                                     </div>
                                       
-                                      <div className="text-xs text-green-600 dark:text-green-400 mb-2 flex items-center gap-3">
+                                      <div className="text-xs text-primary/90 dark:text-primary/90 mb-2 flex items-center gap-3">
                                         <span>{dynamicQuality.languageSpecific.languageIcon} {dynamicQuality.language}</span>
                                         <span>📊 {dynamicQuality.functionCount} function{dynamicQuality.functionCount !== 1 ? 's' : ''}</span>
                                       </div>
                                       
                                     <div className="grid grid-cols-2 gap-1 text-xs">
-                                        <div className={cn("flex items-center gap-1", dynamicQuality.languageSpecific.languageCheck ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        <div className={cn("flex items-center gap-1", dynamicQuality.languageSpecific.languageCheck ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
                                           {dynamicQuality.languageSpecific.languageCheck ? "✓" : "○"} {dynamicQuality.languageSpecific.languageLabel}
                                       </div>
-                                        <div className={cn("flex items-center gap-1", dynamicQuality.codeStandards ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        <div className={cn("flex items-center gap-1", dynamicQuality.codeStandards ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
                                           {dynamicQuality.codeStandards ? "✓" : "○"} Code Standards
                                       </div>
-                                        <div className={cn("flex items-center gap-1", dynamicQuality.isWellRefactored ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                        <div className={cn("flex items-center gap-1", dynamicQuality.isWellRefactored ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
                                           {dynamicQuality.isWellRefactored ? "✓" : "○"} Well Refactored
                                       </div>
-                                      <div className={cn("flex items-center gap-1", msg.codeQuality.isWellDocumented ? "text-green-700 dark:text-green-300" : "text-orange-700 dark:text-orange-300")}>
+                                      <div className={cn("flex items-center gap-1", msg.codeQuality.isWellDocumented ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
                                         {msg.codeQuality.isWellDocumented ? "✓" : "○"} Documented
                                       </div>
                                     </div>
@@ -1688,24 +1752,24 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
                       {msg.type === 'smartCodePlacement' && msg.smartPlacementData && (
                         <div className="space-y-3 mt-3">
-                          <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                          <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                             <CardContent className="p-3">
                               <div className="flex items-center gap-2 mb-2">
-                                <Brain className="h-4 w-4 text-blue-600" />
-                                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                <Brain className="h-4 w-4 text-primary" />
+                                <span className="text-sm font-medium text-primary dark:text-primary">
                                   Smart Code Placement
                                 </span>
-                                <span className="text-xs text-blue-600 dark:text-blue-400 capitalize">
+                                <span className="text-xs text-primary/80 dark:text-primary/90 capitalize">
                                   ({msg.smartPlacementData.codeType})
                                 </span>
                               </div>
                               
                               {msg.smartPlacementData.analysis.topSuggestion && (
-                                <div className="mb-3 p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
-                                  <div className="text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
+                                <div className="mb-3 p-2 bg-primary/5 dark:bg-primary/10 rounded">
+                                  <div className="text-xs font-medium text-primary dark:text-primary mb-1">
                                     🎯 Best Match: {msg.smartPlacementData.analysis.topSuggestion.fileName}
                                   </div>
-                                  <div className="text-xs text-blue-700 dark:text-blue-300">
+                                  <div className="text-xs text-primary/90 dark:text-primary/90">
                                     Confidence: {Math.round(msg.smartPlacementData.analysis.topSuggestion.confidence * 100)}%
                                   </div>
                                 </div>
@@ -1724,7 +1788,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                       'Smart code placement suggestion'
                                     )}
                                     disabled={isLoading || actionAppliedStates[`${msg.id}-smart-suggested`] || loadingStates[`${msg.id}-smart-suggested`]}
-                                    className="bg-blue-600 hover:bg-blue-700"
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
                                   >
                                     {actionAppliedStates[`${msg.id}-smart-suggested`] ? (
                                       <><Check className="mr-1.5 h-4 w-4 text-green-500" /> Applied</>
@@ -1778,14 +1842,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               </div>
 
                               {msg.smartPlacementData.suggestedFiles.length > 1 && (
-                                <div className="mt-3 pt-2 border-t border-blue-200 dark:border-blue-800">
-                                  <div className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                                <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
+                                  <div className="text-xs font-medium text-primary dark:text-primary mb-2">
                                     Other Suggestions:
                                   </div>
                                   <div className="space-y-1">
                                     {msg.smartPlacementData.suggestedFiles.slice(1, 3).map((suggestion, idx) => (
                                       <div key={idx} className="flex items-center justify-between text-xs">
-                                        <span className="text-blue-600 dark:text-blue-400">
+                                        <span className="text-primary/90 dark:text-primary/90">
                                           {suggestion.fileName} ({Math.round(suggestion.confidence * 100)}%)
                                         </span>
                                         <Button
@@ -1927,6 +1991,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         if (recentOp) {
                                           executeUndo(recentOp);
                                           setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp));
+                                        } else {
+                                          toast({title: "Undo Failed", description: "Could not find matching operation to undo.", variant: "destructive"});
                                         }
                                       }}
                                       title={`Undo ${opData.operation} operation`}
@@ -1959,7 +2025,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
                                 <div className="text-xs">
                                   <strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
-                                  <div className="mt-1 max-h-32 overflow-y-auto space-y-1">
+                                  <div className="mt-1 max-h-32 overflow-y-auto space-y-1 themed-scrollbar">
                                     {msg.fileOperationData.filesFound.slice(0, 10).map((file, idx) => (
                                       <div key={idx} className="text-muted-foreground">• {file}</div>
                                     ))}
@@ -2024,24 +2090,24 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                           </div>
                           
-                          <Card className="bg-orange-50/50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800">
+                          <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                             <CardContent className="p-3">
                               <div className="flex items-center gap-2 mb-3">
-                                <Brain className="h-4 w-4 text-orange-600" />
-                                <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                <Brain className="h-4 w-4 text-primary" />
+                                <span className="text-sm font-medium text-primary dark:text-primary">
                                   Smart {msg.smartFolderOperationData.operation.charAt(0).toUpperCase() + msg.smartFolderOperationData.operation.slice(1)} Suggestions
                                 </span>
-                                <span className="text-xs text-orange-600 dark:text-orange-400">
+                                <span className="text-xs text-primary/80 dark:text-primary/90">
                                   ({Math.round(msg.smartFolderOperationData.confidence * 100)}% confidence)
                                 </span>
                               </div>
                               
                               {msg.smartFolderOperationData.folderAnalysis && (
-                                <div className="mb-3 p-2 bg-orange-100/50 dark:bg-orange-900/20 rounded">
-                                  <div className="text-xs font-medium text-orange-800 dark:text-orange-200 mb-1">
+                                <div className="mb-3 p-2 bg-primary/5 dark:bg-primary/10 rounded">
+                                  <div className="text-xs font-medium text-primary dark:text-primary mb-1">
                                     📁 Folder Analysis: {msg.smartFolderOperationData.folderAnalysis.totalFiles} files, {msg.smartFolderOperationData.folderAnalysis.languages.join(', ')}
                                   </div>
-                                  <div className="text-xs text-orange-700 dark:text-orange-300">
+                                  <div className="text-xs text-primary/90 dark:text-primary/90">
                                     Purpose: {msg.smartFolderOperationData.folderAnalysis.primaryPurpose}
                                   </div>
                                 </div>
@@ -2053,18 +2119,18 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   const isApplied = actionAppliedStates[buttonKey];
                                   const anyApplied = Object.keys(actionAppliedStates).some(k => k.startsWith(`${msg.id}-folder-`) && actionAppliedStates[k]);
                                   return (
-                                    <div key={idx} className="relative flex items-center justify-between p-2 bg-white/60 dark:bg-slate-800/60 rounded border mb-2">
+                                    <div key={idx} className="relative flex items-center justify-between p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                           <span className="font-mono text-sm font-medium">{suggestion.folderName}</span>
-                                          <span className="text-xs bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 px-2 py-1 rounded">
+                                          <span className={cn("text-xs px-2 py-1 rounded", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
                                             {Math.round(suggestion.confidence * 100)}%
                                           </span>
                                         </div>
                                         <div className="text-xs text-muted-foreground mt-1">
                                           {suggestion.reasoning}
                                         </div>
-                                        <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                        <div className="text-xs text-primary/90 dark:text-primary/90 mt-1">
                                           📂 {suggestion.folderPath}
                                         </div>
                                       </div>
@@ -2103,7 +2169,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                             } else {
                                               toast({
                                                 title: `${opNameCap} Failed`,
-                                                description: result?.message || `${opName} operation failed. Check console.`,
+                                                description: result?.message || `${opNameCap} operation failed. Check console.`,
                                                 variant: 'destructive',
                                               });
                                               console.error(`AI Assistant: Smart folder operation ${opName} failed.`, result);
@@ -2127,8 +2193,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 })}
                               </div>
                               
-                              <div className="mt-3 pt-2 border-t border-orange-200 dark:border-orange-800">
-                                <div className="text-xs text-orange-600 dark:text-orange-400">
+                              <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
+                                <div className="text-xs text-primary/90 dark:text-primary/90">
                                   🤖 {msg.smartFolderOperationData.reasoning}
                                 </div>
                               </div>
@@ -2144,22 +2210,22 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           </div>
                           
                           {msg.filenameSuggestionData.analysis.mainFunctions.length > 0 && (
-                            <div className="p-2 bg-purple-100/50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800">
-                              <div className="text-xs font-medium text-purple-800 dark:text-purple-200">
+                            <div className="p-2 bg-primary/10 dark:bg-primary/15 rounded border border-primary/20 dark:border-primary/30">
+                              <div className="text-xs font-medium text-primary dark:text-primary">
                                 📝 Functions Found: {msg.filenameSuggestionData.analysis.mainFunctions.join(', ')}
                               </div>
                             </div>
                           )}
 
-                          <Card className="bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800">
+                          <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                             <CardContent className="p-3">
                               <div className="flex items-center gap-2 mb-2">
-                                <Brain className="h-4 w-4 text-purple-600" />
-                                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                                <Brain className="h-4 w-4 text-primary" />
+                                <span className="text-sm font-medium text-primary dark:text-primary">
                                   AI Filename Analysis
                                 </span>
                               </div>
-                              <div className="text-xs text-purple-600 dark:text-purple-400 mb-3">
+                              <div className="text-xs text-primary/90 dark:text-primary/90 mb-3">
                                 {msg.filenameSuggestionData.analysis.detectedLanguage} • {msg.filenameSuggestionData.analysis.codeType}
                               </div>
                               
@@ -2169,11 +2235,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   const isApplied = actionAppliedStates[buttonKey];
                                   const anyApplied = Object.keys(actionAppliedStates).some(k => k.startsWith(`${msg.id}-rename-`) && actionAppliedStates[k]);
                                   return (
-                                    <div key={idx} className="relative flex items-center justify-between p-2 bg-white/60 dark:bg-slate-800/60 rounded border mb-2">
+                                    <div key={idx} className="relative flex items-center justify-between p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                           <span className="font-mono text-sm font-medium">{suggestion.filename}</span>
-                                          <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 px-2 py-1 rounded">
+                                          <span className={cn("text-xs px-2 py-1 rounded", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
                                             {Math.round(suggestion.confidence * 100)}%
                                           </span>
                                         </div>
@@ -2230,7 +2296,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                               } else {
                                                 toast({
                                                   title: "Rename Failed",
-                                                  description: result?.message || 'Could not rename the file. Check console.',
+                                                  description: result?.message || 'Could not rename. Check console.',
                                                   variant: 'destructive',
                                                 });
                                                 console.error(`AI Assistant: Rename failed for ${msg.filenameSuggestionData.targetPath} to ${newName}. Message: ${result?.message}`);
@@ -2254,8 +2320,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   );
                                 })}
                               </div>
-                              <div className="mt-3 pt-2 border-t border-purple-200 dark:border-purple-800">
-                                <div className="text-xs text-purple-600 dark:text-purple-400">
+                              <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
+                                <div className="text-xs text-primary/90 dark:text-primary/90">
                                   💡 Current: {msg.filenameSuggestionData.currentFileName} → Suggested: {msg.filenameSuggestionData.topSuggestion?.filename}
                                 </div>
                               </div>
@@ -2420,4 +2486,3 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </div>
   );
 }
-
