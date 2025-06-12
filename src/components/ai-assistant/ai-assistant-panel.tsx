@@ -176,7 +176,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     } catch (error) {
       toast({
         title: "Undo Failed",
-        description: "Could not undo. Check console.",
+        description: "Could not undo. Check console for details.",
         variant: "destructive"
       });
       console.error("AI Assistant: Undo operation failed.", error);
@@ -330,7 +330,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         } catch (error: any) {
           console.error("AI Assistant: Error applying/merging code.", error);
           updateFileContent(path, codeToApply); 
-          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. Merge error, see console.` });
+          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. Merge error, see console for details.` });
           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
           setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
         }
@@ -458,7 +458,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }, 2000);
     }).catch(err => {
       console.error("AI Assistant: Clipboard copy failed", err);
-      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy. Check console." });
+      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy. Check console for details." });
     });
   };
 
@@ -621,7 +621,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'fileOperationExecution',
-              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Delete operation failed. Check console.'}`,
+              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Delete operation failed. Check console for details.'}`,
               fileOperationData: {
                 operation: 'delete',
                 success: result?.success || false,
@@ -652,7 +652,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'fileOperationExecution',
-              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Rename operation failed. Check console.'}`,
+              content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Rename operation failed. Check console for details.'}`,
               fileOperationData: {
                 operation: 'rename',
                 success: result?.success || false,
@@ -706,7 +706,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 id: generateId(), 
                 role: 'assistant', 
                 type: 'error', 
-                content: "Error generating name suggestions. Please specify the new name manually. Check console." 
+                content: "Error generating name suggestions. Please specify the new name manually. Check console for details." 
               };
             }
           }
@@ -742,7 +742,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   type: 'fileOperationExecution',
                   content: result?.success 
                     ? `✅ Successfully moved to ${smartResult.topSuggestion.folderName}! ${smartResult.reasoning}`
-                    : `❌ ${result?.message || 'Move operation failed. Check console.'}`,
+                    : `❌ ${result?.message || 'Move operation failed. Check console for details.'}`,
                   fileOperationData: {
                     operation: 'move',
                     success: result?.success || false,
@@ -777,7 +777,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 id: generateId(),
                 role: 'assistant',
                 type: 'fileOperationExecution',
-                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed. Check console.'}`,
+                content: result?.success ? `✅ ${result.message}` : `❌ ${result?.message || 'Move operation failed. Check console for details.'}`,
                 fileOperationData: {
                   operation: 'move',
                   success: result?.success || false,
@@ -1119,7 +1119,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 description: `Renamed ${originalName} to ${operationData.newName}`
               };
               success = renameNode(nodeToRename.id, operationData.newName);
-              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist. Check console.`;
+              message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist. Check console for details.`;
               if (success) addToUndoStack(undoOperation); else { console.error(`AI Assistant: Rename for "${originalName}" to "${operationData.newName}" failed.`, {operationData, nodeToRename});}
             } else {
               message = `Item not found: ${operationData.targetPath}`;
@@ -1182,7 +1182,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               };
               addToUndoStack(undoOperation);
             } else {
-              message = `Failed to create. Name invalid or already exists. Check console.`;
+              message = `Failed to create. Name invalid or already exists. Check console for details.`;
             }
           } else {
             message = 'File name and type are required for creation.';
@@ -1220,7 +1220,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       console.error(`AI Assistant: Error in ${operation} operation.`, error);
       toast({ 
         title: "Operation Error", 
-        description: "Unexpected error. Check console.",
+        description: "Unexpected error. Check console for details.",
         variant: "destructive"
       });
       return { success: false, message: "Operation failed: unexpected error." };
@@ -1256,7 +1256,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }
     } catch (error: any) {
       console.error("AI Assistant: Error handling file op suggestion:", error);
-      toast({ title: "Action Failed", description: "Could not execute suggested file operation. Check console.", variant: "destructive" });
+      toast({ title: "Action Failed", description: "Could not execute suggested file operation. Check console for details.", variant: "destructive" });
     }
     setLoadingStates(prev => ({...prev, [buttonKey]: false}));
   };
@@ -1279,7 +1279,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       console.error('AI Assistant: Terminal command error:', error);
       toast({ 
         title: "Terminal Command Failed", 
-        description: "Failed to execute. Check console.",
+        description: "Failed to execute. Check console for details.",
         variant: "destructive"
       });
       return { success: false, message: "Command execution failed" };
@@ -1919,7 +1919,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                         executeUndo(recentOp); 
                                                         setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
                                                     } else { 
-                                                        toast({title: "Undo Failed", description: "Could not find matching rename operation to undo.", variant: "destructive"}); 
+                                                        toast({title: "Undo Failed", description: "Could not find matching rename operation to undo. Check console for details.", variant: "destructive"}); 
                                                         console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
                                                     }
                                                 }}
@@ -2075,7 +2075,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                             } else {
                                               toast({
                                                 title: `${opNameCap} Failed`,
-                                                description: result?.message || `${opNameCap} operation failed. Check console.`,
+                                                description: result?.message || `${opNameCap} operation failed. Check console for details.`,
                                                 variant: 'destructive',
                                               });
                                               console.error(`AI Assistant: Smart folder operation ${opName} failed.`, result);
@@ -2084,7 +2084,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           } catch (error: any) {
                                             toast({
                                               title: `${opNameCap} Error`,
-                                              description: "An unexpected error occurred. Check console.",
+                                              description: "An unexpected error occurred. Check console for details.",
                                               variant: 'destructive',
                                             });
                                             console.error(`AI Assistant: Smart folder operation ${opName} error.`, error);
@@ -2175,7 +2175,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'
                                         } ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || anyApplied}
+                                        disabled={isLoading || (anyApplied && !isApplied)}
                                         onClick={async () => {
                                           if (msg.filenameSuggestionData?.targetPath) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
@@ -2222,7 +2222,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                               } else {
                                                 toast({
                                                   title: "Action Failed",
-                                                  description: result?.message || 'Could not rename. Check console.',
+                                                  description: result?.message || 'Could not rename. Check console for details.',
                                                   variant: 'destructive',
                                                 });
                                                 console.error(`AI Assistant: Rename failed for ${msg.filenameSuggestionData.targetPath} to ${nameToApply}. Message: ${result?.message}`);
@@ -2231,7 +2231,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                             } catch (error: any) {
                                               toast({
                                                 title: "Rename Error",
-                                                description: "An unexpected error occurred. Check console.",
+                                                description: "An unexpected error occurred. Check console for details.",
                                                 variant: 'destructive',
                                               });
                                               console.error('AI Assistant: Rename error (suggestion path):', error);
@@ -2340,7 +2340,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 onSelect={() => handleFileSelect(item.path, item.type)}
                                 className="text-xs cursor-pointer"
                               >
-                                {getFileOrFolderIcon(item.label, item.type)}{getDisplayName(item.label, item.type)}
+                                <span className="shrink-0">{getFileOrFolderIcon(item.label, item.type)}</span>
+                                <span className="flex-1 truncate min-w-0">{getDisplayName(item.label, item.type)}</span>
                               </CommandItem>
                             ))}
                           </ScrollArea>
