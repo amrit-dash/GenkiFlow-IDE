@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, RefreshCw, FileText, Wand2, SearchCode, MessageSquare, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, MessageSquarePlus, FileText, Wand2, SearchCode, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer, intelligentCodeMergerServer, smartFolderOperationsServer } from '@/app/(ide)/actions';
 import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
@@ -638,7 +638,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         }
       } else if (lowerCasePrompt.includes("rename")) {
         const itemToRename = firstAttachedFile ? firstAttachedFile.path : activeFilePath;
-        const newNameMatch = currentPromptValue.match(/rename.*?(?:to|as)\s+([^\s]+)/i);
+        const newNameMatch = currentPromptValue.match(/rename.*?(?:to|as)\s+([^\s.]+)/i); // Match word before extension
         let newName = newNameMatch ? newNameMatch[1] : null;
         
         if (itemToRename) {
@@ -1438,14 +1438,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           <h2 className="text-lg font-headline font-semibold">AI Assistant</h2>
         </div>
         <Button variant="ghost" size="icon" onClick={handleNewChat} title="Start New Chat">
-          <RefreshCw className="w-4 h-4" />
+          <MessageSquarePlus className="w-4 h-4" />
           <span className="sr-only">New Chat</span>
         </Button>
       </div>
 
       {chatHistory.length === 0 && !isLoading ? (
         <div className="flex-1 p-4 flex flex-col items-center justify-center text-center space-y-3 overflow-y-auto themed-scrollbar">
-          <MessageSquare className="w-12 h-12 text-primary opacity-70 mb-2" />
+          <MessageSquarePlus className="w-12 h-12 text-primary opacity-70 mb-2" />
           <h3 className="text-lg font-semibold text-foreground">GenkiFlow AI Assistant</h3>
           <p className="text-xs text-muted-foreground max-w-xs">
             Your intelligent coding partner with project context awareness. I analyze your file structure, chat history, and provide enhanced suggestions.
@@ -1488,7 +1488,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
               return (
                 <div key={msg.id} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
-                  <Card className={cn("max-w-[85%] p-0 shadow-sm", msg.role === 'user' ? "bg-primary/20" : "bg-card/90")}>
+                  <Card className={cn("max-w-[85%] p-0 shadow-sm overflow-x-hidden", msg.role === 'user' ? "bg-primary/20" : "bg-card/90")}>
                     <CardHeader className="p-3 pb-2 flex flex-row items-center gap-2">
                       {msg.role === 'assistant' && <BotIcon className="w-5 h-5 text-primary" />}
                       {msg.role === 'user' && <User className="w-5 h-5 text-primary" />}
@@ -1899,17 +1899,16 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             <p className="whitespace-pre-wrap">{msg.content}</p>
                             <Card className={cn("border-2", msg.fileOperationData.success ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800")}>
                                 <CardContent className="p-3">
-                                    <div className="flex items-start gap-2 mb-2">
+                                    <div className="flex items-start gap-2 mb-1">
                                         {msg.fileOperationData.success ? <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" /> : <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />}
                                         <div className="flex-grow">
                                           <span className="text-sm font-medium capitalize">
                                               {msg.fileOperationData.operation} Operation
                                           </span>
                                           {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mt-0.5"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
-                                          {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mt-0.5"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
                                         </div>
                                         {msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && (
-                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0 ml-auto"
                                               onClick={() => {
                                                   const recentOp = undoStack.find(op => 
                                                       op.type === 'rename' && 
@@ -1930,7 +1929,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           </Button>
                                         )}
                                     </div>
-                                    
+                                    {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mb-1"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
                                     {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
 
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
@@ -2122,7 +2121,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           )}
 
                           <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
-                            <CardContent className="p-3">
+                            <CardContent className="p-3 overflow-hidden"> {/* Added overflow-hidden here */}
                               <div className="flex items-center gap-2 mb-2">
                                 <Brain className="h-4 w-4 text-primary" />
                                 <span className="text-sm font-medium text-primary dark:text-primary">
@@ -2149,15 +2148,17 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                     <div key={idx} className="relative flex items-center justify-between p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <div className="flex-1 truncate min-w-0"> {/* Added min-w-0 for proper truncation in flex */}
+                                          <div className="flex-1 truncate min-w-0"> 
                                             <div className="flex items-center gap-2">
-                                                <span className="font-mono text-sm font-medium truncate" title={suggestion.filename}>
+                                                <span className="font-mono text-sm font-medium truncate flex-shrink min-w-0" title={suggestion.filename}>
                                                   {displayName}
+                                                </span>
+                                                <span className={cn("text-xs px-2 py-1 rounded shrink-0", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
+                                                    {Math.round(suggestion.confidence * 100)}%
                                                 </span>
                                             </div>
                                             <div className="text-xs text-muted-foreground mt-1 capitalize flex items-center">
                                                 <span>{suggestion.category.charAt(0).toUpperCase() + suggestion.category.slice(1)} Suggestion</span>
-                                                <span className="ml-2 text-primary/80">({Math.round(suggestion.confidence * 100)}%)</span>
                                             </div>
                                           </div>
                                         </TooltipTrigger>
@@ -2169,13 +2170,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         </TooltipContent>
                                       </Tooltip>
                                       <button
-                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${
-                                          isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'
-                                        } ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={cn(
+                                          "absolute bottom-2 right-2 rounded-full p-1 transition-colors shrink-0",
+                                          isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary',
+                                          anyApplied && 'opacity-50 pointer-events-none' 
+                                        )}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || (anyApplied && !isApplied)}
+                                        disabled={isLoading || anyApplied}
                                         onClick={async () => {
-                                          if (msg.filenameSuggestionData?.targetPath && !(anyApplied && !isApplied)) {
+                                          if (msg.filenameSuggestionData?.targetPath && !anyApplied) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
                                               const nameToApply = msg.filenameSuggestionData.itemType === 'folder' 
@@ -2278,7 +2281,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               <div className="grid grid-cols-2 gap-2">
                 {attachedFiles.map(file => (
                   <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1 py-0.5 rounded-md">
-                    <div className="flex items-center gap-1.5 text-muted-foreground truncate min-w-0"> {/* Added min-w-0 */}
+                    <div className="flex items-center gap-1.5 text-muted-foreground truncate min-w-0"> 
                       <span className="shrink-0">{getFileOrFolderIcon(file.name, file.type)}</span>
                       <span className="truncate" title={file.path}>{file.name}</span>
                     </div>
@@ -2380,7 +2383,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 {confirmationDialog.isDangerous ? (
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                 ) : (
-                  <MessageSquare className="h-5 w-5 text-primary" />
+                  <MessageSquarePlus className="h-5 w-5 text-primary" />
                 )}
                 <CardTitle className="text-lg">{confirmationDialog.title}</CardTitle>
               </div>
@@ -2416,3 +2419,4 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </TooltipProvider>
   );
 }
+
