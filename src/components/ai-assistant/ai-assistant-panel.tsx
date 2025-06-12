@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, MessageSquarePlus, FileText, Wand2, SearchCode, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, ClipboardCopy, Check, MessageSquarePlus, FileText, Wand2, SearchCode, Code2, FilePlus2, Edit, RotateCcw, Paperclip, XCircle, Pin, TerminalSquare, Undo2, AlertTriangle, FolderOpen, Cpu } from 'lucide-react';
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, trackOperationProgressServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, smartContentInsertionServer, intelligentCodeMergerServer, smartFolderOperationsServer } from '@/app/(ide)/actions';
 import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
@@ -1417,7 +1417,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   
   const getDisplayName = (label: string) => {
     const parts = label.split('/');
-    return parts[parts.length - 1];
+    let name = parts[parts.length - 1];
+    // For folders that might have a trailing slash in their `label` from flattenFileSystem
+    if (name === '' && parts.length > 1) {
+        name = parts[parts.length - 2] + '/'; // Keep the slash for display consistency if it was a folder
+    }
+    return name;
   };
 
   const cleanFolderName = (name: string): string => {
@@ -1442,7 +1447,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
       {chatHistory.length === 0 && !isLoading ? (
         <div className="flex-1 p-4 flex flex-col items-center justify-center text-center space-y-3 overflow-y-auto themed-scrollbar">
-          <MessageSquarePlus className="w-12 h-12 text-primary opacity-70 mb-2" />
+          <Cpu className="w-12 h-12 text-primary opacity-70 mb-2" />
           <h3 className="text-lg font-semibold text-foreground">GenkiFlow AI Assistant</h3>
           <p className="text-xs text-muted-foreground max-w-xs">
             Your intelligent coding partner with project context awareness. I analyze your file structure, chat history, and provide enhanced suggestions.
@@ -1904,30 +1909,30 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           </span>
                                           {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mt-0.5"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
                                         </div>
-                                        {msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && (
-                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0 ml-auto"
-                                              onClick={() => {
-                                                  const recentOp = undoStack.find(op => 
-                                                      op.type === 'rename' && 
-                                                      op.data.newPath === msg.fileOperationData?.targetPath && 
-                                                      op.data.originalName === msg.fileOperationData?.newName 
-                                                  );
-                                                  if (recentOp) { 
-                                                      executeUndo(recentOp); 
-                                                      setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
-                                                  } else { 
-                                                      toast({title: "Undo Failed", description: "Could not find matching rename operation. Check console.", variant: "destructive"}); 
-                                                      console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
-                                                  }
-                                              }}
-                                              title={`Undo rename to ${msg.fileOperationData.newName}`}
-                                          >
-                                              <Undo2 className="h-3.5 w-3.5" />
-                                          </Button>
-                                        )}
                                     </div>
                                     {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mb-1"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
                                     {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
+                                    {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0 ml-auto mt-1"
+                                        onClick={() => {
+                                            const recentOp = undoStack.find(op => 
+                                                op.type === 'rename' && 
+                                                op.data.originalPath === msg.fileOperationData?.targetPath && 
+                                                op.data.newName === msg.fileOperationData?.newName
+                                            );
+                                            if (recentOp) { 
+                                                executeUndo(recentOp); 
+                                                setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
+                                            } else { 
+                                                toast({title: "Undo Failed", description: "Matching rename op not found.", variant: "destructive"}); 
+                                                console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
+                                            }
+                                        }}
+                                        title={`Undo rename to ${msg.fileOperationData.newName}`}
+                                      >
+                                        <Undo2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
 
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
                                         <div className="text-xs"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
@@ -2170,12 +2175,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         className={cn(
                                           "absolute bottom-2 right-2 rounded-full p-1 transition-colors shrink-0",
                                           isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary',
-                                          anyApplied && !isApplied && 'opacity-50 pointer-events-none' 
+                                          (anyApplied && !isApplied) && 'opacity-50 pointer-events-none' 
                                         )}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || (anyApplied && !isApplied) || isApplied}
+                                        disabled={isLoading || (anyApplied && !isApplied)}
                                         onClick={async () => {
-                                          if (msg.filenameSuggestionData?.targetPath && !anyApplied) {
+                                          if (msg.filenameSuggestionData?.targetPath && !(anyApplied && !isApplied)) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
                                               const nameToApply = msg.filenameSuggestionData.itemType === 'folder' 
