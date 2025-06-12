@@ -54,23 +54,22 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       setUnsupportedFiles([]);
       setProcessedZipFileSystem(null);
       setZipProcessingStep('idle');
-      // Don't focus download input immediately to allow accent color selection first
     }
   }, [isOpen]);
 
   const handleDownload = async () => {
     if (!downloadProjectName.trim()) {
-      toast({ variant: "destructive", title: "Error", description: "Project name cannot be empty." });
+      toast({ variant: "destructive", title: "Input Error", description: "Project name cannot be empty." });
       return;
     }
-    toast({ title: "Preparing download...", description: "Your project is being zipped." });
+    toast({ title: "Preparing Download...", description: "Your project is being zipped." });
     try {
       await downloadWorkspaceAsZip(fileSystem, downloadProjectName.trim());
-      toast({ title: "Download Started!", description: `${downloadProjectName.trim()}.zip is downloading.` });
+      toast({ title: "Download Started", description: `${downloadProjectName.trim()}.zip is downloading.` });
       onClose();
-    } catch (error) {
-      console.error("Failed to download workspace:", error);
-      toast({ variant: "destructive", title: "Download Failed", description: (error as Error).message });
+    } catch (error: any) {
+      console.error("Manage Workspace: Download failed", error);
+      toast({ variant: "destructive", title: "Download Failed", description: "Could not prepare project for download. Check console for details." });
     }
   };
 
@@ -85,9 +84,9 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       } else {
         setZipProcessingStep('confirmOverwrite');
       }
-    } catch (error) {
-      console.error(`Error processing ${source} ZIP:`, error);
-      toast({ variant: "destructive", title: `${source} Import Failed`, description: `Could not process the ZIP file. Error: ${(error as Error).message}` });
+    } catch (error: any) {
+      console.error(`Manage Workspace: Error processing ${source} ZIP:`, error);
+      toast({ variant: "destructive", title: `${source} Import Failed`, description: "Could not process the ZIP. Check console for details." });
       setZipProcessingStep('idle');
     } finally {
       setIsProcessingZip(false);
@@ -102,7 +101,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
       setUnsupportedFiles([]);
       setProcessedZipFileSystem(null);
     } else if (file) {
-      toast({ variant: "destructive", title: "Invalid File", description: "Please select a .zip file." });
+      toast({ variant: "destructive", title: "Invalid File Type", description: "Please select a .zip file." });
       setSelectedZipFile(null);
     }
     event.target.value = ''; 
@@ -116,7 +115,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
   const completeWorkspaceReplacement = () => {
     if (processedZipFileSystem) {
       replaceWorkspace(processedZipFileSystem, null); 
-      toast({ title: "Workspace Imported", description: "The new workspace has been loaded." });
+      toast({ title: "Workspace Imported", description: "The new workspace has been loaded successfully." });
       onClose();
     }
   };
@@ -127,7 +126,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
   const confirmAndExecuteReset = () => {
     replaceWorkspace(mockFileSystem, null); 
-    toast({title: "Workspace Reset", description: "Workspace has been reset to default."});
+    toast({title: "Workspace Reset", description: "Workspace has been reset to the default example."});
     onClose();
   };
 
@@ -141,7 +140,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
   const handleAccentColorChange = (newColorHsl: string) => {
     setAccentColor(newColorHsl);
-    // Removed toast for accent color change
   };
 
   return (
@@ -159,7 +157,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
         <ScrollArea className="flex-grow pr-2 -mr-2"> 
           <div className="space-y-6 py-1">
-            {/* Accent Color Section */}
             <section>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-md font-semibold flex items-center">
@@ -194,7 +191,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
             <Separator />
 
-            {/* Download Section */}
             <section>
               <h3 className="text-md font-semibold mb-2 flex items-center"><Download className="mr-2 h-4 w-4 text-primary" />Download Current Workspace</h3>
               <div className="flex items-center gap-2">
@@ -217,7 +213,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
             <Separator />
             
-            {/* ZIP Upload Section */}
             <section>
               <h3 className="text-md font-semibold mb-2 flex items-center"><UploadCloud className="mr-2 h-4 w-4 text-primary" />Upload ZIP & Replace Workspace</h3>
               <p className="text-xs text-muted-foreground mb-2">
@@ -245,7 +240,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
 
             <Separator />
 
-            {/* Reset Workspace Section */}
             <section>
               <h3 className="text-md font-semibold mb-2 flex items-center"><RotateCcwIcon className="mr-2 h-4 w-4 text-primary" />Reset Workspace</h3>
               <div className="flex items-center gap-4">
@@ -265,7 +259,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
         </DialogFooter>
       </DialogContent>
 
-      {/* Alert Dialog for Unsupported Files Confirmation */}
       <AlertDialog open={zipProcessingStep === 'confirmUnsupported'}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -293,7 +286,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Alert Dialog for Workspace Overwrite Confirmation (from ZIP) */}
       <AlertDialog open={zipProcessingStep === 'confirmOverwrite'}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -312,7 +304,6 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Alert Dialog for Reset Workspace Confirmation */}
       <AlertDialog open={zipProcessingStep === 'confirmReset'}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -334,4 +325,3 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
-
