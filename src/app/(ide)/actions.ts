@@ -86,17 +86,16 @@ export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInpu
     return await summarizeCodeSnippet(input);
   } catch (error: any) {
     logDetailedError("summarizeCodeSnippetServer", error);
-    throw new Error(formatErrorForClient("Failed to summarize code snippet.", error));
+    throw new Error(formatErrorForClient("Failed to summarize. Check console.", error));
   }
 }
 
 export async function generateCodeServer(input: GenerateCodeInput): Promise<GenerateCodeOutput> {
   try {
-    // console.log("generateCodeServer input:", JSON.stringify(input, null, 2)); // For debugging
     return await generateCode(input);
   } catch (error: any) {
     logDetailedError("generateCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to generate code.", error));
+    throw new Error(formatErrorForClient("Failed to generate code. Check console.", error));
   }
 }
 
@@ -105,7 +104,7 @@ export async function refactorCodeServer(input: CodeRefactoringSuggestionsInput)
     return await codeRefactoringSuggestions(input);
   } catch (error: any) {
     logDetailedError("refactorCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to get refactoring suggestions.", error));
+    throw new Error(formatErrorForClient("Failed to get refactoring suggestions. Check console.", error));
   }
 }
 
@@ -114,7 +113,7 @@ export async function findExamplesServer(input: FindCodebaseExamplesInput): Prom
     return await findCodebaseExamples(input);
   } catch (error: any) {
     logDetailedError("findExamplesServer", error);
-    throw new Error(formatErrorForClient("Failed to find codebase examples.", error));
+    throw new Error(formatErrorForClient("Failed to find codebase examples. Check console.", error));
   }
 }
 
@@ -123,7 +122,7 @@ export async function enhancedGenerateCodeServer(input: EnhancedGenerateCodeInpu
     return await enhancedGenerateCode(input);
   } catch (error: any) {
     logDetailedError("enhancedGenerateCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to generate enhanced code.", error));
+    throw new Error(formatErrorForClient("Failed to generate enhanced code. Check console.", error));
   }
 }
 
@@ -139,7 +138,7 @@ export async function validateCodeServer(input: { code: string; filePath: string
     });
   } catch (error: any) {
     logDetailedError("validateCodeServer", error);
-    throw new Error(formatErrorForClient("Failed to validate code.", error));
+    throw new Error(formatErrorForClient("Failed to validate code. Check console.", error));
   }
 }
 
@@ -163,7 +162,7 @@ export async function analyzeCodeUsageServer(input: {
     });
   } catch (error: any) {
     logDetailedError("analyzeCodeUsageServer", error);
-    throw new Error(formatErrorForClient("Failed to analyze code usage.", error));
+    throw new Error(formatErrorForClient("Failed to analyze code usage. Check console.", error));
   }
 }
 
@@ -187,7 +186,7 @@ export async function trackOperationProgressServer(input: {
     });
   } catch (error: any) {
     logDetailedError("trackOperationProgressServer", error);
-    throw new Error(formatErrorForClient("Failed to track operation progress.", error));
+    throw new Error(formatErrorForClient("Failed to track operation progress. Check console.", error));
   }
 }
 
@@ -214,7 +213,7 @@ export async function executeFileSystemOperationServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeFileSystemOperationServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file system operation.", error));
+    throw new Error(formatErrorForClient("Failed to execute file system operation. Check console.", error));
   }
 }
 
@@ -240,7 +239,7 @@ export async function executeFileSystemCommandServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeFileSystemCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file system command.", error));
+    throw new Error(formatErrorForClient("Failed to execute file system command. Check console.", error));
   }
 }
 
@@ -260,7 +259,7 @@ export async function executeTerminalCommandServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeTerminalCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute terminal command.", error));
+    throw new Error(formatErrorForClient("Failed to execute terminal command. Check console.", error));
   }
 }
 
@@ -292,7 +291,7 @@ export async function manageCodebaseDatasetServer(input: {
     });
   } catch (error: any) {
     logDetailedError("manageCodebaseDatasetServer", error);
-    throw new Error(formatErrorForClient("Failed to manage codebase dataset.", error));
+    throw new Error(formatErrorForClient("Failed to manage codebase dataset. Check console.", error));
   }
 }
 
@@ -327,7 +326,7 @@ export async function smartCodePlacementServer(input: {
     });
   } catch (error: any) {
     logDetailedError("smartCodePlacementServer", error);
-    throw new Error(formatErrorForClient("Failed to perform smart code placement analysis.", error));
+    throw new Error(formatErrorForClient("Failed smart code placement. Check console.", error));
   }
 }
 
@@ -371,7 +370,7 @@ export async function executeActualFileOperationServer(input: {
     };
   } catch (error: any) {
     logDetailedError("executeActualFileOperationServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file operation.", error));
+    throw new Error(formatErrorForClient("Failed to execute file operation. Check console.", error));
   }
 }
 
@@ -408,7 +407,7 @@ export async function executeActualTerminalCommandServer(input: {
     };
   } catch (error: any) {
     logDetailedError("executeActualTerminalCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute terminal command.", error));
+    throw new Error(formatErrorForClient("Failed to execute terminal command. Check console.", error));
   }
 }
 
@@ -416,6 +415,7 @@ export async function executeActualTerminalCommandServer(input: {
 export async function suggestFilenameServer(input: {
   fileContent: string;
   currentFileName?: string;
+  fileType: 'file' | 'folder'; // Added fileType here
   context?: string;
   projectStructure?: string;
 }) {
@@ -424,35 +424,49 @@ export async function suggestFilenameServer(input: {
     const result = await filenameSuggester({
       fileContent: input.fileContent,
       currentFileName: input.currentFileName,
-      fileType: 'file',
+      fileType: input.fileType, // Pass fileType to the tool
       context: input.context,
       projectStructure: input.projectStructure,
     });
+    
+    let suggestions = result.suggestions;
+    if (input.fileType === 'file') {
+        // Ensure all suggestions use the original extension for files if provided
+        let originalExt = '';
+        if (input.currentFileName && input.currentFileName.includes('.')) {
+          originalExt = '.' + input.currentFileName.split('.');
+        } else if (result.analysis.suggestedExtension) { // Fallback to AI suggested extension
+          originalExt = result.analysis.suggestedExtension;
+        }
 
-    // Extract the original extension from currentFileName
-    let originalExt = '';
-    if (input.currentFileName && input.currentFileName.includes('.')) {
-      originalExt = '.' + input.currentFileName.split('.').pop();
+        if (originalExt) {
+            suggestions = result.suggestions.map(s => {
+                if (!s.filename.endsWith(originalExt)) {
+                    const base = s.filename.replace(/\.[^.]+$/, '');
+                    return { ...s, filename: base + originalExt };
+                }
+                return s;
+            });
+        }
+    } else { // For folders, ensure no extensions and proper capitalization
+        suggestions = result.suggestions.map(s => {
+            let base = s.filename.split('.')[0];
+            base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
+            return { ...s, filename: base.charAt(0).toUpperCase() + base.slice(1) };
+        });
     }
 
-    // Ensure all suggestions use the original extension
-    const suggestions = result.suggestions.map(s => {
-      if (originalExt && !s.filename.endsWith(originalExt)) {
-        const base = s.filename.replace(/\.[^.]+$/, '');
-        return { ...s, filename: base + originalExt };
-      }
-      return s;
-    });
 
     return {
       success: true,
       suggestions,
       analysis: result.analysis,
       topSuggestion: suggestions[0] || null,
+      itemType: input.fileType, // Pass back the itemType for UI to handle
     };
   } catch (error: any) {
     logDetailedError("suggestFilenameServer", error);
-    throw new Error(formatErrorForClient("Failed to generate filename suggestions.", error));
+    throw new Error(formatErrorForClient("Failed to generate filename suggestions. Check console.", error));
   }
 }
 
@@ -482,7 +496,7 @@ export async function smartContentInsertionServer(input: {
     };
   } catch (error: any) {
     logDetailedError("smartContentInsertionServer", error);
-    throw new Error(formatErrorForClient("Failed to perform smart content insertion.", error));
+    throw new Error(formatErrorForClient("Failed smart content insertion. Check console.", error));
   }
 }
 
@@ -517,7 +531,7 @@ export async function intelligentCodeMergerServer(input: {
     };
   } catch (error: any) {
     logDetailedError("intelligentCodeMergerServer", error);
-    throw new Error(formatErrorForClient("Failed to perform intelligent code merging.", error));
+    throw new Error(formatErrorForClient("Failed intelligent code merging. Check console.", error));
   }
 }
 
@@ -549,7 +563,7 @@ export async function fileContextAnalyzerServer(input: {
     };
   } catch (error: any) {
     logDetailedError("fileContextAnalyzerServer", error);
-    throw new Error(formatErrorForClient("Failed to analyze file context.", error));
+    throw new Error(formatErrorForClient("Failed to analyze file context. Check console.", error));
   }
 }
 
@@ -594,6 +608,6 @@ export async function smartFolderOperationsServer(input: {
     };
   } catch (error: any) {
     logDetailedError("smartFolderOperationsServer", error);
-    throw new Error(formatErrorForClient("Failed to perform smart folder operations.", error));
+    throw new Error(formatErrorForClient("Failed smart folder operations. Check console.", error));
   }
 }

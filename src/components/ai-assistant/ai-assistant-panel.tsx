@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -16,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import ReactMarkdown from 'react-markdown';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+
 
 interface AiAssistantPanelProps {
   isVisible: boolean;
@@ -26,6 +27,7 @@ interface AttachedFileUIData {
   path: string;
   name: string;
   content: string;
+  type: 'file' | 'folder';
 }
 
 interface UndoOperation {
@@ -108,6 +110,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const currentCode = activeFilePath ? openedFiles.get(activeFilePath)?.content : undefined;
   const currentFileNode = activeFilePath ? getFileSystemNode(activeFilePath) : undefined;
   const currentFileName = (currentFileNode && !Array.isArray(currentFileNode)) ? currentFileNode.name : undefined;
+  const currentItemType = (currentFileNode && !Array.isArray(currentFileNode)) ? currentFileNode.type : 'file';
+
 
   const addToUndoStack = (operation: UndoOperation) => {
     setUndoStack(prev => {
@@ -171,7 +175,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     } catch (error) {
       toast({
         title: "Undo Failed",
-        description: "Could not undo the operation. Check console for details.",
+        description: "Could not undo. Check console.",
         variant: "destructive"
       });
       console.error("AI Assistant: Undo operation failed.", error);
@@ -239,15 +243,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     return null;
   };
 
-  const flattenFileSystem = useCallback((nodes: FileSystemNode[], basePath: string = ''): { label: string, value: string, path: string }[] => {
-    let list: { label: string, value: string, path: string }[] = [];
+  const flattenFileSystem = useCallback((nodes: FileSystemNode[], basePath: string = ''): { label: string, value: string, path: string, type: 'file' | 'folder' }[] => {
+    let list: { label: string, value: string, path: string, type: 'file' | 'folder' }[] = [];
     nodes.forEach(node => {
       const displayPath = (basePath ? `${basePath}/` : '') + node.name;
-      if (node.type === 'file') {
-        list.push({ label: displayPath, value: node.path, path: node.path });
-      }
+      list.push({ label: displayPath, value: node.path, path: node.path, type: node.type });
       if (node.type === 'folder' && node.children) {
-        list.push({ label: displayPath + '/', value: node.path, path: node.path });
         list = list.concat(flattenFileSystem(node.children, displayPath));
       }
     });
@@ -326,16 +327,16 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           toast({ title: 'Code Merged', description: mergerResult.summary });
           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
         } catch (error: any) {
-          console.error("AI Assistant: Error applying to editor or merging code.", error);
-          updateFileContent(path, codeToApply); // Fallback to full replace
-          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. An error occurred during merging. Check console for details.` });
+          console.error("AI Assistant: Error applying/merging code.", error);
+          updateFileContent(path, codeToApply); 
+          toast({ title: 'Code Applied (Fallback)', description: `Changes applied to ${fileName}. Merge error, see console.` });
           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
           setForceReplaceState(prev => ({ ...prev, [buttonKey]: false }));
         }
         setLoadingStates(prev => ({ ...prev, [buttonKey]: false }));
       }
     } else {
-      toast({ variant: 'destructive', title: 'Action Failed', description: 'Please open or select a file to apply changes.' });
+      toast({ variant: 'destructive', title: 'Action Failed', description: 'Please open or select a file.' });
       console.error("AI Assistant: No active file for handleApplyToEditor.");
       setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
     }
@@ -436,15 +437,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     if (newNode) {
       openFile(newNode.path, newNode);
       updateFileContent(newNode.path, code);
-      const toastResult = toast({ title: "File Created", description: `"${newNode.name}" created with code.`});
-      setTimeout(() => {
-        toastResult.dismiss();
-      }, 1000);
+      toast({ title: "File Created", description: `"${newNode.name}" created with code.`});
       if (!actionAppliedStates[buttonKey]) {
         setButtonAppliedState(buttonKey);
       }
     } else {
-      toast({ variant: "destructive", title: "File Creation Failed", description: `Could not create "${suggestedFileName}". It might already exist or the name is invalid.`});
+      toast({ variant: "destructive", title: "File Creation Failed", description: `Could not create "${suggestedFileName}". Check console.`});
       console.error(`AI Assistant: Failed to create file ${suggestedFileName}`);
     }
     setIsLoading(false);
@@ -459,7 +457,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       }, 2000);
     }).catch(err => {
       console.error("AI Assistant: Clipboard copy failed", err);
-      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy to clipboard. Check console." });
+      toast({ variant: "destructive", title: "Copy Failed", description: "Could not copy. Check console." });
     });
   };
 
@@ -507,6 +505,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       const lowerCasePrompt = currentPromptValue.toLowerCase();
 
       const firstAttachedFile = currentAttachedFiles.length > 0 ? currentAttachedFiles[0] : null;
+      const targetItemType = firstAttachedFile ? firstAttachedFile.type : (activeFilePath ? currentItemType : 'file');
 
       if (lowerCasePrompt.includes("summarize") || lowerCasePrompt.includes("summary")) {
         const codeToSummarize = firstAttachedFile ? firstAttachedFile.content : currentCode;
@@ -597,40 +596,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       } else if (lowerCasePrompt.includes("delete") || lowerCasePrompt.includes("remove")) {
         let fileToDelete = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
         
-        if (lowerCasePrompt.includes("untitled")) {
-          const findUntitledFile = (nodes: FileSystemNode[]): FileSystemNode | null => {
-            for (const node of nodes) {
-              if (node.type === 'file' && node.name.toLowerCase().includes('untitled')) {
-                return node;
-              }
-              if (node.type === 'folder' && node.children) {
-                const found = findUntitledFile(node.children);
-                if (found) return found;
-              }
+        // Attempt to find a file/folder based on prompt keywords if no attachment/active file
+        if (!fileToDelete) {
+            const potentialTargetName = currentPromptValue.split(" ").pop(); // crude
+            if (potentialTargetName) {
+                const foundNode = findNodeByPath(potentialTargetName) || findNodeByPath(`/${potentialTargetName}`);
+                if (foundNode) fileToDelete = foundNode.path;
             }
-            return null;
-          };
-          const untitledNode = findUntitledFile(fileSystem);
-          if (untitledNode) {
-            fileToDelete = untitledNode.path;
-          }
-        } else if (lowerCasePrompt.includes("sum_list")) {
-          const findSumListFile = (nodes: FileSystemNode[]): FileSystemNode | null => {
-            for (const node of nodes) {
-              if (node.type === 'file' && node.name.includes('sum_list')) {
-                return node;
-              }
-              if (node.type === 'folder' && node.children) {
-                const found = findSumListFile(node.children);
-                if (found) return found;
-              }
-            }
-            return null;
-          };
-          const sumListNode = findSumListFile(fileSystem);
-          if (sumListNode) {
-            fileToDelete = sumListNode.path;
-          }
         }
         
         if (fileToDelete) {
@@ -640,7 +612,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               id: generateId(),
               role: 'assistant',
               type: 'error',
-              content: `❌ File "${fileToDelete}" not found.`
+              content: `❌ File or folder "${fileToDelete}" not found.`
             };
           } else {
             const result = await handleFileOperation('delete', { targetPath: fileToDelete });
@@ -662,16 +634,19 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             }
           }
         } else {
-          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify which file to delete or attach a file." };
+          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify which file or folder to delete, or attach it." };
         }
       } else if (lowerCasePrompt.includes("rename")) {
-        const fileToRename = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
+        const itemToRename = firstAttachedFile ? firstAttachedFile.path : activeFilePath;
         const newNameMatch = currentPromptValue.match(/rename.*?(?:to|as)\s+([^\s]+)/i);
-        const newName = newNameMatch ? newNameMatch[1] : null;
+        let newName = newNameMatch ? newNameMatch[1] : null;
         
-        if (fileToRename) {
-          if (newName) {
-            const result = await handleFileOperation('rename', { targetPath: fileToRename, newName });
+        if (itemToRename) {
+          const nodeToRename = getFileSystemNode(itemToRename);
+          const currentItemTypeForSuggestion = nodeToRename && !Array.isArray(nodeToRename) ? nodeToRename.type : 'file';
+
+          if (newName) { // User provided a new name
+            const result = await handleFileOperation('rename', { targetPath: itemToRename, newName });
             aiResponse = {
               id: generateId(),
               role: 'assistant',
@@ -680,22 +655,23 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               fileOperationData: {
                 operation: 'rename',
                 success: result?.success || false,
-                targetPath: fileToRename,
+                targetPath: itemToRename,
                 newName,
                 message: result?.message || 'Operation completed.',
                 requiresConfirmation: false,
               }
             };
-          } else {
+          } else { // AI needs to suggest a name
             try {
-              const fileNode = getFileSystemNode(fileToRename);
-              const fileContent = fileNode && !Array.isArray(fileNode) ? (fileNode.content || '') : '';
-              const currentFileNameForSuggestion = fileNode && !Array.isArray(fileNode) ? fileNode.name : '';
+              const itemNode = getFileSystemNode(itemToRename);
+              const itemContent = itemNode && !Array.isArray(itemNode) && itemNode.type === 'file' ? (itemNode.content || '') : `This is a ${currentItemTypeForSuggestion}. User wants to rename it based on context: ${currentPromptValue}`;
+              const currentItemNameForSuggestion = itemNode && !Array.isArray(itemNode) ? itemNode.name : '';
               const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
               
               const suggestionResult = await suggestFilenameServer({
-                fileContent,
-                currentFileName: currentFileNameForSuggestion,
+                fileContent: itemContent, // For folders, this might be context or empty
+                currentFileName: currentItemNameForSuggestion,
+                fileType: currentItemTypeForSuggestion, // Pass file or folder type
                 context: currentPromptValue,
                 projectStructure: fileSystemTree,
               });
@@ -705,13 +681,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   id: generateId(),
                   role: 'assistant',
                   type: 'filenameSuggestion',
-                  content: `🤖 **AI Analysis Complete!** Based on the file content, I found ${suggestionResult.analysis.mainFunctions.length > 0 ? `functions: ${suggestionResult.analysis.mainFunctions.join(', ')}` : 'code patterns'} in ${suggestionResult.analysis.detectedLanguage}.`,
-                  targetPath: fileToRename,
+                  content: `🤖 **AI Analysis Complete!** I've analyzed the ${currentItemTypeForSuggestion} "${currentItemNameForSuggestion}".`,
+                  targetPath: itemToRename,
                   filenameSuggestionData: {
                     ...suggestionResult,
                     suggestions: suggestionResult.suggestions.slice(0, 3),
-                    currentFileName: currentFileNameForSuggestion,
-                    targetPath: fileToRename,
+                    currentFileName: currentItemNameForSuggestion,
+                    targetPath: itemToRename,
+                    itemType: currentItemTypeForSuggestion,
                   }
                 };
               } else {
@@ -719,7 +696,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   id: generateId(), 
                   role: 'assistant', 
                   type: 'error', 
-                  content: "Failed to analyze file for filename suggestions. Please specify the new name manually." 
+                  content: "Failed to generate name suggestions. Please specify the new name manually." 
                 };
               }
             } catch (error: any) {
@@ -728,12 +705,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 id: generateId(), 
                 role: 'assistant', 
                 type: 'error', 
-                content: "Error generating filename suggestions. Please specify the new name manually. Check console." 
+                content: "Error generating name suggestions. Please specify the new name manually. Check console." 
               };
             }
           }
         } else {
-          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify which file to rename or attach a file." };
+          aiResponse = { id: generateId(), role: 'assistant', type: 'error', content: "Please specify which item to rename or attach it." };
         }
       } else if (lowerCasePrompt.includes("move") && (lowerCasePrompt.includes("to") || lowerCasePrompt.includes("into"))) {
         const fileToMove = currentAttachedFiles.length > 0 ? currentAttachedFiles[0].path : activeFilePath;
@@ -931,7 +908,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             };
           }
         } catch (enhancedError: any) {
-          console.warn('AI Assistant: Enhanced code generation failed, falling back. Error:', enhancedError);
+          console.error('AI Assistant: Enhanced code generation error. Falling back. Error:', enhancedError);
           
           let effectivePrompt = currentPromptValue;
           if (historyForContext.length > 0) {
@@ -981,21 +958,21 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         id: generateId(),
         role: 'assistant',
         type: 'error',
-        content: `Sorry, I ran into an issue. Please check the console for details. (Error: ${errorMessage.substring(0,100)})`
+        content: `Sorry, an issue occurred. Please check the console for details. (Error: ${errorMessage.substring(0,100)})`
       }));
     }
     setIsLoading(false);
     textareaRef.current?.focus();
   };
 
-  const handleFileSelect = (filePath: string) => {
+  const handleFileSelect = (filePath: string, itemType: 'file' | 'folder') => {
     if (attachedFiles.length >= MAX_ATTACHED_FILES) {
-      toast({ variant: "destructive", title: "Attachment Limit", description: `You can attach a maximum of ${MAX_ATTACHED_FILES} files.` });
+      toast({ variant: "destructive", title: "Attachment Limit", description: `Max ${MAX_ATTACHED_FILES} items.` });
       setFileSelectorOpen(false);
       return;
     }
     if (attachedFiles.some(f => f.path === filePath)) {
-      toast({ variant: "default", title: "Already Attached", description: "This file or folder is already attached." });
+      toast({ variant: "default", title: "Already Attached", description: "This item is already attached." });
       setFileSelectorOpen(false);
       return;
     }
@@ -1004,21 +981,23 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     if (fileNode && !Array.isArray(fileNode)) {
       let attachedFile: AttachedFileUIData;
       
-      if (fileNode.type === 'folder') {
+      if (itemType === 'folder') {
         const folderContent = generateFolderContext(fileNode);
         attachedFile = {
           path: filePath,
           name: fileNode.name + '/',
-          content: folderContent
+          content: folderContent,
+          type: 'folder'
         };
-        toast({ title: "Folder Attached", description: `Context from "${fileNode.name}" folder (including ${countFilesInFolder(fileNode)} files) is now attached.` });
+        toast({ title: "Folder Attached", description: `Context from "${fileNode.name}" folder is now attached.` });
       } else {
         const openedFile = openedFiles.get(filePath);
         const contentToAttach = openedFile ? openedFile.content : fileNode.content;
         attachedFile = {
           path: filePath,
           name: fileNode.name,
-          content: contentToAttach || ''
+          content: contentToAttach || '',
+          type: 'file'
         };
         toast({ title: "File Attached", description: `Context from "${fileNode.name}" is now attached.` });
       }
@@ -1043,62 +1022,23 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       });
     };
     
-    traverse(folderNode.children);
+    traverse(node.children);
     return count;
   };
 
   const generateFolderContext = (folderNode: FileSystemNode): string => {
-    if (!folderNode.children) return `Folder: ${folderNode.name}\nPath: ${folderNode.path}\nEmpty folder`;
+    if (!folderNode.children) return `Folder: ${folderNode.name}\nPath: ${folderNode.path}\n(Empty folder)`;
 
     let context = `Folder: ${folderNode.name}\n`;
     context += `Path: ${folderNode.path}\n`;
-    context += `Total files: ${countFilesInFolder(folderNode)}\n\n`;
+    context += `Total direct items: ${folderNode.children.length}\n\n`;
     
-    const filesByType: Record<string, FileSystemNode[]> = {};
-    const traverse = (nodes: FileSystemNode[], currentPath: string = '') => {
-      nodes.forEach(node => {
-        const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
-        
-        if (node.type === 'file') {
-          const ext = node.name.split('.').pop() || 'no-ext';
-          if (!filesByType[ext]) filesByType[ext] = [];
-          filesByType[ext].push(node);
-        } else if (node.type === 'folder' && node.children) {
-          traverse(node.children, fullPath);
-        }
-      });
-    };
-    
-    traverse(folderNode.children);
-    
-    context += "File Structure Summary:\n";
-    Object.entries(filesByType).forEach(([ext, files]) => {
-      context += `- ${ext.toUpperCase()} files (${files.length}): ${files.map(f => f.name).slice(0,5).join(', ')}${files.length > 5 ? '...' : ''}\n`;
+    context += "Direct Children:\n";
+    folderNode.children.slice(0, 10).forEach(child => { // Limit to first 10 direct children for brevity
+        context += `- ${child.name} (${child.type})\n`;
     });
-    
-    context += "\n";
-    
-    const keyFiles: FileSystemNode[] = [];
-    const importantExtensions = ['ts', 'tsx', 'js', 'jsx', 'py', 'md', 'json', 'html', 'css'];
-    
-    importantExtensions.forEach(ext => {
-      if (filesByType[ext]) {
-        keyFiles.push(...filesByType[ext].slice(0, 2)); 
-      }
-    });
-    
-    if (keyFiles.length > 0) {
-      context += "Partial Contents of Key Files (up to 3 total, 300 chars each):\n\n";
-      keyFiles.slice(0, 3).forEach(file => {
-        const fileContent = openedFiles.get(file.path)?.content || file.content || '';
-        const contentPreview = fileContent.length > 300 
-          ? fileContent.slice(0, 300) + '\n... (truncated)'
-          : fileContent;
-        
-        context += `=== ${file.name} ===\n`;
-        context += contentPreview;
-        context += '\n\n';
-      });
+    if (folderNode.children.length > 10) {
+        context += `- ... and ${folderNode.children.length - 10} more items.\n`
     }
     
     return context;
@@ -1111,8 +1051,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
   const handleFileOperation = async (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => {
     if (operation === 'delete') {
       const targetNode = findNodeByPath(operationData.targetPath);
-      const isFolder = targetNode && !Array.isArray(targetNode) && Array.isArray(targetNode.children);
-      const itemType = isFolder ? 'folder' : 'file';
+      const itemType = targetNode && !Array.isArray(targetNode) && targetNode.type === 'folder' ? 'folder' : 'file';
       const itemName = targetNode ? targetNode.name : operationData.targetPath.split('/').pop();
       
       showConfirmationDialog(
@@ -1142,9 +1081,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 type: 'delete',
                 data: {
                   name: nodeToDelete.name,
-                  type: Array.isArray(nodeToDelete.children) ? 'folder' : 'file',
-                  content: !Array.isArray(nodeToDelete.children) ? (openedFiles.get(nodeToDelete.path)?.content || nodeToDelete.content || '') : '',
-                  parentPath: nodeToDelete.path.substring(0, nodeToDelete.path.lastIndexOf('/')),
+                  type: nodeToDelete.type,
+                  content: nodeToDelete.type === 'file' ? (openedFiles.get(nodeToDelete.path)?.content || nodeToDelete.content || '') : '',
+                  parentPath: nodeToDelete.path.substring(0, nodeToDelete.path.lastIndexOf('/')) || '/',
                   originalPath: nodeToDelete.path
                 },
                 timestamp: Date.now(),
@@ -1159,11 +1098,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               if (success) {
                 setAttachedFiles(prev => prev.filter(f => f.path !== nodeToDelete.path));
                 if (undoOperation) addToUndoStack(undoOperation);
-              } else { console.error(`AI Assistant: Delete operation for "${nodeToDelete.name}" reported failure by deleteNode.`); }
+              } else { console.error(`AI Assistant: Delete operation for "${nodeToDelete.name}" failed.`, {operationData, nodeToDelete}); }
             } else {
-              message = `File not found: ${operationData.targetPath}`;
+              message = `Item not found: ${operationData.targetPath}`;
             }
-          } else { message = "Target path is required for delete operation."; }
+          } else { message = "Target path is required for delete."; }
           break;
 
         case 'rename':
@@ -1180,9 +1119,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               };
               success = renameNode(nodeToRename.id, operationData.newName);
               message = success ? `Successfully renamed to ${operationData.newName}.` : `Failed to rename. Name might be invalid or already exist.`;
-              if (success) addToUndoStack(undoOperation); else { console.error(`AI Assistant: Rename operation for "${originalName}" to "${operationData.newName}" reported failure.`);}
+              if (success) addToUndoStack(undoOperation); else { console.error(`AI Assistant: Rename for "${originalName}" to "${operationData.newName}" failed.`, {operationData, nodeToRename});}
             } else {
-              message = `File not found: ${operationData.targetPath}`;
+              message = `Item not found: ${operationData.targetPath}`;
             }
           } else {
             message = 'Target path and new name are required for rename.';
@@ -1194,12 +1133,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
             const nodeToMove = findNodeByPath(operationData.targetPath);
             const destinationNode = findNodeByPath(operationData.destinationPath);
             if (nodeToMove && destinationNode) {
-              const isDestinationFolder = Array.isArray(destinationNode.children);
-              if (!isDestinationFolder) {
+              if (destinationNode.type !== 'folder') {
                 message = `Destination "${destinationNode.name}" is not a folder.`;
               } else {
-                const originalParentPath = nodeToMove.path.substring(0, nodeToMove.path.lastIndexOf('/'));
-                const newPath = destinationNode.path + '/' + nodeToMove.name;
+                const originalParentPath = nodeToMove.path.substring(0, nodeToMove.path.lastIndexOf('/')) || '/';
+                const newPath = (destinationNode.path === '/' ? '' : destinationNode.path) + '/' + nodeToMove.name;
                 undoOperation = {
                   type: 'move',
                   data: { name: nodeToMove.name, originalPath: nodeToMove.path, newPath, originalParentPath, destinationPath: destinationNode.path },
@@ -1212,15 +1150,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                   message = `Successfully moved ${nodeToMove.name} to ${destinationNode.name}.`;
                   addToUndoStack(undoOperation);
                 } catch (error: any) {
-                  console.error("AI Assistant: Move operation failed in context.", error);
+                  console.error("AI Assistant: Move operation error.", error);
                   message = `Failed to move. Error: ${error.message || 'Unknown error'}`;
                 }
               }
             } else {
-              message = `Source or destination not found. Source: ${nodeToMove ? `Found (${nodeToMove.name})` : `Not found (${operationData.targetPath})`}, Dest: ${destinationNode ? `Found (${destinationNode.name})` : `Not found (${operationData.destinationPath})`}.`;
+              message = `Source or destination not found. Src: ${operationData.targetPath}, Dest: ${operationData.destinationPath}.`;
             }
           } else {
-             message = 'Target path and destination path are required for move operation.';
+             message = 'Target and destination paths are required for move.';
           }
           break;
 
@@ -1243,7 +1181,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               };
               addToUndoStack(undoOperation);
             } else {
-              message = `Failed to create. Name might be invalid or already exist.`;
+              message = `Failed to create. Name invalid or already exists.`;
             }
           } else {
             message = 'File name and type are required for creation.';
@@ -1262,7 +1200,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         variant: success ? "default" : "destructive"
       });
       if (!success && operation !== 'list') {
-        console.error(`AI Assistant: File operation ${operation} failed. Message: ${message}`, operationData);
+        console.error(`AI Assistant: File operation ${operation} failed. Msg: ${message}`, operationData);
       }
 
       if (success && operation === 'rename') {
@@ -1278,13 +1216,13 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       return { success, message };
 
     } catch (error: any) {
-      console.error(`AI Assistant: File operation error for ${operation}:`, error);
+      console.error(`AI Assistant: Error in ${operation} operation.`, error);
       toast({ 
         title: "Operation Error", 
-        description: "An unexpected error occurred. Please check the console.",
+        description: "Unexpected error. Check console.",
         variant: "destructive"
       });
-      return { success: false, message: "Operation failed due to an unexpected error." };
+      return { success: false, message: "Operation failed: unexpected error." };
     }
   };
 
@@ -1300,7 +1238,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     try {
       let result;
       if (operationType === 'create' && newName && fileType) {
-        // For create, targetPath is the parent directory, newName is the name of the new item
         result = await performFileOperation('create', { parentPath: targetPath || '/', fileName: newName, fileType, openInIDE: true });
       } else if (operationType === 'rename' && targetPath && newName) {
         result = await performFileOperation('rename', { targetPath, newName });
@@ -1310,15 +1247,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         result = await performFileOperation('move', {targetPath, destinationPath});
       }
        else {
-        throw new Error("Invalid parameters for file operation suggestion.");
+        throw new Error("Invalid params for file op suggestion.");
       }
 
       if (result?.success) {
         setActionAppliedStates(prev => ({...prev, [buttonKey]: true}));
       }
     } catch (error: any) {
-      console.error("AI Assistant: Error handling file operation suggestion:", error);
-      toast({ title: "Operation Failed", description: "Failed to execute suggested file operation. Check console.", variant: "destructive" });
+      console.error("AI Assistant: Error handling file op suggestion:", error);
+      toast({ title: "Operation Failed", description: "Could not execute suggested file operation. Check console.", variant: "destructive" });
     }
     setLoadingStates(prev => ({...prev, [buttonKey]: false}));
   };
@@ -1330,25 +1267,25 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         context,
         requiresConfirmation: true,
         isBackground: false,
-        confirmed: true, // Auto-confirm for now, or implement confirmation flow
+        confirmed: true, 
       });
       toast({ 
         title: "Terminal Command Sent", 
-        description: `Command "${command}" processed. Check terminal panel for output.`,
+        description: `Command "${command}" processed. Check terminal.`,
       });
       return result;
     } catch (error: any) {
       console.error('AI Assistant: Terminal command error:', error);
       toast({ 
         title: "Terminal Command Failed", 
-        description: "Failed to execute terminal command. Check console.",
+        description: "Failed to execute. Check console.",
         variant: "destructive"
       });
       return { success: false, message: "Command execution failed" };
     }
   };
 
-  const analyzeCodeForSmartPlacement = async (code: string, prompt: string) => {
+  const analyzeCodeForSmartPlacement = async (code: string, promptText: string) => {
     try {
       const fileSystemTree = generateSimplifiedFileSystemTree(fileSystem, 4);
       const openFilesForAnalysis = Array.from(openedFiles.entries()).map(([path, node]) => ({
@@ -1357,7 +1294,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         language: detectFileLanguage(path),
       }));
 
-      const codeType = detectCodeType(code, prompt);
+      const codeType = detectCodeType(code, promptText);
       const codeName = extractCodeName(code, codeType);
       const dependencies = extractDependencies(code);
 
@@ -1368,7 +1305,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         query: {
           type: codeType,
           name: codeName,
-          description: prompt,
+          description: promptText,
           language: detectMainLanguage(code),
           dependencies,
         },
@@ -1409,9 +1346,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     return languageMap[ext || ''] || 'Unknown';
   };
 
-  const detectCodeType = (code: string, prompt: string): 'function' | 'component' | 'class' | 'interface' | 'utility' | 'service' | 'hook' | 'general' => {
+  const detectCodeType = (code: string, promptText: string): 'function' | 'component' | 'class' | 'interface' | 'utility' | 'service' | 'hook' | 'general' => {
     const lowerCode = code.toLowerCase();
-    const lowerPrompt = prompt.toLowerCase();
+    const lowerPrompt = promptText.toLowerCase();
     if (lowerPrompt.includes('component') || lowerCode.includes('react') || /<\w+.*?>/.test(code) && (lowerCode.includes('jsx') || lowerCode.includes('tsx'))) return 'component';
     if (lowerPrompt.includes('hook') || lowerCode.includes('use') && (lowerCode.includes('function') || lowerCode.includes('=>'))) return 'hook';
     if (lowerPrompt.includes('interface') || lowerCode.includes('interface ')) return 'interface';
@@ -1473,22 +1410,27 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setExpandedCodePreviews(prev => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
-  const getFileOrFolderIcon = (label: string) => {
-    if (label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-primary" />;
+  const getFileOrFolderIcon = (label: string, itemType?: 'file' | 'folder') => {
+    if (itemType === 'folder' || label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-primary" />;
     return <FileText className="inline h-4 w-4 mr-1 text-primary" />;
   };
-
-  const getDisplayName = (label: string) => {
-    if (label.endsWith('/')) return label.slice(0, -1);
-    return label.split('/').pop() || label;
+  
+  const getDisplayName = (label: string, itemType?: 'file' | 'folder') => {
+    let name = label;
+    if (itemType === 'folder' || label.endsWith('/')) {
+      name = label.slice(0, -1); // Remove trailing slash for folders
+    }
+    return name.split('/').pop() || name; // Get last part of path
   };
 
-  const cleanFolderName = (name: string) => {
-    let base = name.split('.')[0];
+  const cleanFolderName = (name: string): string => {
+    let base = name.split('.')[0]; // Remove extension if any
+    base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
     return base.charAt(0).toUpperCase() + base.slice(1);
   };
 
   return (
+    <TooltipProvider>
     <div className="w-full border-l border-border bg-sidebar flex flex-col h-full">
       <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -1954,91 +1896,53 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
                       {msg.type === 'fileOperationExecution' && msg.fileOperationData && (
                         <div className="space-y-2">
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
-                          <Card className={cn(
-                            "border-2",
-                            msg.fileOperationData.success 
-                              ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
-                              : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
-                          )}>
-                            <CardContent className="p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  {msg.fileOperationData.success ? (
-                                    <Check className="h-4 w-4 text-green-600" />
-                                  ) : (
-                                    <XCircle className="h-4 w-4 text-red-600" />
-                                  )}
-                                  <span className="text-sm font-medium capitalize">
-                                    {msg.fileOperationData.operation} Operation
-                                  </span>
-                                </div>
-                                {msg.fileOperationData && msg.fileOperationData.success && ['delete', 'rename', 'move', 'create'].includes(msg.fileOperationData.operation) && (() => {
-                                  const opData = msg.fileOperationData;
-                                  return (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7 text-xs ml-2"
-                                      onClick={() => {
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            <Card className={cn("border-2", msg.fileOperationData.success ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800")}>
+                                <CardContent className="p-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        {msg.fileOperationData.success ? <Check className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
+                                        <span className="text-sm font-medium capitalize">
+                                            {msg.fileOperationData.operation} Operation
+                                        </span>
+                                    </div>
+                                    
+                                    {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mb-1"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
+                                    {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground mb-1"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
+                                    {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
+
+                                    {msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && (() => {
+                                        const opData = msg.fileOperationData;
                                         const recentOp = undoStack.find(op => 
-                                          op.type === opData.operation &&
-                                          ((op.data.originalPath && op.data.originalPath === opData.targetPath) ||
-                                           (op.data.newPath && op.data.newPath === opData.targetPath) ||
-                                           (op.data.destinationPath && op.data.destinationPath === opData.destinationPath) ||
-                                           (op.data.path && op.data.path === opData.targetPath))
+                                            op.type === 'rename' &&
+                                            op.data.newPath === opData.targetPath && // The original target was the new path
+                                            op.data.originalName === opData.newName   // The original name was the new name
                                         );
-                                        if (recentOp) {
-                                          executeUndo(recentOp);
-                                          setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp));
-                                        } else {
-                                          toast({title: "Undo Failed", description: "Could not find matching operation to undo.", variant: "destructive"});
-                                        }
-                                      }}
-                                      title={`Undo ${opData.operation} operation`}
-                                    >
-                                      <Undo2 className="h-3 w-3 mr-1" />
-                                      Undo
-                                    </Button>
-                                  );
-                                })()}
-                              </div>
-                              
-                              {msg.fileOperationData.targetPath && (
-                                <div className="text-xs text-muted-foreground mb-1">
-                                  <strong>Target:</strong> {msg.fileOperationData.targetPath}
-                                </div>
-                              )}
-                              
-                              {msg.fileOperationData.newName && (
-                                <div className="text-xs text-muted-foreground mb-1">
-                                  <strong>New Name:</strong> {msg.fileOperationData.newName}
-                                </div>
-                              )}
-                              
-                              {msg.fileOperationData.destinationPath && (
-                                <div className="text-xs text-muted-foreground mb-1">
-                                  <strong>Destination:</strong> {msg.fileOperationData.destinationPath}
-                                </div>
-                              )}
-                              
-                              {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
-                                <div className="text-xs">
-                                  <strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
-                                  <div className="mt-1 max-h-32 overflow-y-auto space-y-1 themed-scrollbar">
-                                    {msg.fileOperationData.filesFound.slice(0, 10).map((file, idx) => (
-                                      <div key={idx} className="text-muted-foreground">• {file}</div>
-                                    ))}
-                                    {msg.fileOperationData.filesFound.length > 10 && (
-                                      <div className="text-muted-foreground">
-                                        ... and {msg.fileOperationData.filesFound.length - 10} more items
-                                      </div>
+                                        return (
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                onClick={() => {
+                                                    const recentOp = undoStack.find(op => 
+                                                        op.type === 'rename' && op.data.newPath === opData.targetPath && op.data.originalName === opData.newName
+                                                    );
+                                                    if (recentOp) { executeUndo(recentOp); setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); } 
+                                                    else { toast({title: "Undo Failed", description: "Matching rename op not found.", variant: "destructive"}); }
+                                                }}
+                                                title={`Undo rename to ${opData.newName}`}
+                                            >
+                                                <Undo2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                        );
+                                    })()}
+
+                                    {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
+                                        <div className="text-xs"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
+                                            <div className="mt-1 max-h-32 overflow-y-auto space-y-1 themed-scrollbar">
+                                                {msg.fileOperationData.filesFound.slice(0, 10).map((file, idx) => (<div key={idx} className="text-muted-foreground">• {file}</div>))}
+                                                {msg.fileOperationData.filesFound.length > 10 && (<div className="text-muted-foreground">... and {msg.fileOperationData.filesFound.length - 10} more</div>)}
+                                            </div>
+                                        </div>
                                     )}
-                                  </div>
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
+                                </CardContent>
+                            </Card>
                         </div>
                       )}
 
@@ -2203,7 +2107,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                         </div>
                       )}
 
-                      {msg.type === 'filenameSuggestion' && msg.filenameSuggestionData && (
+                        {msg.type === 'filenameSuggestion' && msg.filenameSuggestionData && (
                         <div className="space-y-3">
                           <div className="whitespace-pre-wrap font-medium text-sm mb-2">
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -2227,6 +2131,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               </div>
                               <div className="text-xs text-primary/90 dark:text-primary/90 mb-3">
                                 {msg.filenameSuggestionData.analysis.detectedLanguage} • {msg.filenameSuggestionData.analysis.codeType}
+                                {msg.filenameSuggestionData.itemType === 'folder' && " (Folder)"}
                               </div>
                               
                               <div className="space-y-2">
@@ -2234,41 +2139,57 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   const buttonKey = `${msg.id}-rename-${idx}`;
                                   const isApplied = actionAppliedStates[buttonKey];
                                   const anyApplied = Object.keys(actionAppliedStates).some(k => k.startsWith(`${msg.id}-rename-`) && actionAppliedStates[k]);
+                                  
+                                  let displayName = suggestion.filename;
+                                  if (msg.filenameSuggestionData?.itemType === 'folder') {
+                                    displayName = cleanFolderName(suggestion.filename);
+                                  }
+
                                   return (
                                     <div key={idx} className="relative flex items-center justify-between p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-mono text-sm font-medium">{suggestion.filename}</span>
-                                          <span className={cn("text-xs px-2 py-1 rounded", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
-                                            {Math.round(suggestion.confidence * 100)}%
-                                          </span>
-                                        </div>
-                                        <div className="text-xs text-muted-foreground mt-1 capitalize">
-                                          {suggestion.category}
-                                        </div>
-                                      </div>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className="flex-1 truncate">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono text-sm font-medium truncate" title={suggestion.filename}>
+                                                  {displayName}
+                                                </span>
+                                              <span className={cn("text-xs px-2 py-1 rounded", "bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary")}>
+                                                {Math.round(suggestion.confidence * 100)}%
+                                              </span>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground mt-1 capitalize truncate" title={suggestion.reasoning}>
+                                              {suggestion.category}: {suggestion.reasoning}
+                                            </div>
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" align="start">
+                                          <p>Full suggested name: {suggestion.filename}</p>
+                                          <p>Reason: {suggestion.reasoning}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
                                       <button
                                         className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
-                                        title={isApplied ? 'Applied' : 'Apply this name'}
+                                        title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
                                         disabled={isLoading || (anyApplied && !isApplied)}
                                         onClick={async () => {
                                           if (msg.filenameSuggestionData?.targetPath) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
-                                              let newName = suggestion.filename;
-                                              const node = getFileSystemNode(msg.filenameSuggestionData.targetPath);
-                                              if (node && !Array.isArray(node) && node.type === 'folder') {
-                                                newName = cleanFolderName(newName);
-                                              }
+                                              const nameToApply = msg.filenameSuggestionData.itemType === 'folder' 
+                                                ? cleanFolderName(suggestion.filename)
+                                                : suggestion.filename;
+
                                               const result = await handleFileOperation('rename', {
                                                 targetPath: msg.filenameSuggestionData.targetPath,
-                                                newName
+                                                newName: nameToApply
                                               });
                                               if (result?.success) {
                                                 toast({
-                                                  title: "File Renamed",
-                                                  description: `Successfully renamed to \"${newName}\"`,
+                                                  title: "Item Renamed",
+                                                  description: `Successfully renamed to \"${nameToApply}\"`,
                                                 });
+                                                // Mark all suggestions for this message as applied
                                                 setActionAppliedStates(prev => {
                                                   const newState = { ...prev };
                                                   Object.keys(newState).forEach(k => {
@@ -2276,18 +2197,19 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                   });
                                                   return newState;
                                                 });
-                                                setChatHistory(prev => [
-                                                  ...prev,
+                                                // Add a follow-up message confirming the rename
+                                                setChatHistory(prevHistory => [
+                                                  ...prevHistory,
                                                   {
                                                     id: generateId(),
                                                     role: 'assistant',
                                                     type: 'fileOperationExecution',
-                                                    content: `✅ Successfully renamed to ${newName}`,
+                                                    content: `✅ Successfully renamed to ${nameToApply}`,
                                                     fileOperationData: {
                                                       operation: 'rename',
                                                       success: true,
                                                       targetPath: msg.filenameSuggestionData!.targetPath,
-                                                      newName,
+                                                      newName: nameToApply,
                                                       message: result.message,
                                                       requiresConfirmation: false,
                                                     }
@@ -2299,7 +2221,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                   description: result?.message || 'Could not rename. Check console.',
                                                   variant: 'destructive',
                                                 });
-                                                console.error(`AI Assistant: Rename failed for ${msg.filenameSuggestionData.targetPath} to ${newName}. Message: ${result?.message}`);
+                                                console.error(`AI Assistant: Rename failed for ${msg.filenameSuggestionData.targetPath} to ${nameToApply}. Message: ${result?.message}`);
                                                 setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false }));
                                               }
                                             } catch (error: any) {
@@ -2322,7 +2244,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               </div>
                               <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
                                 <div className="text-xs text-primary/90 dark:text-primary/90">
-                                  💡 Current: {msg.filenameSuggestionData.currentFileName} → Suggested: {msg.filenameSuggestionData.topSuggestion?.filename}
+                                  💡 Current: {msg.filenameSuggestionData.currentFileName} → Suggested: {
+                                    msg.filenameSuggestionData.itemType === 'folder' 
+                                    ? cleanFolderName(msg.filenameSuggestionData.topSuggestion?.filename || '')
+                                    : msg.filenameSuggestionData.topSuggestion?.filename
+                                  }
                                 </div>
                               </div>
                             </CardContent>
@@ -2351,7 +2277,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 {attachedFiles.map(file => (
                   <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1 py-0.5 rounded-md">
                     <div className="flex items-center gap-1.5 text-muted-foreground truncate">
-                      <Pin className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      {file.type === 'folder' ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" /> : <FileText className="h-3.5 w-3.5 shrink-0 text-primary" /> }
                       <span className="truncate" title={file.path}>{file.name}</span>
                     </div>
                     <Button
@@ -2391,26 +2317,26 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                          title="Attach file for context"
+                          title="Attach file or folder for context"
                       >
                           <Paperclip className="h-3 w-3 shrink-0" />
                       </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
                     <Command>
-                      <CommandInput placeholder="Search files to attach..." />
+                      <CommandInput placeholder="Search files/folders to attach..." />
                       <CommandList>
-                        <CommandEmpty>No files found.</CommandEmpty>
-                        <CommandGroup heading="Workspace Files">
+                        <CommandEmpty>No items found.</CommandEmpty>
+                        <CommandGroup heading="Workspace Items">
                           <ScrollArea className="h-[200px] themed-scrollbar">
-                            {allFilesForSelector.map((file) => (
+                            {allFilesForSelector.map((item) => (
                               <CommandItem
-                                key={file.value}
-                                value={file.value}
-                                onSelect={() => handleFileSelect(file.path)}
+                                key={item.value}
+                                value={item.value}
+                                onSelect={() => handleFileSelect(item.path, item.type)}
                                 className="text-xs cursor-pointer"
                               >
-                                {getFileOrFolderIcon(file.label)}{getDisplayName(file.label)}
+                                {getFileOrFolderIcon(item.label, item.type)}{getDisplayName(item.label, item.type)}
                               </CommandItem>
                             ))}
                           </ScrollArea>
@@ -2484,5 +2410,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 }

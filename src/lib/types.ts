@@ -45,12 +45,13 @@ export interface GenerateCodeOutput {
 
 
 export interface FileOperationSuggestion {
-  type: 'create' | 'rename' | 'delete' | 'none';
+  type: 'create' | 'rename' | 'delete' | 'none' | 'move';
   reasoning: string;
   targetPath?: string;
   newName?: string;
   confidence: number;
   fileType?: 'file' | 'folder';
+  destinationPath?: string;
 }
 
 export interface AlternativeOption {
@@ -115,7 +116,7 @@ export interface FileOperationExecutionData {
 
 export interface TerminalCommandExecutionData {
   command: string;
-  status: 'pending' | 'executing' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'executing' | 'completed' | 'failed' | 'cancelled' | 'unsupported';
   output?: string;
   error?: string;
   context: string;
@@ -123,6 +124,7 @@ export interface TerminalCommandExecutionData {
   isBackground: boolean;
   executionTime?: number;
   exitCode?: number;
+  availableCommands?: string[];
 }
 
 export interface SmartCodePlacementData {
@@ -267,6 +269,7 @@ export interface FilenameSuggestionData {
   topSuggestion: FilenameSuggestion | null;
   currentFileName?: string;
   targetPath?: string;
+  itemType?: 'file' | 'folder'; // Added to distinguish target item type
 }
 
 export interface IdeState {

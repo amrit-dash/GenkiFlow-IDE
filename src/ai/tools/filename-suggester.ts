@@ -11,7 +11,7 @@ import {z} from 'genkit';
 const FilenameSuggesterInputSchema = z.object({
   fileContent: z.string().describe('The content of the file to analyze'),
   currentFileName: z.string().optional().describe('The current filename if any'),
-  fileType: z.enum(['file', 'folder']).default('file').describe('Type of the item to suggest name for'),
+  fileType: z.enum(['file', 'folder']).default('file').describe('Type of the item to suggest name for (file or folder)'),
   context: z.string().optional().describe('Additional context about the file purpose'),
   projectStructure: z.string().optional().describe('Project file structure for context'),
 });
@@ -19,7 +19,7 @@ const FilenameSuggesterInputSchema = z.object({
 // Define the output schema for the tool
 const FilenameSuggesterOutputSchema = z.object({
   suggestions: z.array(z.object({
-    filename: z.string().describe('Suggested filename with extension'),
+    filename: z.string().describe('Suggested filename (with extension for files, without for folders)'),
     reasoning: z.string().describe('Explanation for why this name was suggested'),
     confidence: z.number().min(0).max(1).describe('Confidence score (0-1)'),
     category: z.enum(['descriptive', 'conventional', 'functional', 'contextual']).describe('Type of naming strategy'),
@@ -30,37 +30,29 @@ const FilenameSuggesterOutputSchema = z.object({
     mainFunctions: z.array(z.string()).describe('Main functions or exports found'),
     hasExports: z.boolean().describe('Whether file exports functions/classes'),
     isComponent: z.boolean().describe('Whether this appears to be a UI component'),
-    suggestedExtension: z.string().describe('Recommended file extension'),
+    suggestedExtension: z.string().describe('Recommended file extension (relevant for fileType="file")'),
   }).describe('Analysis of the file content'),
 });
 
 export const filenameSuggester = ai.defineTool(
   {
     name: 'filenameSuggester',
-    description: 'Analyzes file content deeply and suggests exactly 3 contextual, non-repetitive filenames based on code structure, functions, and purpose. Provides intelligent naming based on actual code content.',
+    description: 'Analyzes file content deeply and suggests exactly 3 contextual, non-repetitive filenames based on code structure, functions, and purpose. Provides intelligent naming based on actual code content and distinguishes between file and folder naming conventions.',
     inputSchema: FilenameSuggesterInputSchema,
     outputSchema: FilenameSuggesterOutputSchema,
   },
   async (input) => {
-    console.log('Filename suggester called with enhanced analysis');
+    console.log(`Filename suggester called for ${input.fileType}: ${input.currentFileName || 'New Item'}`);
     
     const content = input.fileContent;
     const currentName = input.currentFileName;
     const fileType = input.fileType || 'file';
     
     // Deep analyze the file content
-    const analysis = analyzeFileContentDeep(content);
+    const analysis = analyzeFileContentDeep(content, fileType);
     
     // Generate exactly 3 intelligent, non-repetitive suggestions
-    let suggestions = generateIntelligentSuggestions(content, analysis, currentName, input.context);
-    
-    // If folder, clean up names
-    if (fileType === 'folder') {
-      suggestions = suggestions.map(s => ({
-        ...s,
-        filename: cleanFolderName(s.filename)
-      }));
-    }
+    let suggestions = generateIntelligentSuggestions(content, analysis, fileType, currentName, input.context);
     
     return {
       suggestions: suggestions.slice(0, 3), // Ensure exactly 3 suggestions
@@ -69,43 +61,71 @@ export const filenameSuggester = ai.defineTool(
   }
 );
 
+// Helper to clean and capitalize folder names
+function cleanFolderName(name: string): string {
+  let base = name.split('.')[0]; // Remove any extension
+  // Capitalize first letter and ensure camelCase or PascalCase for multi-word names
+  base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
 // Enhanced analysis function that deeply understands code structure
-function analyzeFileContentDeep(content: string) {
+function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder') {
   const lowerContent = content.toLowerCase();
   
-  // Detect language and extension with high accuracy
   let detectedLanguage = 'Text';
   let suggestedExtension = '.txt';
-  
-  if (content.includes('def ') && (content.includes('print(') || content.includes('import ') || content.includes('return'))) {
-    detectedLanguage = 'Python';
-    suggestedExtension = '.py';
-  } else if (content.includes('function') || content.includes('const ') || content.includes('let ') || content.includes('=>')) {
-    if (content.includes('React') || content.includes('jsx') || content.includes('tsx') || /return\s*\([\s\S]*</.test(content)) {
-      detectedLanguage = 'React/TypeScript';
-      suggestedExtension = content.includes('interface ') || content.includes(': string') ? '.tsx' : '.jsx';
-    } else if (content.includes('interface ') || content.includes('type ') || content.includes(': string') || content.includes(': number')) {
-      detectedLanguage = 'TypeScript';
-      suggestedExtension = '.ts';
-    } else {
-      detectedLanguage = 'JavaScript';
-      suggestedExtension = '.js';
+
+  if (fileType === 'folder') {
+    detectedLanguage = 'Folder';
+    suggestedExtension = ''; // No extension for folders
+  } else {
+    // Language and extension detection for files
+    if (content.includes('def ') && (content.includes('print(') || content.includes('import ') || content.includes('return')) && !lowerContent.includes('<script') && !lowerContent.includes('function')) {
+      detectedLanguage = 'Python';
+      suggestedExtension = '.py';
+    } else if (content.includes('function') || content.includes('const ') || content.includes('let ') || content.includes('=>') || content.includes('class ') && (content.includes('React') || content.includes('render()'))) {
+      if (content.includes('React') || content.includes('jsx') || content.includes('tsx') || /return\s*\([\s\S]*</.test(content)) {
+        detectedLanguage = content.includes('interface ') || content.includes(': string') || content.includes('type ') ? 'TypeScript (React)' : 'JavaScript (React)';
+        suggestedExtension = detectedLanguage.includes('TypeScript') ? '.tsx' : '.jsx';
+      } else if (content.includes('interface ') || content.includes('type ') || content.includes(': string') || content.includes(': number')) {
+        detectedLanguage = 'TypeScript';
+        suggestedExtension = '.ts';
+      } else {
+        detectedLanguage = 'JavaScript';
+        suggestedExtension = '.js';
+      }
+    } else if (content.includes('#include') || content.includes('std::') || content.includes('int main')) {
+      detectedLanguage = 'C++';
+      suggestedExtension = '.cpp';
+    } else if (content.includes('public class') || content.includes('import java')) {
+      detectedLanguage = 'Java';
+      suggestedExtension = '.java';
+    } else if (lowerContent.includes('<html>') || lowerContent.includes('<body>')) {
+      detectedLanguage = 'HTML';
+      suggestedExtension = '.html';
+    } else if (lowerContent.match(/[\.#\w-]+\s*\{[\s\S]*\}/)) { // Basic CSS pattern
+      detectedLanguage = 'CSS';
+      suggestedExtension = '.css';
+    } else if (lowerContent.startsWith('{') && lowerContent.endsWith('}') || lowerContent.startsWith('[') && lowerContent.endsWith(']')) {
+        try { JSON.parse(content); detectedLanguage = 'JSON'; suggestedExtension = '.json'; } catch (e) { /* not JSON */ }
+    } else if (lowerContent.includes('---') && (lowerContent.includes('layout:') || lowerContent.includes('title:'))) {
+        detectedLanguage = 'Markdown (Frontmatter)';
+        suggestedExtension = '.md';
+    } else if (lowerContent.includes('# ') || lowerContent.includes('## ')) {
+        detectedLanguage = 'Markdown';
+        suggestedExtension = '.md';
     }
-  } else if (content.includes('#include') || content.includes('std::') || content.includes('int main')) {
-    detectedLanguage = 'C++';
-    suggestedExtension = '.cpp';
-  } else if (content.includes('public class') || content.includes('import java')) {
-    detectedLanguage = 'Java';
-    suggestedExtension = '.java';
   }
   
-  // Intelligent code type detection based on actual content patterns
   let codeType = 'general';
-  const isComponent = /return\s*\([\s\S]*</.test(content) || lowerContent.includes('component') || content.includes('jsx') || content.includes('tsx');
+  const isComponent = /return\s*\([\s\S]*</.test(content) && (detectedLanguage.includes('React') || detectedLanguage.includes('JavaScript') || detectedLanguage.includes('TypeScript'));
   
-  if (isComponent) {
+  if (fileType === 'folder') {
+    codeType = 'folder';
+  } else if (isComponent) {
     codeType = 'component';
-  } else if (content.match(/^const use[A-Z]/m) || content.includes('useState') || content.includes('useEffect')) {
+  } else if (content.match(/\b(useState|useEffect|useContext|useReducer|useCallback|useMemo|useRef|useImperativeHandle|useLayoutEffect|useDebugValue)\b/g)) {
     codeType = 'hook';
   } else if (hasMultipleMathFunctions(content)) {
     codeType = 'math-operations';
@@ -115,280 +135,227 @@ function analyzeFileContentDeep(content: string) {
     codeType = 'utility';
   } else if (lowerContent.includes('service') || lowerContent.includes('api') || hasApiPatterns(content)) {
     codeType = 'service';
-  } else if (content.includes('interface ') && !content.includes('function')) {
+  } else if ((content.includes('interface ') || content.includes('type ')) && !content.includes('function') && !content.includes('class ') && (detectedLanguage.includes('TypeScript'))) {
     codeType = 'types';
   } else if (content.includes('class ')) {
     codeType = 'class';
-  } else if (hasMultipleFunctions(content)) {
-    codeType = 'functions';
+  } else if (hasMultipleFunctions(content, detectedLanguage)) {
+    codeType = 'functions-module';
   }
   
-  // Extract meaningful function names (not generic ones)
-  const mainFunctions = extractMeaningfulFunctions(content);
-  
+  const mainFunctions = extractMeaningfulFunctions(content, detectedLanguage);
   const hasExports = content.includes('export') || content.includes('module.exports');
   
   return {
     detectedLanguage,
     codeType,
-    mainFunctions: mainFunctions.slice(0, 5), // Top 5 most meaningful
+    mainFunctions: mainFunctions.slice(0, 5),
     hasExports,
     isComponent,
     suggestedExtension,
   };
 }
 
-// Helper functions for intelligent code pattern detection
 function hasMultipleMathFunctions(content: string): boolean {
   const mathPatterns = [
-    /\b(sum|add|subtract|multiply|divide|calculate|compute)\b/gi,
-    /\+|\-|\*|\/|\%/g,
-    /math\./gi,
-    /\b(average|mean|median|total|product)\b/gi
+    /\b(sum|add|subtract|multiply|divide|calculate|compute|average|mean|median|total|product|power|sqrt|abs|round|floor|ceil|min|max)\b/gi,
+    /\b(Math\.\w+)\b/g, // Math.sqrt, Math.pow etc.
   ];
-  
-  let mathIndicators = 0;
+  let count = 0;
   mathPatterns.forEach(pattern => {
-    const matches = content.match(pattern);
-    if (matches && matches.length > 2) mathIndicators++;
+    count += (content.match(pattern) || []).length;
   });
-  
-  return mathIndicators >= 2;
+  return count > 2; // At least 3 math-related terms or functions
 }
 
 function hasDataProcessingPatterns(content: string): boolean {
   const dataPatterns = [
-    /\b(filter|map|reduce|sort|process|transform)\b/gi,
-    /\b(data|array|list|collection)\b/gi,
-    /\.forEach|\.filter|\.map|\.reduce/gi
+    /\b(filter|map|reduce|sort|find|forEach|some|every|group|transform|process|parse|extract|load|save)\b/gi,
+    /\b(data|array|list|object|collection|item|record|entry|json|csv|xml)\b/gi,
+    /\.(forEach|filter|map|reduce|sort|find)\b/g, // Array methods
   ];
-  
-  return dataPatterns.some(pattern => {
-    const matches = content.match(pattern);
-    return matches && matches.length > 1;
+  let count = 0;
+  dataPatterns.forEach(pattern => {
+    count += (content.match(pattern) || []).length;
   });
+  return count > 2;
 }
 
 function hasUtilityPatterns(content: string): boolean {
   const utilPatterns = [
-    /\b(helper|util|format|validate|convert|parse)\b/gi,
-    /export.*function/gi
+    /\b(util|helper|format|validate|convert|parse|is\w+|get\w+|set\w+|create\w+|build\w+|generate\w+)\b/gi,
+    /export\s+(function|const|let|var|class)/gi
   ];
-  
-  return utilPatterns.some(pattern => content.match(pattern));
+   let count = 0;
+  utilPatterns.forEach(pattern => {
+    count += (content.match(pattern) || []).length;
+  });
+  // Needs multiple utility-like functions or exports
+  return count > 2 && (content.match(/export\s+(function|const|let|var|class)/gi) || []).length > 1;
 }
 
 function hasApiPatterns(content: string): boolean {
   const apiPatterns = [
-    /\b(fetch|axios|api|request|response|endpoint)\b/gi,
-    /\b(get|post|put|delete|patch)\b/gi,
-    /\/api\//gi
+    /\b(fetch|axios|request|response|endpoint|http|https|url|api|client|query|mutation)\b/gi,
+    /\b(get|post|put|delete|patch)\s*\(/gi, // Common HTTP methods as functions
+    /\/api\//gi,
+    /\.(get|post|put|delete|patch)\s*\(/gi, // Chained methods like client.get()
   ];
-  
-  return apiPatterns.some(pattern => content.match(pattern));
+  let count = 0;
+  apiPatterns.forEach(pattern => {
+    count += (content.match(pattern) || []).length;
+  });
+  return count > 1;
 }
 
-function hasMultipleFunctions(content: string): boolean {
-  const functionCount = (content.match(/\b(function|def|const\s+\w+\s*=)/g) || []).length;
+function hasMultipleFunctions(content: string, language: string): boolean {
+  let functionCount = 0;
+  if (language.includes('JavaScript') || language.includes('TypeScript')) {
+    functionCount = (content.match(/\b(function|=>|class\s+\w+\s*\{[\s\S]*constructor)\b/g) || []).length;
+    functionCount += (content.match(/^(?:export\s+)?(?:async\s+)?(?:function\*?\s+\w+|const\s+\w+\s*=\s*(?:async\s+)?\(|class\s+\w+)/gm) || []).length;
+  } else if (language === 'Python') {
+    functionCount = (content.match(/^\s*def\s+\w+\s*\(|^\s*class\s+\w+\s*\(/gm) || []).length;
+  }
   return functionCount > 1;
 }
 
-// Extract meaningful function names, avoiding generic ones
-function extractMeaningfulFunctions(content: string): string[] {
+function extractMeaningfulFunctions(content: string, language: string): string[] {
   const functions: string[] = [];
-  
-  // Function patterns for different languages
-  const patterns = [
-    /function\s+([a-zA-Z_][a-zA-Z0-9_]*)/g,
-    /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g,
-    /def\s+([a-zA-Z_][a-zA-Z0-9_]*)/g,
-    /export\s+(?:const\s+)?([a-zA-Z_][a-zA-Z0-9_]*)/g,
-    /class\s+([A-Z][a-zA-Z0-9_]*)/g
-  ];
-  
-  // Generic names to avoid
+  const uniqueFunctions = new Set<string>();
+
+  const patterns: RegExp[] = [];
+  if (language.includes('JavaScript') || language.includes('TypeScript')) {
+    patterns.push(
+      /(?:export\s+)?(?:async\s+)?function\*?\s+([a-zA-Z_][a-zA-Z0-9_]*)/g, // function foo / export function foo
+      /(?:export\s+)?const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:async\s+)?(?:\([^)]*\))?\s*=>/g, // const foo = () => / export const foo = async () =>
+      /(?:export\s+default\s+)?class\s+([A-Z][a-zA-Z0-9_]*)/g, // class Foo / export default class Foo
+      /(?:export\s+)?(?:abstract\s+)?class\s+([A-Z][a-zA-Z0-9_]*)/g // export class Foo / abstract class Foo
+    );
+  } else if (language === 'Python') {
+    patterns.push(
+      /^\s*def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/gm, // def foo(
+      /^\s*class\s+([A-Z][a-zA-Z0-9_]*)\s*[\(:]/gm // class Foo: / class Foo(
+    );
+  }
+
   const genericNames = new Set([
-    'main', 'init', 'start', 'run', 'execute', 'handler', 'callback',
-    'temp', 'test', 'example', 'demo', 'foo', 'bar', 'baz'
+    'main', 'init', 'start', 'run', 'execute', 'handler', 'callback', 'constructor',
+    'temp', 'test', 'example', 'demo', 'foo', 'bar', 'baz', 'data', 'item', 'value', 'key',
+    'get', 'set', 'update', 'create', 'delete', 'index', 'app', 'config', 'util', 'helper', 'render'
   ]);
-  
+
   patterns.forEach(pattern => {
     let match;
     while ((match = pattern.exec(content)) !== null) {
       const funcName = match[1];
       if (funcName && 
           funcName.length > 2 && 
-          funcName.length < 25 &&
+          funcName.length < 30 && // Avoid overly long names
           !genericNames.has(funcName.toLowerCase()) &&
-          !functions.includes(funcName)) {
+          !/^[A-Z_0-9]+$/.test(funcName) && // Avoid CONSTANTS
+          !uniqueFunctions.has(funcName)) {
         functions.push(funcName);
+        uniqueFunctions.add(funcName);
       }
     }
   });
   
-  // Prioritize more meaningful names
-  return functions.sort((a, b) => {
-    const scoreA = getMeaningfulnessScore(a);
-    const scoreB = getMeaningfulnessScore(b);
-    return scoreB - scoreA;
-  });
+  return functions.sort((a, b) => getMeaningfulnessScore(b) - getMeaningfulnessScore(a));
 }
 
 function getMeaningfulnessScore(name: string): number {
-  let score = 0;
+  let score = name.length; // Longer names are often more descriptive
+  if (/[A-Z]/.test(name) && /[a-z]/.test(name)) score += 5; // Camel/PascalCase bonus
+  if (name.includes('_')) score += 3; // Snake_case bonus
   
-  // Longer names tend to be more descriptive
-  score += Math.min(name.length * 0.5, 5);
-  
-  // Names with underscores or camelCase are more structured
-  if (name.includes('_') || /[a-z][A-Z]/.test(name)) score += 2;
-  
-  // Domain-specific terms get higher scores
-  const domainTerms = ['calculate', 'process', 'handle', 'manage', 'create', 'update', 'delete', 'fetch', 'save', 'load'];
-  if (domainTerms.some(term => name.toLowerCase().includes(term))) score += 3;
-  
+  // Penalize if it looks like a variable name (all caps or starts with lowercase and no clear verb)
+  if (/^[A-Z_0-9]+$/.test(name)) score -= 10; // Likely a constant
+  if (/^[a-z]/.test(name) && !/\b(get|set|is|has|handle|create|update|delete|calculate|process|validate|format|convert|parse|render|build|generate|fetch|load|save)\b/i.test(name)) {
+      score -= 5; // Might be a variable rather than function/class
+  }
   return score;
 }
 
-// Generate exactly 3 intelligent, non-repetitive suggestions
-function generateIntelligentSuggestions(content: string, analysis: any, currentName?: string, context?: string) {
-  const suggestions = [];
-  const usedNames = new Set();
-  
-  // Strategy 1: Context-aware functional naming
-  if (analysis.codeType === 'math-operations' && analysis.mainFunctions.length > 0) {
-    const baseName = analysis.detectedLanguage === 'Python' ? 'math_operations' : 'mathOperations';
-    const filename = `${baseName}${analysis.suggestedExtension}`;
-    if (!usedNames.has(filename)) {
-      suggestions.push({
-        filename,
-        reasoning: `Generic name for multiple math functions (${analysis.mainFunctions.slice(0, 2).join(', ')}) in ${analysis.detectedLanguage}`,
-        confidence: 0.95,
-        category: 'contextual' as const,
-      });
-      usedNames.add(filename);
+function generateIntelligentSuggestions(content: string, analysis: any, fileType: 'file' | 'folder', currentName?: string, context?: string) {
+  const suggestions: Array<{filename: string, reasoning: string, confidence: number, category: 'descriptive' | 'conventional' | 'functional' | 'contextual'}> = [];
+  const usedNames = new Set<string>();
+
+  const addSuggestion = (name: string, reason: string, conf: number, cat: 'descriptive' | 'conventional' | 'functional' | 'contextual') => {
+    if (name && !usedNames.has(name.toLowerCase()) && suggestions.length < 3) {
+      suggestions.push({ filename: name, reasoning: reason, confidence: Math.min(0.95, Math.max(0.1, conf)), category: cat });
+      usedNames.add(name.toLowerCase());
     }
-  } else if (analysis.mainFunctions.length > 0) {
-    // Use the most meaningful function name
-    const primaryFunction = analysis.mainFunctions[0];
-    const filename = `${primaryFunction}${analysis.suggestedExtension}`;
-    if (!usedNames.has(filename)) {
-      suggestions.push({
-        filename,
-        reasoning: `Named after the main function "${primaryFunction}"`,
-        confidence: 0.90,
-        category: 'functional' as const,
-      });
-      usedNames.add(filename);
+  };
+  
+  let baseName = '';
+
+  // Strategy 1: Primary function/class/component name
+  if (analysis.mainFunctions.length > 0) {
+    baseName = analysis.mainFunctions[0];
+    let suggestedName = fileType === 'folder' ? cleanFolderName(baseName) : `${baseName}${analysis.suggestedExtension}`;
+    addSuggestion(suggestedName, `Based on the primary entity: ${baseName}`, 0.9, 'functional');
+  }
+
+  // Strategy 2: Code type based conventional naming
+  if (analysis.codeType !== 'general' && analysis.codeType !== 'folder') {
+    let conventional = '';
+    if (analysis.codeType === 'component') conventional = baseName || 'NewComponent';
+    else if (analysis.codeType === 'hook') conventional = baseName || 'useNewHook';
+    else if (analysis.codeType === 'utility') conventional = 'utils';
+    else if (analysis.codeType === 'service') conventional = baseName ? `${baseName}Service` : 'apiService';
+    else if (analysis.codeType === 'types') conventional = 'types';
+    else if (analysis.codeType === 'math-operations') conventional = 'mathUtils';
+    else if (analysis.codeType === 'data-processor') conventional = 'dataProcessor';
+    else if (analysis.codeType === 'functions-module') conventional = baseName ? `${baseName}Module` : 'helpers';
+
+
+    if (conventional) {
+       let suggestedName = fileType === 'folder' ? cleanFolderName(conventional) : `${conventional}${analysis.suggestedExtension}`;
+       addSuggestion(suggestedName, `Conventional name for a ${analysis.codeType}`, 0.8, 'conventional');
     }
   }
   
-  // Strategy 2: Semantic naming based on code purpose
-  const semanticName = getSemanticName(analysis, content);
-  if (semanticName && !usedNames.has(semanticName)) {
-    suggestions.push({
-      filename: semanticName,
-      reasoning: `Descriptive name based on ${analysis.codeType} functionality`,
-      confidence: 0.85,
-      category: 'descriptive' as const,
+  // Strategy 3: Context from user prompt if available
+  if (context) {
+    const contextWords = context.toLowerCase().match(/\b\w{4,}\b/g) || []; // Meaningful words
+    if (contextWords.length > 0) {
+      let contextBase = contextWords.slice(0,2).join('_'); // e.g. "create_user" from "create user profile"
+      contextBase = contextBase.replace(/[^a-zA-Z0-9_]/g, ''); // Sanitize
+      let suggestedName = fileType === 'folder' ? cleanFolderName(contextBase) : `${contextBase}${analysis.suggestedExtension}`;
+      addSuggestion(suggestedName, `Based on your instruction: "${context}"`, 0.75, 'contextual');
+    }
+  }
+
+  // Strategy 4: Descriptive name if others are weak or missing
+  if (suggestions.length < 2 && analysis.codeType !== 'general') {
+    let descriptiveBase = analysis.codeType.replace(/-/g, '_'); // e.g. "math_operations"
+    if (analysis.mainFunctions.length > 1) descriptiveBase += `_${analysis.mainFunctions[1]}`; // Add secondary function
+    descriptiveBase = descriptiveBase.slice(0, 30); // Limit length
+    let suggestedName = fileType === 'folder' ? cleanFolderName(descriptiveBase) : `${descriptiveBase}${analysis.suggestedExtension}`;
+    addSuggestion(suggestedName, `Descriptive name for ${analysis.codeType}`, 0.7, 'descriptive');
+  }
+
+  // Fallback suggestions
+  const fallbacks = fileType === 'folder' 
+    ? ['NewUtilities', 'SharedLogic', 'MyModule']
+    : ['app', 'core', 'utils', 'index', 'script'];
+  
+  let fallbackIndex = 0;
+  while (suggestions.length < 3 && fallbackIndex < fallbacks.length) {
+    let fallbackBase = fallbacks[fallbackIndex++];
+    let suggestedName = fileType === 'folder' ? cleanFolderName(fallbackBase) : `${fallbackBase}${analysis.suggestedExtension}`;
+    addSuggestion(suggestedName, 'General purpose fallback name', 0.5 - (suggestions.length * 0.1), 'descriptive');
+  }
+  
+  // Ensure first letter is capitalized for folders if not already handled by cleanFolderName
+  if (fileType === 'folder') {
+    suggestions.forEach(sugg => {
+        if (sugg.filename.length > 0 && sugg.filename[0] === sugg.filename[0].toLowerCase()) {
+            sugg.filename = sugg.filename.charAt(0).toUpperCase() + sugg.filename.slice(1);
+        }
     });
-    usedNames.add(semanticName);
   }
-  
-  // Strategy 3: Conventional naming based on patterns
-  const conventionalName = getConventionalName(analysis, content);
-  if (conventionalName && !usedNames.has(conventionalName)) {
-    suggestions.push({
-      filename: conventionalName,
-      reasoning: `Following ${analysis.detectedLanguage} naming conventions`,
-      confidence: 0.80,
-      category: 'conventional' as const,
-    });
-    usedNames.add(conventionalName);
-  }
-  
-  // Fill remaining slots if needed with intelligent alternatives
-  while (suggestions.length < 3) {
-    const fallbackName = generateFallbackName(analysis, suggestions.length, analysis.suggestedExtension);
-    if (!usedNames.has(fallbackName)) {
-      suggestions.push({
-        filename: fallbackName,
-        reasoning: `Alternative ${analysis.codeType} file name`,
-        confidence: 0.70 - (suggestions.length * 0.1),
-        category: 'descriptive' as const,
-      });
-      usedNames.add(fallbackName);
-    } else {
-      break; // Avoid infinite loop
-    }
-  }
-  
-  return suggestions;
+
+  return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 3);
 }
 
-function getSemanticName(analysis: any, content: string): string | null {
-  const ext = analysis.suggestedExtension;
-  
-  switch (analysis.codeType) {
-    case 'math-operations':
-      return analysis.detectedLanguage === 'Python' ? `math_utils${ext}` : `mathUtils${ext}`;
-    case 'data-processor':
-      return analysis.detectedLanguage === 'Python' ? `data_processor${ext}` : `dataProcessor${ext}`;
-    case 'component':
-      return analysis.mainFunctions.length > 0 ? `${analysis.mainFunctions[0]}Component${ext}` : `Component${ext}`;
-    case 'hook':
-      return analysis.mainFunctions.length > 0 ? `${analysis.mainFunctions[0]}${ext}` : `customHook${ext}`;
-    case 'utility':
-      return analysis.detectedLanguage === 'Python' ? `helpers${ext}` : `utils${ext}`;
-    case 'service':
-      return analysis.detectedLanguage === 'Python' ? `api_service${ext}` : `apiService${ext}`;
-    case 'types':
-      return `types${ext}`;
-    default:
-      if (analysis.mainFunctions.length > 1) {
-        return analysis.detectedLanguage === 'Python' ? `functions${ext}` : `helpers${ext}`;
-      }
-      return null;
-  }
-}
-
-function getConventionalName(analysis: any, content: string): string | null {
-  const ext = analysis.suggestedExtension;
-  
-  if (analysis.isComponent && analysis.mainFunctions.length > 0) {
-    return `${analysis.mainFunctions[0]}${ext}`;
-  }
-  
-  if (analysis.detectedLanguage === 'Python' && analysis.mainFunctions.length > 1) {
-    // Python convention: snake_case for modules with multiple functions
-    const baseName = analysis.codeType === 'math-operations' ? 'calculations' : 'module';
-    return `${baseName}${ext}`;
-  }
-  
-  if (analysis.detectedLanguage.includes('TypeScript') || analysis.detectedLanguage === 'JavaScript') {
-    // JS/TS convention: camelCase or PascalCase
-    if (analysis.isComponent) {
-      return analysis.mainFunctions.length > 0 ? `${analysis.mainFunctions[0]}${ext}` : `MyComponent${ext}`;
-    }
-    if (analysis.codeType === 'utility') {
-      return `utilities${ext}`;
-    }
-  }
-  
-  return null;
-}
-
-function generateFallbackName(analysis: any, index: number, ext: string): string {
-  const fallbacks = [
-    `${analysis.codeType}${ext}`,
-    `${analysis.detectedLanguage.toLowerCase().replace(/[^a-z]/g, '')}${ext}`,
-    `code${ext}`
-  ];
-  
-  return fallbacks[index] || `file${index}${ext}`;
-}
-
-function cleanFolderName(name: string) {
-  let base = name.split('.')[0];
-  return base.charAt(0).toUpperCase() + base.slice(1);
-} 
