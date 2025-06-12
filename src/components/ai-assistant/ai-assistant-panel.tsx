@@ -1410,17 +1410,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setExpandedCodePreviews(prev => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
-  const getFileOrFolderIcon = (label: string, itemType?: 'file' | 'folder') => {
-    if (itemType === 'folder' || label.endsWith('/')) return <FolderOpen className="inline h-4 w-4 mr-1 text-primary shrink-0" />;
+  const getFileOrFolderIcon = (itemType: 'file' | 'folder') => {
+    if (itemType === 'folder') return <FolderOpen className="inline h-4 w-4 mr-1 text-primary shrink-0" />;
     return <FileText className="inline h-4 w-4 mr-1 text-primary shrink-0" />;
   };
   
-  const getDisplayName = (label: string, itemType?: 'file' | 'folder') => {
-    let name = label;
-    if (itemType === 'folder' || label.endsWith('/')) {
-      name = label.slice(0, -1); 
-    }
-    return name.split('/').pop() || name; 
+  const getDisplayName = (label: string) => {
+    const parts = label.split('/');
+    return parts[parts.length - 1];
   };
 
   const cleanFolderName = (name: string): string => {
@@ -2158,7 +2155,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                 </span>
                                             </div>
                                             <div className="text-xs text-muted-foreground mt-1 capitalize flex items-center">
-                                                <span>{suggestion.category.charAt(0).toUpperCase() + suggestion.category.slice(1)} Suggestion</span>
+                                                <span>{suggestion.category} Suggestion ({Math.round(suggestion.confidence*100)}%)</span>
                                             </div>
                                           </div>
                                         </TooltipTrigger>
@@ -2173,10 +2170,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         className={cn(
                                           "absolute bottom-2 right-2 rounded-full p-1 transition-colors shrink-0",
                                           isApplied ? 'bg-green-100 text-green-600' : 'bg-transparent text-muted-foreground hover:text-primary',
-                                          anyApplied && 'opacity-50 pointer-events-none' 
+                                          anyApplied && !isApplied && 'opacity-50 pointer-events-none' 
                                         )}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || anyApplied}
+                                        disabled={isLoading || (anyApplied && !isApplied) || isApplied}
                                         onClick={async () => {
                                           if (msg.filenameSuggestionData?.targetPath && !anyApplied) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
@@ -2282,7 +2279,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 {attachedFiles.map(file => (
                   <div key={file.path} className="flex items-center justify-between text-xs bg-muted px-1 py-0.5 rounded-md">
                     <div className="flex items-center gap-1.5 text-muted-foreground truncate min-w-0"> 
-                      <span className="shrink-0">{getFileOrFolderIcon(file.name, file.type)}</span>
+                      <span className="shrink-0">{getFileOrFolderIcon(file.type)}</span>
                       <span className="truncate" title={file.path}>{file.name}</span>
                     </div>
                     <Button
@@ -2341,8 +2338,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 onSelect={() => handleFileSelect(item.path, item.type)}
                                 className="text-xs cursor-pointer flex items-center" 
                               >
-                                <span className="shrink-0 mr-2">{getFileOrFolderIcon(item.label, item.type)}</span>
-                                <span className="flex-1 truncate min-w-0">{getDisplayName(item.label, item.type)}</span>
+                                <span className="shrink-0 mr-2">{getFileOrFolderIcon(item.type)}</span>
+                                <span className="flex-1 truncate min-w-0">{getDisplayName(item.label)}</span>
                               </CommandItem>
                             ))}
                           </ScrollArea>
