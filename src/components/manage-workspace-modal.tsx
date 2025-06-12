@@ -26,9 +26,9 @@ type ProcessingStep = 'idle' | 'confirmUnsupported' | 'confirmOverwrite' | 'conf
 const ACCENT_COLOR_PALETTE = [
   { name: 'Default Purple', value: '270 70% 55%', cssColor: 'hsl(270, 70%, 55%)' },
   { name: 'Vibrant Blue', value: '210 70% 55%', cssColor: 'hsl(210, 70%, 55%)' },
-  { name: 'Forest Green', value: '145 60% 45%', cssColor: 'hsl(145, 60%, 45%)' },
+  // { name: 'Forest Green', value: '145 60% 45%', cssColor: 'hsl(145, 60%, 45%)' }, // Removed
   { name: 'Sunset Orange', value: '30 80% 55%', cssColor: 'hsl(30, 80%, 55%)' },
-  { name: 'Ruby Red', value: '0 70% 50%', cssColor: 'hsl(0, 70%, 50%)' },
+  // { name: 'Ruby Red', value: '0 70% 50%', cssColor: 'hsl(0, 70%, 50%)' }, // Removed
   { name: 'Hot Pink', value: '330 80% 60%', cssColor: 'hsl(330, 80%, 60%)' },
   { name: 'Teal Aqua', value: '180 60% 45%', cssColor: 'hsl(180, 60%, 45%)' },
 ];
@@ -163,32 +163,34 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
           <div className="space-y-6 py-1">
             {/* Accent Color Section */}
             <section>
-              <h3 className="text-md font-semibold mb-3 flex items-center">
-                <Palette className="mr-2 h-4 w-4 text-primary" />
-                Change Accent Color
-              </h3>
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2">
-                {ACCENT_COLOR_PALETTE.map((color) => (
-                  <Button
-                    key={color.name}
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      "h-10 w-10 rounded-md border-2 transition-all duration-150 ease-in-out",
-                      accentColor === color.value 
-                        ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground dark:ring-background' // More prominent selection
-                        : 'hover:scale-110'
-                    )}
-                    style={{ backgroundColor: color.cssColor }}
-                    onClick={() => handleAccentColorChange(color.value)}
-                    title={color.name}
-                  >
-                    {accentColor === color.value && (
-                      <span className="text-xs font-bold" style={{ color: parseInt(color.value.split(' ')[2]) > 50 ? 'black' : 'white' }}>✓</span>
-                    )}
-                    <span className="sr-only">{color.name}</span>
-                  </Button>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-md font-semibold flex items-center">
+                  <Palette className="mr-2 h-4 w-4 text-primary" />
+                  Change Accent Color
+                </h3>
+                <div className="flex flex-row gap-2">
+                  {ACCENT_COLOR_PALETTE.map((color) => (
+                    <Button
+                      key={color.name}
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        "h-10 w-10 rounded-full border-2 transition-all duration-150 ease-in-out", // Changed to rounded-full
+                        accentColor === color.value 
+                          ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground dark:ring-background'
+                          : 'hover:scale-110'
+                      )}
+                      style={{ backgroundColor: color.cssColor }}
+                      onClick={() => handleAccentColorChange(color.value)}
+                      title={color.name}
+                    >
+                      {accentColor === color.value && (
+                        <span className="text-xs font-bold" style={{ color: parseInt(color.value.split(' ')[2]) > 50 ? 'black' : 'white' }}>✓</span>
+                      )}
+                      <span className="sr-only">{color.name}</span>
+                    </Button>
+                  ))}
+                </div>
               </div>
             </section>
 
@@ -334,3 +336,4 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
+
