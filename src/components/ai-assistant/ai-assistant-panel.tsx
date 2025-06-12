@@ -994,7 +994,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         const folderContent = generateFolderContext(fileNode);
         attachedFile = {
           path: filePath,
-          name: fileNode.name + '/', // Keep slash for folders in UI state if needed
+          name: fileNode.name, // Use name directly, getDisplayName handles it
           content: folderContent,
           type: 'folder'
         };
@@ -1909,16 +1909,32 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                             <p className="whitespace-pre-wrap">{msg.content}</p>
                             <Card className={cn("border-2", msg.fileOperationData.success ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800")}>
                                 <CardContent className="p-3">
-                                    <div className="flex items-start gap-2 mb-1">
+                                    <div className="flex items-center gap-2 mb-1">
                                         {msg.fileOperationData.success ? <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" /> : <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />}
-                                        <div className="flex-grow">
-                                          <span className="text-sm font-medium capitalize">
-                                              {msg.fileOperationData.operation} Operation
-                                          </span>
-                                          {msg.fileOperationData.targetPath && <div className="text-xs text-muted-foreground mt-0.5"><strong>Target:</strong> {msg.fileOperationData.targetPath}</div>}
-                                          {msg.fileOperationData.newName && <div className="text-xs text-muted-foreground"><strong>New Name:</strong> {msg.fileOperationData.newName}</div>}
-                                        </div>
-                                         {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
+                                        <span className="text-sm font-medium capitalize flex-grow">
+                                            {msg.fileOperationData.operation} Operation
+                                        </span>
+                                    </div>
+                                    <div className="flex items-start justify-between">
+                                      <div className="pl-6"> {/* Indent details slightly */}
+                                          {msg.fileOperationData.targetPath && (
+                                              <div className="text-xs text-muted-foreground mt-0.5">
+                                                  <strong>Target:</strong> {msg.fileOperationData.targetPath}
+                                              </div>
+                                          )}
+                                          {msg.fileOperationData.newName && (
+                                              <div className="text-xs text-muted-foreground">
+                                                  <strong>New Name:</strong> {msg.fileOperationData.newName}
+                                              </div>
+                                          )}
+                                          {msg.fileOperationData.destinationPath && (
+                                            <div className="text-xs text-muted-foreground">
+                                                <strong>Destination:</strong> {msg.fileOperationData.destinationPath}
+                                            </div>
+                                          )}
+                                      </div>
+                                      {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
+                                        <div className="pt-1">
                                           <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
                                             onClick={() => {
                                                 const recentOp = undoStack.find(op => 
@@ -1938,14 +1954,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           >
                                             <Undo2 className="h-3.5 w-3.5" />
                                           </Button>
-                                        )}
+                                        </div>
+                                      )}
                                     </div>
-                                   
-                                    {msg.fileOperationData.destinationPath && <div className="text-xs text-muted-foreground mb-1"><strong>Destination:</strong> {msg.fileOperationData.destinationPath}</div>}
-                                    
-
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
-                                        <div className="text-xs"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
+                                        <div className="text-xs mt-2 pl-6"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
                                             <div className="mt-1 max-h-32 overflow-y-auto space-y-1 themed-scrollbar">
                                                 {msg.fileOperationData.filesFound.slice(0, 10).map((file, idx) => (<div key={idx} className="text-muted-foreground">• {file}</div>))}
                                                 {msg.fileOperationData.filesFound.length > 10 && (<div className="text-muted-foreground">... and {msg.fileOperationData.filesFound.length - 10} more</div>)}
@@ -2049,12 +2062,19 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           📂 {suggestion.folderPath}
                                         </div>
                                       </div>
-                                      <button
-                                        className={`absolute bottom-2 right-2 rounded-full p-1 transition-colors ${isApplied ? 'bg-green-100 text-green-600' : 'text-muted-foreground hover:text-primary'} ${anyApplied && !isApplied ? 'opacity-50 pointer-events-none' : ''}`}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn(
+                                            "absolute bottom-2 right-2 h-7 w-7",
+                                            isApplied ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground hover:text-primary',
+                                            (isLoading || (anyApplied && !isApplied)) && 'opacity-50 pointer-events-none',
+                                            anyApplied && isApplied && 'text-green-600 cursor-default hover:text-green-600'
+                                        )}
                                         title={isApplied ? 'Applied' : `Use this ${msg.smartFolderOperationData?.operation === 'move' ? 'destination' : 'name'}`}
-                                        disabled={isLoading || (anyApplied && !isApplied)}
+                                        disabled={isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)}
                                         onClick={async () => {
-                                          if (anyApplied && !isApplied) return; // Explicitly prevent re-click if another button in group was clicked
+                                          if (isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)) return;
                                           setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                           const opName = msg.smartFolderOperationData?.operation || 'Operation';
                                           const opNameCap = opName.charAt(0).toUpperCase() + opName.slice(1);
@@ -2089,7 +2109,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                                 variant: 'destructive',
                                               });
                                               console.error(`AI Assistant: Smart folder operation ${opName} failed.`, result);
-                                              setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false })); // Re-enable if failed
+                                              setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false })); 
                                             }
                                           } catch (error: any) {
                                             toast({
@@ -2098,12 +2118,12 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                               variant: 'destructive',
                                             });
                                             console.error(`AI Assistant: Smart folder operation ${opName} error.`, error);
-                                            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false })); // Re-enable on error
+                                            setActionAppliedStates(prev => ({ ...prev, [buttonKey]: false })); 
                                           }
                                         }}
                                       >
-                                        {isApplied ? <Check className="h-5 w-5 text-green-600" /> : <Check className="h-5 w-5" />}
-                                      </button>
+                                        {isApplied ? <CheckCircle2 className="h-5 w-5" /> : <Check className="h-5 w-5" />}
+                                      </Button>
                                     </div>
                                   );
                                 })}
@@ -2158,8 +2178,11 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   }
 
                                   return (
-                                    <div key={idx} className="relative p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2 pr-10"> 
-                                      <div className="pr-2"> 
+                                    <div key={idx} className="relative p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
+                                      <span className="absolute top-1.5 right-1.5 text-xs px-1.5 py-0.5 rounded-full bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary font-medium z-10">
+                                        {Math.round(suggestion.confidence * 100)}%
+                                      </span>
+                                      <div className="pr-12"> {/* Ensure space for confidence badge and button */}
                                         <Tooltip>
                                           <TooltipTrigger asChild>
                                             <span className="font-mono text-sm font-medium truncate block flex-shrink min-w-0" title={suggestion.filename}>
@@ -2168,25 +2191,28 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           </TooltipTrigger>
                                           <TooltipContent side="top" align="start">
                                             <p>Full suggested name: {suggestion.filename}</p>
-                                            <p>Category: {suggestion.category} ({Math.round(suggestion.confidence * 100)}% confidence)</p>
+                                            <p>Confidence: {Math.round(suggestion.confidence * 100)}%</p>
                                             <p>Detailed Reason: {suggestion.reasoning}</p>
                                           </TooltipContent>
                                         </Tooltip>
                                         <div className="text-xs text-muted-foreground mt-1 capitalize">
-                                            <span>{suggestion.category} Suggestion ({Math.round(suggestion.confidence * 100)}%)</span>
+                                            <span>{suggestion.category} Suggestion</span>
                                         </div>
                                       </div>
 
-                                      <button
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
                                         className={cn(
-                                          "absolute bottom-1.5 right-1.5 rounded-full p-1 transition-colors shrink-0",
-                                          isApplied ? 'text-green-600' : 'text-muted-foreground hover:text-primary',
-                                          (isLoading || anyApplied) && 'opacity-50 pointer-events-none'
+                                          "absolute bottom-2 right-2 h-7 w-7", // Adjusted vertical position
+                                          isApplied ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground hover:text-primary',
+                                          (isLoading || (anyApplied && !isApplied)) && 'opacity-50 pointer-events-none',
+                                           anyApplied && isApplied && 'text-green-600 cursor-default hover:text-green-600' // Keep applied green
                                         )}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                                        disabled={isLoading || anyApplied}
+                                        disabled={isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)}
                                         onClick={async () => {
-                                          if (isLoading || anyApplied) return;
+                                          if (isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)) return;
                                           if (msg.filenameSuggestionData?.targetPath) {
                                             setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
                                             try {
@@ -2251,7 +2277,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         }}
                                       >
                                         {isApplied ? <CheckCircle2 className="h-5 w-5" /> : <Check className="h-5 w-5" />}
-                                      </button>
+                                      </Button>
                                     </div>
                                   );
                                 })}
@@ -2259,7 +2285,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
                                 <div className="text-xs text-primary/90 dark:text-primary/90">
                                   <div>💡 Current: {msg.filenameSuggestionData.currentFileName}</div>
-                                  <div>→ Suggested: {
+                                  <div className="mt-0.5">→ Suggested: {
                                       msg.filenameSuggestionData.topSuggestion 
                                       ? (msg.filenameSuggestionData.itemType === 'folder'
                                         ? cleanFolderName(msg.filenameSuggestionData.topSuggestion.filename)
@@ -2432,3 +2458,4 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </TooltipProvider>
   );
 }
+
