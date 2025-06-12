@@ -579,7 +579,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             }
             targetParentNode = findTargetRecursive(newFs);
             if (!targetParentNode) {
-                console.error("Target parent folder not found or is not a folder:", targetParentFolderId);
+                console.warn("Target parent folder not found or is not a folder:", targetParentFolderId); // Changed from error to warn
                 if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode); else if (!sourceParentNode) newFs.push(draggedNode);
                 return prevFs; 
             }
