@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Brain, Send, Loader2, User, BotIcon, MessageSquarePlus, Paperclip, XCircle, Pin, AlertTriangle, Cpu, FolderOpen, FileText } from 'lucide-react';
+import { Brain, Send, Loader2, User, BotIcon, MessageSquarePlus, Paperclip, XCircle, Pin, AlertTriangle, Cpu, FolderOpen, FileText, Wand2 } from 'lucide-react'; // Added Wand2 here
 import { useIde } from '@/contexts/ide-context';
 import { summarizeCodeSnippetServer, generateCodeServer, refactorCodeServer, findExamplesServer, enhancedGenerateCodeServer, validateCodeServer, analyzeCodeUsageServer, executeActualFileOperationServer, executeActualTerminalCommandServer, smartCodePlacementServer, suggestFilenameServer, intelligentCodeMergerServer, smartFolderOperationsServer } from '@/app/(ide)/actions';
 import { generateSimplifiedFileSystemTree, analyzeFileSystemStructure } from '@/ai/tools/file-system-tree-generator';
@@ -20,7 +20,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { HintCard } from './hint-card';
 import { ChatMessageItem } from './chat-message-item';
 import type { AttachedFileUIData, UndoOperation, ConfirmationDialogData, ChatMessage, FilenameSuggestionDataForPanel } from './types';
-import { generateId, isFullFileReplacement } from './ai-assistant-utils';
+import { generateId, isFullFileReplacement, detectMainLanguage, detectCodeType, extractCodeName, extractDependencies } from './ai-assistant-utils';
 
 
 interface AiAssistantPanelProps {
@@ -896,6 +896,25 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     textareaRef.current?.focus();
   };
 
+  const generateFolderContext = (folderNode: FileSystemNode): string => {
+    if (!folderNode.children) return `Folder: ${folderNode.name}\nPath: ${folderNode.path}\n(Empty folder)`;
+  
+    let context = `Folder: ${folderNode.name}\n`;
+    context += `Path: ${folderNode.path}\n`;
+    context += `Total direct items: ${folderNode.children.length}\n\n`;
+    
+    context += "Direct Children:\n";
+    folderNode.children.slice(0, 10).forEach(child => { 
+        context += `- ${child.name} (${child.type})\n`;
+    });
+    if (folderNode.children.length > 10) {
+        context += `- ... and ${folderNode.children.length - 10} more items.\n`
+    }
+    
+    return context;
+  };
+
+
   const handleFileSelect = (filePath: string, itemType: 'file' | 'folder') => {
     if (attachedFiles.length >= MAX_ATTACHED_FILES) {
       toast({ variant: "destructive", title: "Attachment Limit Reached", description: `You can attach a maximum of ${MAX_ATTACHED_FILES} items.` });
@@ -1161,7 +1180,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
       const openFilesForAnalysis = Array.from(openedFiles.entries()).map(([path, node]) => ({
         path,
         content: node.content || '',
-        language: detectFileLanguage(path),
+        language: detectMainLanguage(path),
       }));
 
       const codeType = detectCodeType(code, promptText);
@@ -1252,7 +1271,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               onActivate={() => { setPrompt("Summarize the code."); textareaRef.current?.focus(); }}
             />
             <HintCard
-              icon={BotIcon} // Changed from Code2
+              icon={BotIcon} 
               title="Generate Code"
               description="Generate code with project context and smart file placement."
               onActivate={() => { setPrompt("Generate a Python function that takes a list of numbers and returns their sum."); textareaRef.current?.focus(); }}
@@ -1264,7 +1283,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               onActivate={() => { setPrompt("Refactor the current code for better readability and performance."); textareaRef.current?.focus(); }}
             />
              <HintCard
-              icon={Pin} // Changed from SearchCode
+              icon={Pin} 
               title="Find Examples"
               description="Search the codebase for usage examples of functions or components."
               onActivate={() => { setPrompt("Find examples of how the Button component is used."); textareaRef.current?.focus(); }}
@@ -1302,7 +1321,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 setForceReplaceState={setForceReplaceState}
               />
             ))}
-             {isLoading && chatHistory.length === 0 && ( // Show loader if loading and history is empty (first message)
+             {isLoading && chatHistory.length === 0 && ( 
                 <div className="flex justify-center items-center h-full">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -1454,3 +1473,5 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     </TooltipProvider>
   );
 }
+
+    
