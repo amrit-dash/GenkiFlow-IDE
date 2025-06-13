@@ -33,7 +33,18 @@ export function useAttachmentManager(ideContext: IdeState) {
   }, [openedFiles, generateFolderContext]);
 
   const allFilesForSelector = useMemo(() => {
-    return flattenFileSystemForSearch(fileSystem);
+    const flatList = flattenFileSystemForSearch(fileSystem);
+    // Sort the list: folders first, then files, both alphabetically
+    return flatList.sort((a, b) => {
+      if (a.type === 'folder' && b.type === 'file') {
+        return -1; // a (folder) comes before b (file)
+      }
+      if (a.type === 'file' && b.type === 'folder') {
+        return 1; // b (folder) comes before a (file)
+      }
+      // If types are the same, sort by name alphabetically
+      return a.name.localeCompare(b.name);
+    });
   }, [fileSystem, flattenFileSystemForSearch]);
 
   const handleFileSelect = useCallback((file: AttachedFileUIData) => {
