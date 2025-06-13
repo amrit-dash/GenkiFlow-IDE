@@ -78,9 +78,8 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type your message or / for commands..."
-          className="flex-1 resize-none bg-background border-border focus-visible:ring-primary focus-visible:ring-offset-0 min-h-[40px] max-h-[160px] text-sm themed-scrollbar"
-          rows={2}
+          placeholder="Type your message or ask for commands..."
+          className="flex-1 resize-none bg-background border-border focus-visible:ring-primary focus-visible:ring-offset-0 min-h-[86px] h-[86px] max-h-[200px] text-sm themed-scrollbar"
           disabled={isLoading}
         />
         <div className="flex flex-col gap-1.5 shrink-0">
