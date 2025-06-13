@@ -129,6 +129,9 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
 
   const executeUndo = async (operation: UndoOperation) => {
     try {
+      let undoSuccess = false;
+      let feedbackMessage = "";
+
       switch (operation.type) {
         case 'delete':
           const parentPath = operation.data.parentPath || '/';
@@ -139,21 +142,31 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           if (restoredNode && operation.data.content && operation.data.type === 'file') {
             updateFileContent(restoredNode.path, operation.data.content);
           }
-          toast({
-            title: "Undo Successful",
-            description: `Restored ${operation.data.name}`,
-          });
+          if(restoredNode) {
+            undoSuccess = true;
+            feedbackMessage = `✅ Undo successful: Restored ${operation.data.name}.`;
+            toast({
+              title: "Undo Successful",
+              description: `Restored ${operation.data.name}`,
+            });
+          } else {
+            feedbackMessage = `❌ Undo failed: Could not restore ${operation.data.name}.`;
+            toast({ title: "Undo Failed", description: `Could not restore ${operation.data.name}.`, variant: "destructive"});
+          }
           break;
           
         case 'rename':
           const nodeToRenameBack = getFileSystemNode(operation.data.newPath);
           if (nodeToRenameBack && !Array.isArray(nodeToRenameBack)) {
             renameNode(nodeToRenameBack.id, operation.data.originalName);
+            undoSuccess = true;
+            feedbackMessage = `✅ Undo successful: Restored name to '${operation.data.originalName}'.`;
             toast({
               title: "Undo Successful", 
               description: `Renamed back to ${operation.data.originalName}`,
             });
           } else {
+            feedbackMessage = `❌ Undo failed: Could not find item at ${operation.data.newPath} to rename back.`;
             toast({ title: "Undo Failed", description: `Could not find item at ${operation.data.newPath} to rename back. Please check console for details.`, variant: "destructive"});
             console.warn("Undo rename: node not found at newPath", operation.data.newPath);
           }
@@ -164,10 +177,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           const originalParent = getFileSystemNode(operation.data.originalParentPath);
           if (nodeToMoveBack && !Array.isArray(nodeToMoveBack) && originalParent && !Array.isArray(originalParent)) {
             moveNode(nodeToMoveBack.id, originalParent.id);
+            undoSuccess = true;
+            feedbackMessage = `✅ Undo successful: Moved ${operation.data.name} back to its original location.`;
             toast({
               title: "Undo Successful",
               description: `Moved back to original location`,
             });
+          } else {
+            feedbackMessage = `❌ Undo failed: Could not move ${operation.data.name} back. Source or original parent not found.`;
+            toast({ title: "Undo Failed", description: `Could not move back. Source or original parent not found.`, variant: "destructive"});
           }
           break;
           
@@ -175,13 +193,31 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           const nodeToDelete = getFileSystemNode(operation.data.path);
           if (nodeToDelete && !Array.isArray(nodeToDelete)) {
             deleteNode(nodeToDelete.id);
+            undoSuccess = true;
+            feedbackMessage = `✅ Undo successful: Removed created ${operation.data.name}.`;
             toast({
               title: "Undo Successful",
               description: `Removed created ${operation.data.name}`,
             });
+          } else {
+            feedbackMessage = `❌ Undo failed: Could not find created item ${operation.data.name} to remove.`;
+            toast({ title: "Undo Failed", description: `Could not find created item ${operation.data.name} to remove.`, variant: "destructive"});
           }
           break;
       }
+
+      if (feedbackMessage) {
+        setChatHistory(prevHistory => [
+          ...prevHistory,
+          {
+            id: generateId(),
+            role: 'assistant',
+            type: 'text',
+            content: feedbackMessage
+          }
+        ]);
+      }
+
     } catch (error) {
       toast({
         title: "Undo Failed",
@@ -189,6 +225,15 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
         variant: "destructive"
       });
       console.error("AI Assistant: Undo operation failed.", error);
+       setChatHistory(prevHistory => [
+          ...prevHistory,
+          {
+            id: generateId(),
+            role: 'assistant',
+            type: 'error',
+            content: `❌ Undo operation encountered an error. Please check console for details.`
+          }
+        ]);
     }
   };
 
@@ -1527,7 +1572,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-transparent"
                                 onClick={() => handleCopyCode(msg.code!, `${msg.id}-code`)}
                                 title={copiedStates[`${msg.id}-code`] ? "Copied!" : "Copy code"}
                               >
@@ -1556,7 +1601,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                   onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)}
                                   disabled={isLoading}
                                   title="Re-apply: Create File & Insert"
-                                  className="h-7 w-7"
+                                  className="h-7 w-7 hover:bg-transparent"
                                 >
                                   <RotateCcw className="h-4 w-4" />
                                 </Button>
@@ -1592,7 +1637,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                    onClick={async () => await handleApplyToEditor(msg.code!, msg.id, applyGeneratedCodeKey, msg.targetPath, 'Generated code from AI assistant')}
                                    disabled={isLoading}
                                    title="Re-apply: Insert into Editor"
-                                   className="h-7 w-7"
+                                   className="h-7 w-7 hover:bg-transparent"
                                  >
                                    <RotateCcw className="h-4 w-4" />
                                  </Button>
@@ -1807,7 +1852,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         <Button
                                           size="sm"
                                           variant="ghost"
-                                          className="h-6 px-2 text-xs"
+                                          className="h-6 px-2 text-xs hover:bg-transparent"
                                           onClick={async () => await handleApplyToEditor(
                                             msg.code!,
                                             msg.id,
@@ -1842,7 +1887,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className="absolute top-0.5 right-0.5 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-transparent"
                                   onClick={() => handleCopyCode(msg.suggestion!.proposedCode, `${msg.id}-suggestion`)}
                                   title={copiedStates[`${msg.id}-suggestion`] ? "Copied!" : "Copy code"}
                                 >
@@ -1870,7 +1915,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                      onClick={async () => await handleApplyToEditor(msg.suggestion!.proposedCode, msg.id, applyEditorKey, msg.targetPath, 'Refactoring suggestion')}
                                      disabled={isLoading}
                                      title="Re-apply: Apply to Editor"
-                                     className="h-6 w-6 mt-1"
+                                     className="h-6 w-6 mt-1 hover:bg-transparent"
                                    >
                                      <RotateCcw className="h-3.5 w-3.5" />
                                    </Button>
@@ -1893,7 +1938,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-transparent"
                                 onClick={() => handleCopyCode(ex, `${msg.id}-example-${i}`)}
                                 title={copiedStates[`${msg.id}-example-${i}`] ? "Copied!" : "Copy code"}
                               >
@@ -1908,55 +1953,54 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                         <div className="space-y-2">
                             <p className="whitespace-pre-wrap">{msg.content}</p>
                             <Card className={cn("border-2", msg.fileOperationData.success ? "bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-800" : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800")}>
-                                <CardContent className="p-3">
+                                <CardContent className={cn("p-3", msg.fileOperationData.operation === 'rename' && msg.fileOperationData.success && "relative")}>
                                     <div className="flex items-center gap-2 mb-1">
                                         {msg.fileOperationData.success ? <Check className="h-4 w-4 text-green-600 mt-0.5 shrink-0" /> : <XCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />}
                                         <span className="text-sm font-medium capitalize flex-grow">
                                             {msg.fileOperationData.operation} Operation
                                         </span>
                                     </div>
-                                    <div className="flex items-start justify-between">
-                                      <div className="pl-6"> {/* Indent details slightly */}
-                                          {msg.fileOperationData.targetPath && (
-                                              <div className="text-xs text-muted-foreground mt-0.5">
-                                                  <strong>Target:</strong> {msg.fileOperationData.targetPath}
-                                              </div>
-                                          )}
-                                          {msg.fileOperationData.newName && (
-                                              <div className="text-xs text-muted-foreground">
-                                                  <strong>New Name:</strong> {msg.fileOperationData.newName}
-                                              </div>
-                                          )}
-                                          {msg.fileOperationData.destinationPath && (
-                                            <div className="text-xs text-muted-foreground">
-                                                <strong>Destination:</strong> {msg.fileOperationData.destinationPath}
+                                    <div className="pl-6"> {/* Indent details slightly */}
+                                        {msg.fileOperationData.targetPath && (
+                                            <div className="text-xs text-muted-foreground mt-0.5">
+                                                <strong>Target:</strong> {msg.fileOperationData.targetPath}
                                             </div>
-                                          )}
-                                      </div>
-                                      {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
-                                        <div className="pt-1">
-                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground shrink-0"
-                                            onClick={() => {
-                                                const recentOp = undoStack.find(op => 
-                                                    op.type === 'rename' && 
-                                                    op.data.originalPath === msg.fileOperationData?.targetPath && 
-                                                    op.data.newName === msg.fileOperationData?.newName
-                                                );
-                                                if (recentOp) { 
-                                                    executeUndo(recentOp); 
-                                                    setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
-                                                } else { 
-                                                    toast({title: "Undo Failed", description: "Matching rename operation not found in undo history.", variant: "destructive"}); 
-                                                    console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
-                                                }
-                                            }}
-                                            title={`Undo rename to ${msg.fileOperationData.newName}`}
-                                          >
-                                            <Undo2 className="h-3.5 w-3.5" />
-                                          </Button>
-                                        </div>
-                                      )}
+                                        )}
+                                        {msg.fileOperationData.newName && (
+                                            <div className="text-xs text-muted-foreground">
+                                                <strong>New Name:</strong> {msg.fileOperationData.newName}
+                                            </div>
+                                        )}
+                                        {msg.fileOperationData.destinationPath && (
+                                          <div className="text-xs text-muted-foreground">
+                                              <strong>Destination:</strong> {msg.fileOperationData.destinationPath}
+                                          </div>
+                                        )}
                                     </div>
+                                    {msg.fileOperationData.success && msg.fileOperationData.operation === 'rename' && undoStack.find(op => op.type === 'rename' && op.data.originalPath === msg.fileOperationData?.targetPath && op.data.newName === msg.fileOperationData?.newName) && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-transparent shrink-0 absolute top-3 right-3"
+                                          onClick={() => {
+                                              const recentOp = undoStack.find(op => 
+                                                  op.type === 'rename' && 
+                                                  op.data.originalPath === msg.fileOperationData?.targetPath && 
+                                                  op.data.newName === msg.fileOperationData?.newName
+                                              );
+                                              if (recentOp) { 
+                                                  executeUndo(recentOp); 
+                                                  setUndoStack(prev => prev.filter(op => op.timestamp !== recentOp.timestamp)); 
+                                              } else { 
+                                                  toast({title: "Undo Failed", description: "Matching rename operation not found in undo history.", variant: "destructive"}); 
+                                                  console.warn("Undo: Matching rename op not found for", msg.fileOperationData);
+                                              }
+                                          }}
+                                          title={`Undo rename to ${msg.fileOperationData.newName}`}
+                                        >
+                                          <Undo2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    )}
                                     {msg.fileOperationData.filesFound && msg.fileOperationData.filesFound.length > 0 && (
                                         <div className="text-xs mt-2 pl-6"><strong>Items Found ({msg.fileOperationData.filesFound.length}):</strong>
                                             <div className="mt-1 max-h-32 overflow-y-auto space-y-1 themed-scrollbar">
@@ -2066,7 +2110,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         variant="ghost"
                                         size="icon"
                                         className={cn(
-                                            "absolute bottom-2 right-2 h-7 w-7",
+                                            "absolute bottom-2 right-2 h-7 w-7 hover:bg-transparent",
                                             isApplied ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground hover:text-primary',
                                             (isLoading || (anyApplied && !isApplied)) && 'opacity-50 pointer-events-none',
                                             anyApplied && isApplied && 'text-green-600 cursor-default hover:text-green-600'
@@ -2182,7 +2226,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                       <span className="absolute top-1.5 right-1.5 text-xs px-1.5 py-0.5 rounded-full bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary font-medium z-10">
                                         {Math.round(suggestion.confidence * 100)}%
                                       </span>
-                                      <div className="pr-12"> {/* Ensure space for confidence badge and button */}
+                                      <div className="pr-12"> 
                                         <Tooltip>
                                           <TooltipTrigger asChild>
                                             <span className="font-mono text-sm font-medium truncate block flex-shrink min-w-0" title={suggestion.filename}>
@@ -2191,8 +2235,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                           </TooltipTrigger>
                                           <TooltipContent side="top" align="start">
                                             <p>Full suggested name: {suggestion.filename}</p>
-                                            <p>Confidence: {Math.round(suggestion.confidence * 100)}%</p>
-                                            <p>Detailed Reason: {suggestion.reasoning}</p>
                                           </TooltipContent>
                                         </Tooltip>
                                         <div className="text-xs text-muted-foreground mt-1 capitalize">
@@ -2204,10 +2246,10 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                                         variant="ghost"
                                         size="icon"
                                         className={cn(
-                                          "absolute bottom-2 right-2 h-7 w-7", // Adjusted vertical position
+                                          "absolute bottom-2 right-2 h-7 w-7 hover:bg-transparent", 
                                           isApplied ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground hover:text-primary',
                                           (isLoading || (anyApplied && !isApplied)) && 'opacity-50 pointer-events-none',
-                                           anyApplied && isApplied && 'text-green-600 cursor-default hover:text-green-600' // Keep applied green
+                                           anyApplied && isApplied && 'text-green-600 cursor-default hover:text-green-600'
                                         )}
                                         title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
                                         disabled={isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)}
@@ -2338,32 +2380,31 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
               </div>
             </div>
           )}
-
-          <div className="flex items-end gap-2.5 w-full">
+        <div className="flex items-end gap-2.5 w-full">
             <Textarea
               ref={textareaRef}
               placeholder="Chat with AI Assistant..."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="flex-1 min-h-[80px] bg-input resize-none rounded-lg border-none focus:border-[1px] focus:border-primary pl-2 pr-2 py-2 themed-scrollbar text-xs"
+              className="flex-1 min-h-[40px] max-h-[160px] bg-input resize-none rounded-lg border-none focus:border-[1px] focus:border-primary pl-2 pr-2 py-2 themed-scrollbar text-xs"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSendMessage();
                 }
               }}
-              rows={1}
+              rows={2}
             />
-            <div className="flex flex-col items-center gap-1 justify-end">
+            <div className="flex flex-col items-center gap-1 justify-end self-end">
               <Popover open={fileSelectorOpen} onOpenChange={setFileSelectorOpen}>
                   <PopoverTrigger asChild>
                       <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                           title="Attach file or folder for context"
                       >
-                          <Paperclip className="h-3 w-3 shrink-0" />
+                          <Paperclip className="h-4 w-4 shrink-0" />
                       </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[300px] p-0 mb-1 themed-scrollbar" side="top" align="end">
@@ -2400,9 +2441,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
                 disabled={isLoading || (!prompt.trim() && attachedFiles.length === 0)}
                 onClick={handleSendMessage}
                 title="Send message"
-                style={{ alignSelf: 'flex-end' }}
               >
-                {isLoading ? <Loader2 className="h-8 w-8 animate-spin" /> : <Send className="h-8 w-8" />}
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
           </div>
