@@ -163,7 +163,7 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
                   <Palette className="mr-2 h-4 w-4 text-primary" />
                   Change Accent Color
                 </h3>
-                <div className="flex flex-row gap-2">
+                <div className="flex flex-row gap-2 pr-2">
                   {ACCENT_COLOR_PALETTE.map((color) => (
                     <Button
                       key={color.name}
@@ -325,3 +325,4 @@ export function ManageWorkspaceModal({ isOpen, onClose }: ManageWorkspaceModalPr
     </Dialog>
   );
 }
+
