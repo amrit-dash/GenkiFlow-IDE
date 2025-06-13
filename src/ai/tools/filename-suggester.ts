@@ -60,18 +60,45 @@ export const filenameSuggester = ai.defineTool(
         if (fileType === 'file') {
             const currentNameLower = currentName.toLowerCase();
             const currentFileParts = currentName.split('.');
-            const currentFileExt = currentFileParts.length > 1 && currentFileParts[0] !== "" ? `.${currentFileParts.pop()!.toLowerCase()}` : (currentFileParts[0].startsWith('.') ? currentFileParts[0].toLowerCase() : "");
-            const currentFileBase = currentFileParts.join('.').toLowerCase();
+            // Handle dotfiles like ".gitignore" where base is "" and ext is ".gitignore"
+            // Or ".babelrc.js" where base is ".babelrc" and ext is ".js"
+            let currentFileExt = '';
+            let currentFileBase = currentNameLower;
+
+            const lastDotIndex = currentName.lastIndexOf('.');
+            if (lastDotIndex > 0) { // Regular file like "file.ts" or dotfile with extension like ".config.js"
+                currentFileExt = currentName.substring(lastDotIndex).toLowerCase();
+                currentFileBase = currentName.substring(0, lastDotIndex).toLowerCase();
+            } else if (lastDotIndex === 0) { // Dotfile like ".gitignore"
+                currentFileExt = currentName.toLowerCase(); // The whole name is the "extension"
+                currentFileBase = ""; // No base before the dot
+            }
+            // If no dot, base is the whole name, ext is empty (handled by suggestion logic)
 
             finalSuggestions = generatedSuggestions.filter(s => {
-                const suggestionParts = s.filename.split('.');
-                const suggestionExt = suggestionParts.length > 1 && suggestionParts[0] !== "" ? `.${suggestionParts.pop()!.toLowerCase()}` : (suggestionParts[0].startsWith('.') ? suggestionParts[0].toLowerCase() : "");
-                const suggestionBase = suggestionParts.join('.').toLowerCase();
+                const suggestionNameLower = s.filename.toLowerCase();
+                let suggestionExt = '';
+                let suggestionBase = suggestionNameLower;
 
-                if (currentFileExt === "" && suggestionExt === "") {
+                const sugLastDotIndex = s.filename.lastIndexOf('.');
+                if (sugLastDotIndex > 0) {
+                    suggestionExt = s.filename.substring(sugLastDotIndex).toLowerCase();
+                    suggestionBase = s.filename.substring(0, sugLastDotIndex).toLowerCase();
+                } else if (sugLastDotIndex === 0) {
+                    suggestionExt = s.filename.toLowerCase();
+                    suggestionBase = "";
+                }
+                
+                // If both current and suggestion have no discernible standard extension (e.g. "Makefile" or ".gitattributes")
+                if (currentFileExt === '' && suggestionExt === '') {
                     return suggestionBase !== currentFileBase;
                 }
-                // Handles cases like ".gitignore" vs ".gitignore" or "file.ts" vs "file.ts"
+                 // If one is a dotfile (ext is the full name like ".gitignore") and other is regular (ext is like ".ts")
+                if ((currentFileBase === "" && currentFileExt !== "") !== (suggestionBase === "" && suggestionExt !== "")) {
+                    return true; // They are structurally different
+                }
+
+                // Direct comparison if both are similar structure
                 if (currentFileBase === suggestionBase && currentFileExt === suggestionExt) {
                     return false;
                 }
@@ -93,6 +120,7 @@ export const filenameSuggester = ai.defineTool(
 );
 
 function cleanFolderName(name: string): string {
+  if (!name) return "NewFolder";
   let base = name.split('.')[0]; 
   base = base.replace(/[-_.\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
   if (!base) return "NewFolder"; 
@@ -130,22 +158,33 @@ function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder', cu
       '.java': { lang: 'Java', ext: '.java' },
       '.cpp': { lang: 'C++', ext: '.cpp' },
       '.cxx': { lang: 'C++', ext: '.cxx' },
-      '.h': { lang: 'C++', ext: '.h' },
-      '.hpp': { lang: 'C++', ext: '.hpp' },
+      '.h': { lang: 'C/C++ Header', ext: '.h' },
+      '.hpp': { lang: 'C++ Header', ext: '.hpp' },
       '.html': { lang: 'HTML', ext: '.html' },
       '.htm': { lang: 'HTML', ext: '.htm' },
       '.css': { lang: 'CSS', ext: '.css' },
       '.json': { lang: 'JSON', ext: '.json' },
       '.md': { lang: 'Markdown', ext: '.md' },
       '.markdown': { lang: 'Markdown', ext: '.markdown' },
+      '.gitignore': { lang: 'Git Ignore', ext: '.gitignore' },
+      '.npmrc': { lang: 'NPM Config', ext: '.npmrc' },
+      '.env': { lang: 'Environment Variables', ext: '.env' },
+      // Add more specific dotfiles if needed
     };
     
     if (extFromCurrentName && languageMap[extFromCurrentName]) {
         detectedLanguage = languageMap[extFromCurrentName].lang;
         suggestedExtension = languageMap[extFromCurrentName].ext;
     } else if (extFromCurrentName && extFromCurrentName.startsWith('.')) { 
-        detectedLanguage = `Configuration (${extFromCurrentName})`; 
-        suggestedExtension = extFromCurrentName;
+        // Generic dotfile handling
+        const knownDotfile = Object.keys(languageMap).find(k => k === extFromCurrentName);
+        if (knownDotfile) {
+            detectedLanguage = languageMap[knownDotfile].lang;
+            suggestedExtension = languageMap[knownDotfile].ext;
+        } else {
+            detectedLanguage = `Configuration (${extFromCurrentName})`; 
+            suggestedExtension = extFromCurrentName; // Keep the original dotfile "extension"
+        }
     } else { 
         if (content.includes('def ') && (content.includes('import ') || content.includes('return')) && !lowerContent.includes('<script') && !lowerContent.includes('function')) {
           detectedLanguage = 'Python'; suggestedExtension = '.py';
@@ -333,6 +372,13 @@ function getMeaningfulnessScore(name: string): number {
   return score;
 }
 
+const commandLikeWords = new Set([
+    'rename', 'create', 'delete', 'move', 'update', 'change', 'make', 'generate', 'write',
+    'file', 'folder', 'item', 'this', 'that', 'the', 'a', 'an', 'for', 'to', 'in', 'of', 'is', 'add',
+    'script', 'code', 'program', 'function', 'class', 'component', 'module', 'page', 'view',
+    'set', 'get', 'put', 'post', 'style', 'config', 'setting', 'main', 'init'
+]);
+
 function generateIntelligentSuggestions(
     analysis: ReturnType<typeof analyzeFileContentDeep>, 
     fileType: 'file' | 'folder', 
@@ -349,30 +395,23 @@ function generateIntelligentSuggestions(
     let cleanBase = baseNameOriginal;
 
     if (fileType === 'file') {
-        // Remove common problematic patterns or existing extensions from the base name
-        // Goal: get a clean identifier to which we'll append the *suggested* extension
+        // More aggressive cleaning for base name before adding extension
         cleanBase = baseNameOriginal
-            .replace(/\.[^/.]+$/, "") // Remove any existing extension
-            .replace(/[^a-zA-Z0-9_.-]+/g, '_') // Replace invalid characters with underscore
-            .replace(/[,]$/, "") // Remove trailing comma
-            .replace(/_{2,}/g, '_') // Reduce multiple underscores to one
-            .replace(/^_+|_+$/g, ''); // Trim underscores from start/end
+            .replace(/\.[^/.]+$/, "")       // Remove any existing extension
+            .replace(/[^a-zA-Z0-9_-]+/g, '_') // Replace invalid chars (allow hyphen)
+            .replace(/_{2,}/g, '_')          // Reduce multiple underscores
+            .replace(/^_+|_+$/g, '')         // Trim underscores
+            .replace(/^-+|-+$/g, '');        // Trim hyphens
 
-        // For dotfiles, the "extension" is the whole name after the dot.
-        // For regular files, ensure no dots remain in the cleanBase before appending the true extension.
-        if (baseNameOriginal.startsWith('.')) {
-             // e.g. ".eslintrc" -> cleanBase = ".eslintrc"
-             // e.g. ".foo.bar" -> cleanBase = ".foo" (if .bar is seen as an extension to strip)
-             // Let's assume for dotfiles, the base IS the name.
-             cleanBase = baseNameOriginal.replace(/[^a-zA-Z0-9_.-]+/g, '_').replace(/[,]$/, "");
-             if (cleanBase.lastIndexOf('.') > 0) { // if it's like ".foo.bar"
-                //  cleanBase = cleanBase.substring(0, cleanBase.lastIndexOf('.'));
-             }
-        } else {
-            cleanBase = cleanBase.split('.')[0]; // Take only the part before the first dot if not a dotfile
+        // Special handling for dotfiles: if original was a dotfile, preserve the dot
+        if (baseNameOriginal.startsWith('.') && !cleanBase.startsWith('.')) {
+            cleanBase = '.' + cleanBase;
         }
-         if (!cleanBase && baseNameOriginal.startsWith('.')) cleanBase = baseNameOriginal; // Restore if cleaning made it empty (e.g. was just ".myconfig")
-         if (!cleanBase) cleanBase = "suggestion"; // Fallback if cleaning results in empty string
+        // If cleaning resulted in an empty string but it was a dotfile like ".git" (becomes ""), restore
+        if (!cleanBase && baseNameOriginal.startsWith('.')) {
+             cleanBase = baseNameOriginal.replace(/[^a-zA-Z0-9_.-]+/g, '_').replace(/[,]$/, ""); // Less aggressive for dotfiles
+        }
+        if (!cleanBase && !baseNameOriginal.startsWith('.')) cleanBase = "suggestion"; // Fallback if cleaning results in empty string
     }
 
 
@@ -384,25 +423,41 @@ function generateIntelligentSuggestions(
                                : (analysis.suggestedExtension ? '.' + analysis.suggestedExtension : '');
         
         if (finalName.startsWith('.')) { // Handles dotfiles like ".gitignore", ".env"
-            // Dotfiles generally don't get another extension appended unless `suggestedExtension` itself implies it.
-            // If `analysis.suggestedExtension` IS the dotfile name (e.g. ".gitignore"), it's fine.
-            // If `finalName` is ".babelrc" and `suggestedExtension` is ".js", it should be ".babelrc.js"
-            // However, `analysis.suggestedExtension` for ".babelrc" would BE ".babelrc".
-            if (finalName === "." || finalName === "..") finalName = "config"; // Default for bad dotfile names
-            else if (extensionToUse && finalName !== extensionToUse && !finalName.endsWith(extensionToUse)) {
-                 // This case is tricky. If finalName=".config" and extToUse=".json", maybe ".config.json"?
-                 // For now, if it's a dotfile, assume `finalName` is complete or `suggestedExtension` IS the full dotfilename.
-                 // If `suggestedExtension` is a standard one like ".ts" AND finalName is a dotfile base, append.
-                 if (['.ts', '.js', '.py', '.json', '.md', '.html', '.css'].includes(extensionToUse)) {
-                    finalName = finalName + extensionToUse;
-                 }
-                 // else, assume finalName as a dotfile is complete. e.g. finalName = ".gitignore"
-            } else if (!finalName.includes('.')) { // A base like "env" for a dotfile ".env"
-                 finalName = extensionToUse; // suggestedExtension would be ".env"
+            if (finalName === "." || finalName === "..") {
+                 finalName = (analysis.codeType !== 'general' && analysis.codeType !== 'folder') ? analysis.codeType : 'config'; // Default for bad dotfile names
             }
-        } else {
+            // If suggestedExtension IS the full dotfile name (e.g., ".gitignore"), it's already set in finalName if cleanBase was derived from it.
+            // If finalName is like ".babelrc" and suggestedExtension is ".js", it should be ".babelrc.js"
+            // Check if suggestedExtension is a standard one and not already part of finalName (for complex dotfiles)
+            const standardExtensions = ['.ts', '.js', '.json', '.md', '.py', '.html', '.css', '.xml', '.yaml', '.yml', '.sh', '.java', '.cs', '.go', '.rb', '.php'];
+            if (standardExtensions.includes(extensionToUse) && !finalName.endsWith(extensionToUse)) {
+                finalName += extensionToUse;
+            } else if (!finalName.includes('.') && extensionToUse.startsWith('.')){ // e.g. base "env", ext ".env"
+                finalName = extensionToUse;
+            } else if (finalName.includes('.') && extensionToUse && finalName.split('.').pop() !== extensionToUse.substring(1)) {
+                // This means finalName might be like ".config" and extensionToUse is ".local" -> ".config.local"
+                // Or finalName is "my.config" and extToUse is ".json" -> "my.config.json"
+                // This part is tricky; let's assume suggestedExtension for dotfiles is usually the full name.
+                // If finalName is like ".eslintrc" and suggestedExtension is also ".eslintrc", this is fine.
+                // If finalName is "babelrc" (no dot) and suggestedExtension is ".babelrc", this is also fine.
+                 if (extensionToUse && !finalName.endsWith(extensionToUse) && !standardExtensions.includes(extensionToUse) && extensionToUse.startsWith('.')) {
+                    // if ext is like ".local" and filename is ".config"
+                    finalName += extensionToUse;
+                 } else if (!finalName.startsWith('.')) { // base "eslintrc", ext ".eslintrc"
+                     finalName = extensionToUse;
+                 }
+            }
+        } else { // Not a dotfile
             finalName = finalName + extensionToUse;
         }
+         // Final check if finalName is just an extension (e.g. user typed ".ts")
+        if (finalName.startsWith('.') && !/[a-zA-Z0-9]/.test(finalName.substring(1))) {
+            finalName = `file${finalName}`;
+        }
+        if (finalName === extensionToUse) { // If base was empty and only extension remained
+            finalName = `untitled${extensionToUse}`;
+        }
+
 
     } else { // folder
       finalName = cleanFolderName(finalName); 
@@ -436,11 +491,17 @@ function generateIntelligentSuggestions(
   }
   
   if (context) {
-    const contextWords = context.toLowerCase().match(/\b\w{4,}\b/g) || []; 
-    if (contextWords.length > 0) {
-      let contextBase = contextWords.slice(0,2).join('_'); 
-      contextBase = contextBase.replace(/[^a-zA-Z0-9_]/g, ''); 
-      addSuggestion(contextBase, `Based on your instruction: "${context}"`, 0.75, 'contextual');
+    const allWords = context.toLowerCase().split(/\s+/);
+    const meaningfulContextWords = allWords
+        .map(word => word.replace(/[^a-z0-9_-]/gi, '')) // Allow hyphen and underscore in words initially
+        .filter(word => word.length >= 3 && !commandLikeWords.has(word.toLowerCase()));
+
+    if (meaningfulContextWords.length > 0) {
+        let contextBase = meaningfulContextWords.slice(0, 2).join('_');
+        contextBase = contextBase.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 35); // Allow hyphens, limit length
+        if (contextBase) {
+             addSuggestion(contextBase, `From your instruction: "${context.length > 30 ? context.substring(0,27) + '...' : context}"`, 0.75, 'contextual');
+        }
     }
   }
 
@@ -449,7 +510,7 @@ function generateIntelligentSuggestions(
     if (analysis.mainFunctions.length > 1) { 
       descriptiveBase += `_${analysis.mainFunctions[1]}`;
     } else if (analysis.mainFunctions.length === 0 && context) { 
-      const contextWord = context.toLowerCase().match(/\b\w{4,}\b/g)?.[0];
+      const contextWord = context.toLowerCase().match(/\b[a-zA-Z_][a-zA-Z0-9_-]{3,}\b/g)?.filter(w => !commandLikeWords.has(w.toLowerCase()))[0];
       if (contextWord) descriptiveBase += `_${contextWord}`;
     }
     descriptiveBase = descriptiveBase.slice(0, 30); 
