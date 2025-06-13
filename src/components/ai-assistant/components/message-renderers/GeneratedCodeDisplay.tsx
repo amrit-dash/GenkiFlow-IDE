@@ -48,7 +48,7 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
                 <ActionButton
-                  onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, msg.id, createFileKey)}
+                  onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, createFileKey)}
                   isLoading={loadingStates[createFileKey]}
                   isApplied={actionAppliedStates[createFileKey]}
                   disabled={isLoading}
@@ -62,7 +62,7 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
               {(msg.type === 'generatedCode' || msg.type === 'enhancedCodeGeneration') && (
                 <>
                 <ActionButton
-                    onClick={async () => await handleApplyToEditor(msg.code!, msg.id, applyEditorKey, msg.targetPath, 'Generated code from AI assistant', forceReplaceState[applyEditorKey])}
+                    onClick={async () => await handleApplyToEditor(msg.code!, applyEditorKey, msg.targetPath, 'Generated code from AI assistant', forceReplaceState[applyEditorKey])}
                     isLoading={loadingStates[applyEditorKey]}
                     isApplied={actionAppliedStates[applyEditorKey]}
                     disabled={isLoading || (!msg.targetPath && !activeFilePath)}
@@ -90,7 +90,7 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
                        variant="ghost"
                        onClick={async () => {
                         setForceReplaceState(prev => ({...prev, [applyEditorKey]: !prev[applyEditorKey]}));
-                        await handleApplyToEditor(msg.code!, msg.id, applyEditorKey, msg.targetPath, 'Generated code from AI assistant', !forceReplaceState[applyEditorKey]);
+                        await handleApplyToEditor(msg.code!, applyEditorKey, msg.targetPath, 'Generated code from AI assistant', !forceReplaceState[applyEditorKey]);
                        }}
                        disabled={isLoading || loadingStates[applyEditorKey]}
                        title={forceReplaceState[applyEditorKey] ? "Undo Force Replace & Re-apply (Merge)" : "Force Replace & Re-apply"}
