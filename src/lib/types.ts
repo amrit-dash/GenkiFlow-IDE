@@ -1,3 +1,4 @@
+
 export interface FileSystemNode {
   id: string;
   name: string;
@@ -272,6 +273,15 @@ export interface FilenameSuggestionData {
   itemType?: 'file' | 'folder'; // Added to distinguish target item type
 }
 
+// Define the shape of the toast options based on useToast hook
+interface ToastOptions {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: React.ReactElement; // ToastActionElement
+  variant?: "default" | "destructive";
+  [key: string]: any; // Allow other props like duration, etc.
+}
+
 export interface IdeState {
   fileSystem: FileSystemNode[];
   openedFiles: Map<string, FileSystemNode>; // path -> FileSystemNode (live editing buffer)
@@ -294,6 +304,7 @@ export interface IdeState {
   redoContentChange: (filePath: string) => void;
   accentColor: string; // HSL string, e.g., "270 70% 55%"
   setAccentColor: (color: string) => void;
+  toast: (options: ToastOptions) => { id: string; dismiss: () => void; update: (props: ToastOptions) => void; }; // Added toast function
 }
 
 // Add other shared types here
