@@ -2,6 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { ClipboardCopy, Check } from 'lucide-react';
+import { cn } from '@/lib/utils'; // Added this import
 
 interface CodeBlockProps {
   code: string;
