@@ -2,14 +2,14 @@
 "use client";
 
 import React from 'react';
-import { Sparkles, Code2, MessageSquare, Wand2, FileText } from 'lucide-react';
-import { HintCard } from '../hint-card'; // Assuming hint-card is one level up
-import type { AttachedFileUIData } from '../types'; // Assuming types is one level up
+import { Brain, Code2, MessageSquare, Wand2, FileText } from 'lucide-react'; // Changed Sparkles to Brain
+import { HintCard } from '../hint-card';
+import type { AttachedFileUIData } from '../types';
 
 interface ChatEmptyStateProps {
   setPrompt: (prompt: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
-  attachedFiles: AttachedFileUIData[]; // Add this prop
+  attachedFiles: AttachedFileUIData[];
 }
 
 export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({ setPrompt, textareaRef, attachedFiles }) => {
@@ -46,8 +46,8 @@ export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({ setPrompt, texta
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-      <Sparkles className="w-16 h-16 text-primary mb-4" />
+    <div className="flex-1 flex flex-col items-center justify-center p-4 pb-2 text-center"> {/* Changed p-6 to p-4 pb-2 */}
+      <Brain className="w-16 h-16 text-primary mb-4" /> {/* Changed Sparkles to Brain */}
       <h2 className="text-xl font-semibold mb-2 text-foreground">How can I help you today?</h2>
       <p className="text-sm text-muted-foreground mb-6 max-w-md">
         Ask me to generate code, explain concepts, refactor snippets, or analyze your project.

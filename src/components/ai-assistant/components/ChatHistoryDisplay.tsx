@@ -29,7 +29,8 @@ export const ChatHistoryDisplay: React.FC<ChatHistoryDisplayProps> = ({
         />
       ) : (
         <ScrollArea ref={scrollAreaRef} className="flex-1 p-1 themed-scrollbar">
-          <div className="p-3 space-y-4">
+          {/* Changed padding from p-3 to px-3 pt-3 pb-1 to reduce bottom gap */}
+          <div className="px-3 pt-3 pb-1 space-y-4">
             {chatHistory.map((msg) => (
               <ChatMessageItem
                 key={msg.id}
