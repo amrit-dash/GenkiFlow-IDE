@@ -1,5 +1,5 @@
 
-import type { FileSystemNode, AiSuggestion, FileOperationSuggestion, AlternativeOption, CodeQuality, UsageAnalysisData, FileOperationExecutionData, TerminalCommandExecutionData, SmartCodePlacementData, FilenameSuggestionData, SmartFolderOperationData } from '@/lib/types';
+import type { FileSystemNode, AiSuggestion, FileOperationSuggestion, AlternativeOption, CodeQuality, UsageAnalysisData, FileOperationExecutionData, TerminalCommandExecutionData, SmartCodePlacementData, FilenameSuggestionData, SmartFolderOperationData, ChatMessage as BaseChatMessage, ProgressData, ErrorValidationData } from '@/lib/types';
 
 export interface AttachedFileUIData {
   path: string;
@@ -23,20 +23,15 @@ export interface ConfirmationDialogData {
   isDangerous?: boolean;
 }
 
-// This type is specific to how filename suggestions are handled in the panel,
-// potentially augmenting the one from lib/types if needed.
-export interface FilenameSuggestionDataForPanel extends FilenameSuggestionData {
-  // Add any panel-specific properties if needed
-}
-
 // Re-exporting ChatMessage from lib/types for convenience within this module if other types here depend on it.
 // Or, if ChatMessage itself becomes more UI-specific, it could be defined here.
 // For now, assuming it's mostly data structure from lib/types.
-export type { ChatMessage } from '@/lib/types';
+export type ChatMessage = BaseChatMessage;
 
-// Props for the ChatMessageItem component
+
+// Props for the main ChatMessageItem dispatcher component
 export interface ChatMessageItemProps {
-  msg: import('@/lib/types').ChatMessage; // Use full import path if ChatMessage remains in lib/types
+  msg: ChatMessage;
   isLoading: boolean;
   activeFilePath: string | null;
   currentCode: string | undefined;
@@ -61,9 +56,98 @@ export interface ChatMessageItemProps {
   executeUndo: (operation: UndoOperation) => Promise<void>;
   setUndoStack: React.Dispatch<React.SetStateAction<UndoOperation[]>>;
   handleFileOperation: (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => Promise<{ success: boolean; message: string; } | undefined>;
-  setChatHistory: React.Dispatch<React.SetStateAction<import('@/lib/types').ChatMessage[]>>;
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   toggleCodePreview: (msgId: string) => void;
   expandedCodePreviews: Record<string, boolean>;
   forceReplaceState: Record<string, boolean>;
   setForceReplaceState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+}
+
+// Base props for individual message display components
+export interface BaseMessageDisplayProps extends Pick<ChatMessageItemProps,
+  | 'isLoading'
+  | 'activeFilePath'
+  | 'getFileSystemNode'
+  | 'handleCopyCode'
+  | 'copiedStates'
+  | 'handleApplyToEditor'
+  | 'actionAppliedStates'
+  | 'loadingStates'
+  | 'handleCreateFileAndInsert'
+  | 'handleFileOperationSuggestionAction'
+  | 'undoStack'
+  | 'executeUndo'
+  | 'setUndoStack'
+  | 'handleFileOperation'
+  | 'setChatHistory'
+  | 'toggleCodePreview'
+  | 'expandedCodePreviews'
+  | 'forceReplaceState'
+  | 'setForceReplaceState'
+> {
+  msg: ChatMessage; // The specific message object
+}
+
+// Props for specific message types
+export interface TextMessageDisplayProps extends Pick<BaseMessageDisplayProps, 'msg'> {}
+export interface ErrorMessageDisplayProps extends Pick<BaseMessageDisplayProps, 'msg'> {}
+export interface LoadingMessageDisplayProps extends Pick<BaseMessageDisplayProps, 'msg'> {}
+
+export interface GeneratedCodeDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'generatedCode' | 'newFileSuggestion' | 'enhancedCodeGeneration' }>;
+}
+
+export interface RefactorSuggestionDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'refactorSuggestion' }>;
+}
+
+export interface CodeExamplesDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'codeExamples' }>;
+}
+
+export interface FileOperationDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'fileOperationExecution' }>;
+}
+
+export interface TerminalCommandDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'terminalCommandExecution' }>;
+}
+
+export interface SmartCodePlacementDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'smartCodePlacement' }>;
+}
+
+export interface FilenameSuggestionDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'filenameSuggestion' }>;
+}
+
+export interface SmartFolderOperationDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'smartFolderOperation' }>;
+}
+
+export interface ErrorValidationDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'errorValidation' }>;
+}
+
+export interface UsageAnalysisDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'usageAnalysis' }>;
+}
+export interface ProgressUpdateDisplayProps extends BaseMessageDisplayProps {
+  msg: Extract<ChatMessage, { type: 'progressUpdate' }>;
+}
+
+export interface ActionButtonProps {
+  onClick: () => void;
+  disabled?: boolean;
+  isLoading?: boolean;
+  isApplied?: boolean;
+  appliedText?: string;
+  loadingText?: string;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+  variant?: "default" | "outline" | "ghost" | "secondary" | "destructive" | "link";
+  size?: "default" | "sm" | "lg" | "icon";
+  title?: string;
+  className?: string;
+  buttonKey: string; // Unique key for this button instance for state management
 }
