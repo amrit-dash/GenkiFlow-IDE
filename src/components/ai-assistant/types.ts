@@ -1,5 +1,6 @@
 
 import type { FileSystemNode, AiSuggestion, FileOperationSuggestion, AlternativeOption, CodeQuality, UsageAnalysisData, FileOperationExecutionData, TerminalCommandExecutionData, SmartCodePlacementData, FilenameSuggestionData, SmartFolderOperationData, ChatMessage as BaseChatMessage, ProgressData, ErrorValidationData } from '@/lib/types';
+import type React from 'react'; // Added React import for RefObject
 
 export interface AttachedFileUIData {
   path: string;
@@ -23,9 +24,6 @@ export interface ConfirmationDialogData {
   isDangerous?: boolean;
 }
 
-// Re-exporting ChatMessage from lib/types for convenience within this module if other types here depend on it.
-// Or, if ChatMessage itself becomes more UI-specific, it could be defined here.
-// For now, assuming it's mostly data structure from lib/types.
 export type ChatMessage = BaseChatMessage;
 
 
@@ -40,10 +38,10 @@ export interface ChatMessageItemProps {
   getFileSystemNode: (pathOrId: string) => FileSystemNode | FileSystemNode[] | undefined;
   handleCopyCode: (codeToCopy: string, messageIdPlusAction: string) => void;
   copiedStates: Record<string, boolean>;
-  handleApplyToEditor: (codeToApply: string, messageId: string, buttonKey: string, targetPath?: string, insertionContext?: string, forceReplace?: boolean) => Promise<void>;
-  actionAppliedStates: Record<string, boolean>;
-  loadingStates: Record<string, boolean>;
-  handleCreateFileAndInsert: (suggestedFileName: string, code: string, messageId: string, buttonKey: string) => Promise<void>;
+  
+  // Handlers from useOperationHandler (or similar)
+  handleApplyToEditor: (codeToApply: string, buttonKey: string, targetPath?: string, insertionContext?: string, forceReplace?: boolean) => Promise<void>;
+  handleCreateFileAndInsert: (suggestedFileName: string, code: string, buttonKey: string) => Promise<void>; // Removed messageId as buttonKey is unique
   handleFileOperationSuggestionAction: (
     operationType: 'create' | 'rename' | 'delete' | 'move',
     targetPath: string | undefined,
@@ -52,40 +50,41 @@ export interface ChatMessageItemProps {
     buttonKey: string,
     destinationPath?: string
   ) => Promise<void>;
+  
+  actionAppliedStates: Record<string, boolean>;
+  loadingStates: Record<string, boolean>;
+  
   undoStack: UndoOperation[];
   executeUndo: (operation: UndoOperation) => Promise<void>;
   setUndoStack: React.Dispatch<React.SetStateAction<UndoOperation[]>>;
+  
   handleFileOperation: (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => Promise<{ success: boolean; message: string; } | undefined>;
-  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>; // For undo feedback
+  
+  // UI State handlers from useChatManager (or similar)
   toggleCodePreview: (msgId: string) => void;
   expandedCodePreviews: Record<string, boolean>;
   forceReplaceState: Record<string, boolean>;
   setForceReplaceState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
 }
 
-// Base props for individual message display components
-export interface BaseMessageDisplayProps extends Pick<ChatMessageItemProps,
-  | 'isLoading'
-  | 'activeFilePath'
-  | 'getFileSystemNode'
-  | 'handleCopyCode'
-  | 'copiedStates'
-  | 'handleApplyToEditor'
-  | 'actionAppliedStates'
-  | 'loadingStates'
-  | 'handleCreateFileAndInsert'
-  | 'handleFileOperationSuggestionAction'
-  | 'undoStack'
-  | 'executeUndo'
-  | 'setUndoStack'
-  | 'handleFileOperation'
-  | 'setChatHistory'
-  | 'toggleCodePreview'
-  | 'expandedCodePreviews'
-  | 'forceReplaceState'
-  | 'setForceReplaceState'
-> {
-  msg: ChatMessage; // The specific message object
+// Base props for individual message display components, inheriting ChatMessageItemProps
+export interface BaseMessageDisplayProps extends ChatMessageItemProps {
+  // msg is already in ChatMessageItemProps, no need to re-declare here
+  // Individual display components will typically destructure what they need from ChatMessageItemProps
+}
+
+
+// Specific props for ChatHistoryDisplay
+export interface ChatHistoryDisplayProps extends ChatMessageItemProps {
+  chatHistory: ChatMessage[];
+  // isLoading: boolean; // Already in ChatMessageItemProps
+  scrollAreaRef: React.RefObject<HTMLDivElement>;
+  // Empty state props
+  setPromptForEmptyState: (value: string) => void;
+  textareaRefForEmptyState: React.RefObject<HTMLTextAreaElement>;
+  attachedFilesForEmptyState: AttachedFileUIData[];
 }
 
 // Props for specific message types
@@ -149,5 +148,25 @@ export interface ActionButtonProps {
   size?: "default" | "sm" | "lg" | "icon";
   title?: string;
   className?: string;
-  buttonKey: string; // Unique key for this button instance for state management
+  buttonKey: string;
 }
+
+// Props for AIInteraction hook
+export interface UseAIInteractionProps {
+  prompt: string;
+  setPrompt: React.Dispatch<React.SetStateAction<string>>;
+  attachedFiles: AttachedFileUIData[];
+  setAttachedFiles: React.Dispatch<React.SetStateAction<AttachedFileUIData[]>>;
+  chatHistory: ChatMessage[];
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  ideContext: IdeState;
+  performFileOperation: (operation: 'create' | 'delete' | 'rename' | 'move' | 'list', operationData: any) => Promise<{ success: boolean; message: string; } | undefined>;
+  showConfirmationDialog: (title: string, message: string, operation: () => void, isDangerous?: boolean) => void;
+  setLoadingStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  setActionAppliedStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  addToUndoStack: (operation: UndoOperation) => void;
+  setForceReplaceState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+}
+
+    
