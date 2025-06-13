@@ -5,7 +5,7 @@ import React from 'react';
 import { useIde } from '@/contexts/ide-context';
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { ChatMessageItem } from './chat-message-item'; // Will be used by ChatHistoryDisplay
+// import { ChatMessageItem } from './chat-message-item'; // Will be used by ChatHistoryDisplay
 import { ChatInputArea } from './components/ChatInputArea';
 import { ConfirmationDialogComponent } from './components/ConfirmationDialogComponent';
 import { AiAssistantHeader } from './components/AiAssistantHeader';
@@ -31,8 +31,8 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setPrompt,
     chatHistory,
     setChatHistory,
-    isLoading, // This isLoading state will be managed by useAIInteraction
-    setIsLoading, // Setter for isLoading
+    isLoading, 
+    setIsLoading, 
     scrollAreaRef,
     textareaRef,
     copiedStates,
@@ -42,7 +42,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     loadingStates,
     setLoadingStates,
     expandedCodePreviews,
-    // setExpandedCodePreviews, // Managed by toggleCodePreview
     toggleCodePreview,
     forceReplaceState,
     setForceReplaceState,
@@ -63,7 +62,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     undoStack,
     setUndoStack,
     confirmationDialog,
-    // setConfirmationDialog, // Managed by show/close
     performFileOperation,
     executeUndo,
     showConfirmationDialog,
@@ -75,7 +73,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     ideContext,
     setChatHistory,
     setAttachedFiles,
-    setCopiedStates,
+    // setCopiedStates, // This setter might not be directly needed in useOperationHandler
     setLoadingStates,
     setActionAppliedStates,
     setForceReplaceState,
@@ -88,7 +86,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setAttachedFiles,
     chatHistory,
     setChatHistory,
-    setIsLoading, // Pass the setIsLoading from useChatManager
+    setIsLoading, 
     ideContext,
     performFileOperation,
     showConfirmationDialog,
@@ -96,8 +94,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     setActionAppliedStates,
     addToUndoStack: (op) => setUndoStack(prev => [op, ...prev].slice(0, 10)),
     setForceReplaceState,
-    // ensure findNodeByPath and generateFolderContext are available or passed if needed by AI Interaction for specific flows
-    // For now, assuming they are used by handlers within useOperationHandler or directly via ideContext
   });
 
   const handleCopyCode = (codeToCopy: string, key: string) => {
@@ -122,18 +118,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           chatHistory={chatHistory}
           isLoading={isLoading}
           scrollAreaRef={scrollAreaRef}
-          // Empty state props
           setPromptForEmptyState={setPrompt}
           textareaRefForEmptyState={textareaRef}
           attachedFilesForEmptyState={attachedFiles}
-          // ChatMessageItem props spread starts here
-          // Props from ideContext
           activeFilePath={ideContext.activeFilePath}
           currentCode={ideContext.activeFilePath ? ideContext.openedFiles.get(ideContext.activeFilePath)?.content : undefined}
           openedFiles={ideContext.openedFiles}
-          fileSystem={ideContext.fileSystem as FileSystemNode[]} // Cast if necessary, ensure type alignment
+          fileSystem={ideContext.fileSystem as FileSystemNode[]} 
           getFileSystemNode={ideContext.getFileSystemNode}
-          // Props from useChatManager
           copiedStates={copiedStates}
           actionAppliedStates={actionAppliedStates}
           loadingStates={loadingStates}
@@ -141,16 +133,14 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           toggleCodePreview={toggleCodePreview}
           forceReplaceState={forceReplaceState}
           setForceReplaceState={setForceReplaceState}
-          setChatHistory={setChatHistory} // For Undo operations within ChatMessageItem
-          // Props from useOperationHandler
+          setChatHistory={setChatHistory} 
           handleApplyToEditor={handleApplyCodeToEditor}
           handleCreateFileAndInsert={handleCreateFileFromSuggestion}
           handleFileOperationSuggestionAction={handleExecuteFileOperationSuggestion}
           undoStack={undoStack}
           executeUndo={executeUndo}
-          setUndoStack={setUndoStack} // For ChatMessageItem to update stack after local undo
-          handleFileOperation={performFileOperation} // For direct file ops from ChatMessageItem
-          // Other direct handlers
+          setUndoStack={setUndoStack} 
+          handleFileOperation={performFileOperation} 
           handleCopyCode={handleCopyCode}
         />
 
