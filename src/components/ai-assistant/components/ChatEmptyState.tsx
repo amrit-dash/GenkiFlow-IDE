@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import { Bot, Code2, MessageSquare, Wand2, FileText } from 'lucide-react'; // Changed Brain to Bot
+import { Sparkles, Code2, MessageSquare, Wand2, FileText } from 'lucide-react'; // Changed Bot to Sparkles
 import { HintCard } from '../hint-card';
 import type { AttachedFileUIData } from '../types';
 
@@ -47,7 +47,7 @@ export const ChatEmptyState: React.FC<ChatEmptyStateProps> = ({ setPrompt, texta
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 pb-2 text-center"> {/* Changed p-6 to p-4 pb-2 */}
-      <Bot className="w-16 h-16 text-primary mb-4" /> {/* Changed Brain to Bot */}
+      <Sparkles className="w-16 h-16 text-primary mb-4" /> {/* Changed Bot to Sparkles */}
       <h2 className="text-xl font-semibold mb-2 text-foreground">How can I help you today?</h2>
       <p className="text-sm text-muted-foreground mb-6 max-w-md">
         Ask me to generate code, explain concepts, refactor snippets, or analyze your project.
