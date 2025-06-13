@@ -8,6 +8,7 @@ import { FilePlus2, Edit, Wand2, RotateCcw, Check, Brain } from 'lucide-react';
 import { getDynamicCodeQuality } from '@/components/ai-assistant/ai-assistant-utils';
 import type { GeneratedCodeDisplayProps } from '@/components/ai-assistant/types';
 import { useIde } from '@/contexts/ide-context'; // For getFileSystemNode
+import { cn } from '@/lib/utils'; // Added missing import
 
 export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
   msg,
