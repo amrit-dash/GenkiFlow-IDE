@@ -38,11 +38,8 @@ export const ChatHistoryDisplay: React.FC<ChatHistoryDisplayProps> = ({
                 {...chatMessageItemProps} // Spread remaining props for ChatMessageItem
               />
             ))}
-            {isLoading && chatHistory.length > 0 && ( // Show loader at bottom if history exists
-              <div className="flex justify-center py-2">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            )}
+            {/* Removed the redundant loader that appeared when chatHistory.length > 0 && isLoading.
+                The 'type: loading' message in chatHistory itself will serve as the indicator. */}
             {isLoading && chatHistory.length === 0 && ( // Centered loader for initial load
               <div className="flex justify-center items-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

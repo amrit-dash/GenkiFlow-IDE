@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Paperclip, Send, X, Folder, FileText, CornerDownLeft } from 'lucide-react';
+import { Paperclip, Send, X, Folder, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AttachedFileUIData } from '../types';
 import { getDisplayName } from '../ai-assistant-utils';
@@ -130,7 +130,7 @@ export const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             className="shrink-0 h-10 w-10"
             title="Send Message (Enter)"
           >
-            {isLoading ? <CornerDownLeft className="h-4 w-4 animate-pulse" /> : <Send className="h-4 w-4" />}
+            <Send className="h-4 w-4" />
           </Button>
         </div>
       </div>
