@@ -189,7 +189,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center py-1.5 px-2 rounded-md cursor-pointer",
+          "flex items-center py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
@@ -227,10 +227,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           />
         ) : (
           <>
-            <span className="truncate flex-grow pointer-events-none">{node.name}</span> 
+            <span className="truncate flex-grow min-w-0" title={node.name}>{node.name}</span> 
             
             {showActions && !isRenaming && (
-              <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150">
+              <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150 shrink-0"> {/* Added shrink-0 */}
                 {isFolder && (
                   <>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddFile} data-action-button title="Add File">
@@ -293,3 +293,4 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
+
