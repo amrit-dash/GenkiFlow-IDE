@@ -64,11 +64,11 @@ const FileOperationSuggestionSchema = z.object({
 });
 
 const EnhancedGenerateCodeOutputSchema = z.object({
-  code: z.string().nullable().describe('The generated code. This could be a new file content, a snippet, or the modified content of an existing file. Should be minimal or empty if fileOperationSuggestion is the primary output.'),
+  code: z.string().nullable().optional().describe('The generated code. This could be a new file content, a snippet, or the modified content of an existing file. Should be minimal or empty if fileOperationSuggestion is the primary output.'),
   isNewFile: z.boolean().describe('Whether this should be a new file.'),
   suggestedFileName: z.string().optional().nullable().describe('Suggested filename for new files.'),
   targetPath: z.string().optional().nullable().describe('Target path for existing file edits OR the path of the item being operated on by fileOperationSuggestion.'),
-  explanation: z.string().nullable().describe('Explanation of what the code does or the file operation. Should be concise if fileOperationSuggestion is primary.'),
+  explanation: z.string().nullable().optional().describe('Explanation of what the code does or the file operation. Should be concise if fileOperationSuggestion is primary.'),
   fileOperationSuggestion: FileOperationSuggestionSchema.optional().describe('Suggested file system operation. This should be the primary output for direct file system commands.'),
   alternativeOptions: z.array(z.object({
     description: z.string(),
@@ -83,7 +83,6 @@ const EnhancedGenerateCodeOutputSchema = z.object({
     isWellDocumented: z.boolean(),
     estimatedComplexity: z.enum(['low', 'medium', 'high']),
   }).optional().describe('Quality assessment of the generated code.'),
-  // Allow passthrough for filenameSuggester results if that was the primary action
   filenameSuggestionData: z.any().optional().describe('If the primary action was to suggest filenames, this field will contain the direct output from the filenameSuggester tool.'),
 });
 
@@ -97,7 +96,7 @@ const prompt = ai.definePrompt({
   name: 'enhancedGenerateCodePrompt',
   input: {schema: EnhancedGenerateCodeInputSchema},
   output: {schema: EnhancedGenerateCodeOutputSchema},
-  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger, fileContextAnalyzer, filenameSuggester], // Added filenameSuggester
+  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger, fileContextAnalyzer, filenameSuggester],
   prompt: `You are an expert AI coding assistant with deep understanding of software architecture, file system operations, and best practices.
 
 User Prompt: {{{prompt}}}
@@ -161,13 +160,13 @@ ENHANCED INSTRUCTIONS & TOOL USAGE:
 2. **If user asks for filename suggestions** (e.g., "suggest names for this file/folder"):
    a. Identify the target (file or folder, prioritizing attachments if referenced).
    b. Use the 'filenameSuggester' tool with the target's content (or summary for folders) and current name.
-   c. Your primary response should be the direct output from 'filenameSuggester'. Populate the 'filenameSuggestionData' field in your output. Make 'explanation' very brief (e.g., "Here are some name suggestions for [target_name]:") and 'code' empty.
+   c. Your primary response should be the direct output from 'filenameSuggester'. Populate the 'filenameSuggestionData' field in your output. Make 'explanation' very brief (e.g., "Here are some name suggestions for [target_name]:") and 'code' empty or null.
 3. **If user gives a direct file system command** (e.g., "rename file X to Y", "delete folder Z", "move file A to folder B"):
    a. Identify the target(s) and parameters, prioritizing attached items as per TARGET PRIORITIZATION.
    b. Your primary output MUST be through the 'fileOperationSuggestion' field.
    c. The 'targetPath' in 'fileOperationSuggestion' must be the path of the item being operated on. For 'rename', include 'newName'. For 'move', include 'destinationPath'. For 'create', include 'fileType' and 'targetPath' (parent directory).
    d. The 'explanation' field should be a concise confirmation of the understood operation (e.g., "Okay, I will rename file X to Y." or "Preparing to delete folder Z.").
-   e. The 'code' field should be empty or contain a very brief status message only.
+   e. The 'code' field should be empty, null, or contain a very brief status message only.
    f. Ensure 'confidence' in 'fileOperationSuggestion' is appropriately set.
 4. **For code generation/modification not primarily a file operation**:
    a. Follow the workflow below.
@@ -195,7 +194,7 @@ ERROR HANDLING & CLARIFICATION:
 - Always explain what you're doing before using tools that modify state or need confirmation.
 
 OUTPUT REQUIREMENTS:
-- For pure file operations or filename suggestions, prioritize 'fileOperationSuggestion' or 'filenameSuggestionData' respectively, keeping 'code' and 'explanation' concise or empty.
+- For pure file operations or filename suggestions, prioritize 'fileOperationSuggestion' or 'filenameSuggestionData' respectively, keeping 'code' and 'explanation' concise, empty, or null.
 - For code generation, produce clean, production-ready code.
 - Accurately set 'targetPath' based on TARGET PRIORITIZATION.
 - Set 'isNewFile' and 'suggestedFileName' correctly for new code.
@@ -222,5 +221,7 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
 
     
