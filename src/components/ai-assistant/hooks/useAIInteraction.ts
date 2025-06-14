@@ -3,12 +3,36 @@
 
 import { useCallback } from 'react';
 import type { IdeState } from '@/contexts/ide-context';
-import type { ChatMessage, AttachedFileUIData, UndoOperation, UseAIInteractionProps } from '../types';
-import { 
+import type { ChatMessage, AttachedFileUIData, UndoOperation, UseAIInteractionProps, FilenameSuggestionData as ChatFilenameSuggestionData } from '../types';
+import {
   enhancedGenerateCodeServer,
 } from '@/app/(ide)/actions';
 import { generateId, generateFolderContext } from '../ai-assistant-utils';
 import type { FileSystemNode } from '@/lib/types';
+// Import the output type of the filenameSuggester tool if it's defined in its own file, or use a compatible local type.
+// For this example, let's assume the structure from the tool's output matches what FilenameSuggestionData needs,
+// or we'll adapt it. Let's refine this.
+// The filenameSuggester tool (in src/ai/tools/filename-suggester.ts) outputs a specific schema.
+// We need to map that tool's output to the ChatFilenameSuggestionData type.
+
+// Assuming FilenameSuggesterToolOutput type matching src/ai/tools/filename-suggester.ts outputSchema
+interface FilenameSuggesterToolOutput {
+  suggestions: Array<{
+    filename: string;
+    reasoning: string;
+    confidence: number;
+    category: 'descriptive' | 'conventional' | 'functional' | 'contextual';
+  }>;
+  analysis: {
+    detectedLanguage: string;
+    codeType: string;
+    mainFunctions: string[];
+    hasExports: boolean;
+    isComponent: boolean;
+    suggestedExtension: string;
+    currentFileNameForFiltering?: string; // This comes from the tool's analysis
+  };
+}
 
 
 export function useAIInteraction({
@@ -20,19 +44,19 @@ export function useAIInteraction({
   setChatHistory,
   setIsLoading,
   ideContext,
-  performFileOperation, 
-  showConfirmationDialog, 
-  setLoadingStates, 
-  setActionAppliedStates, 
-  addToUndoStack, 
-  setForceReplaceState, 
+  performFileOperation,
+  showConfirmationDialog,
+  setLoadingStates,
+  setActionAppliedStates,
+  addToUndoStack,
+  setForceReplaceState,
 }: UseAIInteractionProps) {
-  const { 
-    activeFilePath, 
-    openedFiles, 
-    getFileSystemNode, 
-    fileSystem, 
-    toast 
+  const {
+    activeFilePath,
+    openedFiles,
+    getFileSystemNode,
+    fileSystem,
+    toast
   } = ideContext;
 
   const handleSendMessage = useCallback(async () => {
@@ -48,7 +72,8 @@ export function useAIInteraction({
 
     setChatHistory(prev => [...prev, userMessage]);
     setIsLoading(true);
-    setPrompt(''); 
+    const currentPrompt = prompt.trim(); // Capture prompt before clearing
+    setPrompt('');
 
     const assistantMessageId = generateId();
     const loadingMessage: ChatMessage = {
@@ -61,8 +86,8 @@ export function useAIInteraction({
 
     try {
       let response: ChatMessage | null = null;
-      
-      const generateMinimalTree = (nodes: FileSystemNode[], prefix = "", depth = 0, maxDepth = 2): string => {
+
+      const generateMinimalTree = (nodes: FileSystemNode[], prefix = "", depth = 0, maxDepth = 3): string => {
         if (depth > maxDepth) return "";
         let treeString = "";
         nodes.forEach(node => {
@@ -74,13 +99,13 @@ export function useAIInteraction({
         return treeString;
       };
       const fileSystemTree = generateMinimalTree(fileSystem);
-      const currentFileNode = activeFilePath ? getFileSystemNode(activeFilePath) : null;
-      const currentFileContent = activeFilePath ? openedFiles.get(activeFilePath)?.content : undefined;
-      const currentFileName = (currentFileNode && typeof currentFileNode === 'object' && !Array.isArray(currentFileNode)) ? currentFileNode.name : undefined;
+      const activeFileNode = activeFilePath ? getFileSystemNode(activeFilePath) : null;
+      const currentFileContentForContext = activeFilePath ? (openedFiles.get(activeFilePath)?.content || (activeFileNode && !Array.isArray(activeFileNode) && activeFileNode.type === 'file' ? activeFileNode.content : undefined)) : undefined;
+      const currentFileNameForContext = activeFilePath ? (activeFileNode && !Array.isArray(activeFileNode) ? activeFileNode.name : activeFilePath.split('/').pop()) : undefined;
 
       const attachedFilesData = attachedFiles.map(f => ({
         path: f.path,
-        content: f.type === 'file' ? f.content : generateFolderContext(f as FileSystemNode) 
+        content: f.type === 'file' ? f.content : generateFolderContext(f as FileSystemNode)
       }));
 
       const projectContextAnalysis = ideContext.analyzeFileSystemStructure ? ideContext.analyzeFileSystemStructure(fileSystem) : undefined;
@@ -94,33 +119,61 @@ export function useAIInteraction({
       } : undefined;
 
       const enhancedGenInput = {
-        prompt: prompt.trim(),
+        prompt: currentPrompt,
         currentFilePath: activeFilePath || undefined,
-        currentFileContent: currentFileContent,
-        currentFileName: currentFileName,
+        currentFileContent: currentFileContentForContext,
+        currentFileName: currentFileNameForContext,
         attachedFiles: attachedFilesData,
         fileSystemTree: fileSystemTree,
-        chatHistory: chatHistory.slice(-5).map(m => ({ role: m.role, content: m.content })),
+        chatHistory: chatHistory.slice(-5).map(m => ({ role: m.role, content: m.content })), // Pass recent history
         projectContext: projectContextForAI,
       };
 
       const enhancedResult = await enhancedGenerateCodeServer(enhancedGenInput);
-      
-      response = {
-        id: assistantMessageId,
-        role: 'assistant',
-        type: 'enhancedCodeGeneration',
-        content: enhancedResult.explanation,
-        code: enhancedResult.code,
-        isNewFile: enhancedResult.isNewFile,
-        suggestedFileName: enhancedResult.suggestedFileName || undefined,
-        targetPath: enhancedResult.targetPath || undefined,
-        explanation: enhancedResult.explanation,
-        fileOperationSuggestion: enhancedResult.fileOperationSuggestion,
-        alternativeOptions: enhancedResult.alternativeOptions,
-        codeQuality: enhancedResult.codeQuality,
-      };
-      
+
+      // Check if the AI used the filenameSuggester tool via enhancedGenerateCode
+      if (enhancedResult.filenameSuggestionData) {
+        const toolOutput = enhancedResult.filenameSuggestionData as FilenameSuggesterToolOutput;
+        const targetPathForResult = enhancedResult.targetPath; // Relies on enhancedGenerateCode setting this to the item suggested for
+        const targetNode = targetPathForResult ? getFileSystemNode(targetPathForResult) : null;
+        const itemTypeForResult = (targetNode && !Array.isArray(targetNode)) ? targetNode.type : 'file';
+        const currentNameForSuggestion = toolOutput.analysis?.currentFileNameForFiltering || (targetNode && !Array.isArray(targetNode) ? targetNode.name : targetPathForResult?.split('/').pop());
+
+        response = {
+          id: assistantMessageId,
+          role: 'assistant',
+          type: 'filenameSuggestion',
+          content: enhancedResult.explanation || `Okay, I've analyzed "${currentNameForSuggestion || 'the item'}" and here are some name suggestions:`,
+          filenameSuggestionData: {
+            suggestions: toolOutput.suggestions,
+            analysis: toolOutput.analysis as ChatFilenameSuggestionData['analysis'], // Cast, ensure fields match
+            topSuggestion: toolOutput.suggestions.length > 0 ? toolOutput.suggestions[0] : null,
+            currentFileName: currentNameForSuggestion,
+            targetPath: targetPathForResult,
+            itemType: itemTypeForResult,
+          },
+          targetPath: targetPathForResult,
+          explanation: enhancedResult.explanation,
+          code: undefined, isNewFile: false, suggestedFileName: undefined,
+          fileOperationSuggestion: undefined, alternativeOptions: undefined, codeQuality: undefined,
+        };
+      } else { // Handle as a standard enhanced code generation response
+        response = {
+          id: assistantMessageId,
+          role: 'assistant',
+          type: 'enhancedCodeGeneration',
+          content: enhancedResult.explanation || "Here's what I found:",
+          code: enhancedResult.code,
+          isNewFile: enhancedResult.isNewFile || false,
+          suggestedFileName: enhancedResult.suggestedFileName || undefined,
+          targetPath: enhancedResult.targetPath || undefined,
+          explanation: enhancedResult.explanation,
+          fileOperationSuggestion: enhancedResult.fileOperationSuggestion,
+          alternativeOptions: enhancedResult.alternativeOptions,
+          codeQuality: enhancedResult.codeQuality,
+        };
+      }
+
       if (response) {
         setChatHistory(prev => prev.map(msg => msg.id === assistantMessageId ? response! : msg));
       } else {
@@ -138,28 +191,28 @@ export function useAIInteraction({
       toast({ variant: "destructive", title: "AI Error", description: errorMessage });
     } finally {
       setIsLoading(false);
-      setAttachedFiles([]);
+      setAttachedFiles([]); // Clear attachments after each message
     }
   }, [
-    prompt, 
-    setPrompt, 
-    attachedFiles, 
-    setAttachedFiles, 
-    chatHistory, 
-    setChatHistory, 
-    setIsLoading, 
-    ideContext, 
-    performFileOperation, 
+    prompt,
+    setPrompt,
+    attachedFiles,
+    setAttachedFiles,
+    chatHistory,
+    setChatHistory,
+    setIsLoading,
+    ideContext, // Keep the whole context for simplicity, or destructure specific needs
+    performFileOperation,
     showConfirmationDialog,
     setLoadingStates,
     setActionAppliedStates,
     addToUndoStack,
     setForceReplaceState,
-    activeFilePath,
-    openedFiles,
-    fileSystem,
-    toast,
-    getFileSystemNode
+    activeFilePath, // Now directly used
+    openedFiles,    // Now directly used
+    fileSystem,     // Now directly used
+    getFileSystemNode, // Now directly used
+    toast           // Now directly used
   ]);
 
   return { handleSendMessage };
