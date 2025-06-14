@@ -88,7 +88,7 @@ const FileOperationSuggestionSchema = z.object({
 
 const EnhancedGenerateCodeOutputSchema = z.object({
   code: z.string().nullable().optional(),
-  isNewFile: z.boolean().optional(),
+  isNewFile: z.boolean().optional(), // Made optional to align with prompt adjustments
   suggestedFileName: z.string().optional().nullable(),
   targetPath: z.string().optional().nullable(),
   explanation: z.string().nullable().optional(),
@@ -242,23 +242,30 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
     outputSchema: EnhancedGenerateCodeOutputSchema,
   },
   async (input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> => {
+    console.log('DEBUG: enhancedGenerateCodeFlow - Input to prompt:', JSON.stringify(input, null, 2));
     const { output } = await prompt(input);
+    console.log('DEBUG: enhancedGenerateCodeFlow - Raw output from LLM:', JSON.stringify(output, null, 2));
+
 
     if (!output) {
       console.error("EnhancedGenerateCodeFlow: Prompt output was null or undefined.");
       // Return a minimal, valid error-like response conforming to the schema
       return {
         explanation: "Sorry, I encountered an internal error and couldn't process your request. Please try rephrasing or try again later.",
-        isNewFile: false, 
+        isNewFile: false,
+        code: null,
         // All other fields are optional or nullable and can be omitted here
       };
     }
 
+    // If filenameSuggestionData or a significant fileOperationSuggestion is present, it's not a new file being created *by this flow*.
     if (output.filenameSuggestionData || (output.fileOperationSuggestion && output.fileOperationSuggestion.type !== 'none')) {
         output.isNewFile = false;
     } else if (output.code && output.isNewFile === undefined && output.suggestedFileName) {
+        // If there's code and a suggested filename, and isNewFile wasn't set, assume it's a new file.
         output.isNewFile = true;
     } else if (output.isNewFile === undefined) {
+        // Default to false if not otherwise determined.
         output.isNewFile = false;
     }
     return output;
@@ -267,3 +274,4 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
 
 
     
+
