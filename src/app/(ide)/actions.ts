@@ -8,7 +8,7 @@ import {
 } from '@/ai/flows/summarize-code-snippet';
 import { 
   generateCode, 
-  type GenerateCodeInput, 
+  // type GenerateCodeInput, // Not directly used by client if enhancedGenerateCode is primary
   type GenerateCodeOutput 
 } from '@/ai/flows/generate-code-from-prompt';
 import { 
@@ -26,6 +26,7 @@ import {
   type EnhancedGenerateCodeInput, 
   type EnhancedGenerateCodeOutput 
 } from '@/ai/flows/enhanced-code-generation';
+import type { AttachedFileUIData } from '@/components/ai-assistant/types'; // For context
 
 function logDetailedError(actionName: string, error: any) {
   const timestamp = new Date().toISOString();
@@ -75,16 +76,34 @@ function formatErrorForClient(baseMessage: string, error: any): string {
   return baseMessage; 
 }
 
-export async function summarizeCodeSnippetServer(input: SummarizeCodeSnippetInput): Promise<SummarizeCodeSnippetOutput> {
+// Define common context to be passed from client
+interface ServerActionContext {
+    currentFilePath?: string;
+    currentFileContent?: string;
+    attachedFilesDataForAI?: Array<{ path: string; content: string; }>; // Matches what useAIInteraction prepares
+}
+
+export async function summarizeCodeSnippetServer(
+    input: Omit<SummarizeCodeSnippetInput, 'codeSnippet'> & ServerActionContext
+): Promise<SummarizeCodeSnippetOutput> {
   try {
-    return await summarizeCodeSnippet(input);
+    let codeSnippet = "";
+    if (input.attachedFilesDataForAI && input.attachedFilesDataForAI.length > 0) {
+        codeSnippet = input.attachedFilesDataForAI[0].content;
+    } else if (input.currentFileContent) {
+        codeSnippet = input.currentFileContent;
+    } else {
+        throw new Error("No code content provided for summarization (either active file or attachment).");
+    }
+    return await summarizeCodeSnippet({ codeSnippet });
   } catch (error: any) {
     logDetailedError("summarizeCodeSnippetServer", error);
     throw new Error(formatErrorForClient("Failed to summarize. Please check console for details.", error));
   }
 }
 
-export async function generateCodeServer(input: GenerateCodeInput): Promise<GenerateCodeOutput> {
+// generateCodeServer is kept for direct calls if needed, but enhancedGenerateCodeServer is primary for complex scenarios
+export async function generateCodeServer(input: Parameters<typeof generateCode>[0]): Promise<GenerateCodeOutput> {
   try {
     return await generateCode(input);
   } catch (error: any) {
@@ -93,9 +112,23 @@ export async function generateCodeServer(input: GenerateCodeInput): Promise<Gene
   }
 }
 
-export async function refactorCodeServer(input: CodeRefactoringSuggestionsInput): Promise<CodeRefactoringSuggestionsOutput> {
+export async function refactorCodeServer(
+    input: Omit<CodeRefactoringSuggestionsInput, 'codeSnippet' | 'fileContext'> & ServerActionContext
+): Promise<CodeRefactoringSuggestionsOutput> {
    try {
-    return await codeRefactoringSuggestions(input);
+    let codeSnippet = "";
+    let fileContext = "No specific file context provided.";
+
+    if (input.attachedFilesDataForAI && input.attachedFilesDataForAI.length > 0) {
+        codeSnippet = input.attachedFilesDataForAI[0].content;
+        fileContext = `File: ${input.attachedFilesDataForAI[0].path.split('/').pop() || input.attachedFilesDataForAI[0].path}`;
+    } else if (input.currentFileContent && input.currentFilePath) {
+        codeSnippet = input.currentFileContent;
+        fileContext = `File: ${input.currentFilePath.split('/').pop() || input.currentFilePath}`;
+    } else {
+         throw new Error("No code content provided for refactoring (either active file or attachment).");
+    }
+    return await codeRefactoringSuggestions({ codeSnippet, fileContext });
   } catch (error: any) {
     logDetailedError("refactorCodeServer", error);
     throw new Error(formatErrorForClient("Failed to get refactoring suggestions. Please check console for details.", error));
@@ -104,6 +137,8 @@ export async function refactorCodeServer(input: CodeRefactoringSuggestionsInput)
 
 export async function findExamplesServer(input: FindCodebaseExamplesInput): Promise<FindCodebaseExamplesOutput> {
   try {
+    // This flow uses the codebaseSearch tool, which implicitly searches the whole codebase.
+    // No specific file/attachment context needed here unless the tool itself is modified.
     return await findCodebaseExamples(input);
   } catch (error: any) {
     logDetailedError("findExamplesServer", error);
@@ -194,6 +229,7 @@ export async function executeFileSystemOperationServer(input: {
 }) {
   try {
     const { fileSystemOperations } = await import('@/ai/tools/file-system-operations');
+    // This tool is for *suggesting* operations, the actual execution is client-side via useIde
     return await fileSystemOperations({
       operation: input.operation,
       currentFileSystemTree: input.fileSystemTree,
@@ -205,7 +241,7 @@ export async function executeFileSystemOperationServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeFileSystemOperationServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file system operation. Please check console for details.", error));
+    throw new Error(formatErrorForClient("Failed to get file system operation suggestion. Please check console for details.", error));
   }
 }
 
@@ -220,6 +256,7 @@ export async function executeFileSystemCommandServer(input: {
 }) {
   try {
     const { fileSystemExecutor } = await import('@/ai/tools/file-system-executor');
+    // This tool *simulates* execution and returns whether confirmation is needed.
     return await fileSystemExecutor({
       operation: input.operation,
       targetPath: input.targetPath,
@@ -231,27 +268,43 @@ export async function executeFileSystemCommandServer(input: {
     });
   } catch (error: any) {
     logDetailedError("executeFileSystemCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file system command. Please check console for details.", error));
+    throw new Error(formatErrorForClient("Failed to simulate file system command. Please check console for details.", error));
   }
 }
 
-export async function executeTerminalCommandServer(input: {
+export async function executeActualTerminalCommandServer(input: {
   command: string;
   context: string;
   requiresConfirmation?: boolean;
   isBackground?: boolean;
+  confirmed?: boolean; // Added for consistency, though tool itself handles confirmation state
 }) {
   try {
     const { terminalOperations } = await import('@/ai/tools/terminal-operations');
-    return await terminalOperations({
+    const result = await terminalOperations({
       command: input.command,
       context: input.context,
       requiresConfirmation: input.requiresConfirmation ?? true,
       isBackground: input.isBackground ?? false,
     });
+
+    return {
+      ...result,
+      // Client side will handle actual execution based on 'pending' status and user confirmation
+      canExecute: result.status !== 'unsupported', // If not unsupported, client can proceed with confirmation
+      readyForExecution: input.confirmed === true && result.status === 'pending',
+      supportedCommands: [ // This list is from the tool itself
+        'echo', 'clear', 'help', 'date', 'ls', 'cd', 'pwd', 'mkdir', 'touch', 'rm', 'cat'
+      ],
+      executionInstructions: result.status === 'pending' ? { // Only provide if pending confirmation
+        command: input.command,
+        context: input.context,
+        isBackground: input.isBackground,
+      } : undefined
+    };
   } catch (error: any) {
-    logDetailedError("executeTerminalCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute terminal command. Please check console for details.", error));
+    logDetailedError("executeActualTerminalCommandServer", error);
+    throw new Error(formatErrorForClient("Failed to process terminal command. Please check console for details.", error));
   }
 }
 
@@ -321,6 +374,7 @@ export async function smartCodePlacementServer(input: {
   }
 }
 
+// This action is kept for potential direct use if AI determines a confirmed operation
 export async function executeActualFileOperationServer(input: {
   operation: 'create' | 'delete' | 'rename' | 'move' | 'list';
   targetPath?: string;
@@ -329,10 +383,12 @@ export async function executeActualFileOperationServer(input: {
   content?: string;
   fileType?: 'file' | 'folder';
   fileSystemTree: string;
-  confirmed?: boolean;
+  confirmed?: boolean; // If true, implies AI has already confirmed or it's a direct command
 }) {
   try {
     const { fileSystemExecutor } = await import('@/ai/tools/file-system-executor');
+    // This tool simulates execution and checks if confirmation is needed.
+    // The actual file operation is done client-side by performFileOperation in useOperationHandler.
     const result = await fileSystemExecutor({
       operation: input.operation,
       targetPath: input.targetPath,
@@ -343,10 +399,11 @@ export async function executeActualFileOperationServer(input: {
       currentFileSystemTree: input.fileSystemTree,
     });
 
+    // This action now returns the *simulated* result. The client decides if/how to proceed.
     return {
       ...result,
-      canExecute: result.success,
-      readyForExecution: input.confirmed === true,
+      canExecute: result.success, // Indicates if the operation *can* be executed
+      readyForExecution: input.confirmed === true && result.success && !result.requiresUserConfirmation,
       executionInstructions: result.success ? {
         operation: input.operation,
         targetPath: input.targetPath,
@@ -358,44 +415,10 @@ export async function executeActualFileOperationServer(input: {
     };
   } catch (error: any) {
     logDetailedError("executeActualFileOperationServer", error);
-    throw new Error(formatErrorForClient("Failed to execute file operation. Please check console for details.", error));
+    throw new Error(formatErrorForClient("Failed to process file operation request. Please check console for details.", error));
   }
 }
 
-export async function executeActualTerminalCommandServer(input: {
-  command: string;
-  context: string;
-  requiresConfirmation?: boolean;
-  isBackground?: boolean;
-  confirmed?: boolean;
-}) {
-  try {
-    const { terminalOperations } = await import('@/ai/tools/terminal-operations');
-    const result = await terminalOperations({
-      command: input.command,
-      context: input.context,
-      requiresConfirmation: input.requiresConfirmation ?? true,
-      isBackground: input.isBackground ?? false,
-    });
-
-    return {
-      ...result,
-      canExecute: true,
-      readyForExecution: input.confirmed === true,
-      supportedCommands: [
-        'echo', 'clear', 'help', 'date', 'ls', 'cd', 'pwd', 'mkdir', 'touch', 'rm'
-      ],
-      executionInstructions: {
-        command: input.command,
-        context: input.context,
-        isBackground: input.isBackground,
-      }
-    };
-  } catch (error: any) {
-    logDetailedError("executeActualTerminalCommandServer", error);
-    throw new Error(formatErrorForClient("Failed to execute terminal command. Please check console for details.", error));
-  }
-}
 
 export async function suggestFilenameServer(input: {
   fileContent: string;
@@ -403,6 +426,7 @@ export async function suggestFilenameServer(input: {
   fileType: 'file' | 'folder'; 
   context?: string;
   projectStructure?: string;
+  // No ServerActionContext needed as this function's input is already specific
 }) {
   try {
     const { filenameSuggester } = await import('@/ai/tools/filename-suggester');
@@ -413,15 +437,14 @@ export async function suggestFilenameServer(input: {
       context: input.context,
       projectStructure: input.projectStructure,
     });
-    
-    // The filenameSuggester tool is now responsible for correct extensions and filtering.
-    // No need to modify suggestions here.
-    
+        
     return {
       success: true,
-      suggestions: result.suggestions, // Use suggestions directly from the tool
+      suggestions: result.suggestions,
       analysis: result.analysis,
       topSuggestion: result.suggestions[0] || null,
+      // currentFileName: input.currentFileName, // Pass through for client
+      // targetPath: input.currentFilePath, // This is tricky; the file content might be from anywhere
       itemType: input.fileType, 
     };
   } catch (error: any) {
@@ -526,11 +549,11 @@ export async function fileContextAnalyzerServer(input: {
 
 export async function smartFolderOperationsServer(input: {
   operation: 'move' | 'rename' | 'delete' | 'analyze';
-  targetPath: string;
+  targetPath: string; // Path of the folder being operated on, or item to move
   userInstruction: string;
-  destinationHint?: string;
+  destinationHint?: string; // For move operations
   fileSystemTree: string;
-  folderContents?: Array<{
+  folderContents?: Array<{ // Context for the target folder (if renaming/analyzing) or item being moved
     path: string;
     name: string;
     type: 'file' | 'folder';
@@ -550,7 +573,7 @@ export async function smartFolderOperationsServer(input: {
     });
 
     return {
-      success: true,
+      success: true, // Assuming tool itself doesn't throw for operational errors, but reports them
       operation: result.operation,
       canExecuteDirectly: result.canExecuteDirectly,
       suggestions: result.suggestions,
@@ -567,4 +590,3 @@ export async function smartFolderOperationsServer(input: {
     throw new Error(formatErrorForClient("Failed smart folder operations. Please check console for details.", error));
   }
 }
-

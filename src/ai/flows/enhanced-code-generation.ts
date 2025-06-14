@@ -13,17 +13,37 @@
 
 import {ai} from '@/ai/genkit';
 import {z}from 'genkit';
-import {fileSystemOperations} from '../tools/file-system-operations';
-import {codebaseSearch} from '../tools/codebase-search';
-import {errorValidation} from '../tools/error-validation';
-import {codeUsageAnalysis} from '../tools/code-usage-analysis';
-import {operationProgress} from '../tools/operation-progress';
-import {terminalOperations} from '../tools/terminal-operations';
-import {fileSystemExecutor} from '../tools/file-system-executor';
-import {codebaseDataset} from '../tools/codebase-dataset';
-import {intelligentCodeMerger} from '../tools/intelligent-code-merger';
-import {fileContextAnalyzer} from '../tools/file-context-analyzer';
-import { filenameSuggester } from '../tools/filename-suggester';
+import {fileSystemOperations}from '../tools/file-system-operations';
+import {codebaseSearch}from '../tools/codebase-search';
+import {errorValidation}from '../tools/error-validation';
+import {codeUsageAnalysis}from '../tools/code-usage-analysis';
+import {operationProgress}from '../tools/operation-progress';
+import {terminalOperations}from '../tools/terminal-operations';
+import {fileSystemExecutor}from '../tools/file-system-executor';
+import {codebaseDataset}from '../tools/codebase-dataset';
+import {intelligentCodeMerger}from '../tools/intelligent-code-merger';
+import {fileContextAnalyzer}from '../tools/file-context-analyzer';
+import { filenameSuggester }from '../tools/filename-suggester';
+
+// Define FilenameSuggesterOutputSchema to match the tool's output
+const FilenameSuggesterOutputSchema = z.object({
+  suggestions: z.array(z.object({
+    filename: z.string().describe('Suggested filename (with extension for files, without for folders)'),
+    reasoning: z.string().describe('Explanation for why this name was suggested'),
+    confidence: z.number().min(0).max(1).describe('Confidence score (0-1)'),
+    category: z.enum(['descriptive', 'conventional', 'functional', 'contextual']).describe('Type of naming strategy'),
+  })).describe('List of filename suggestions ordered by confidence'),
+  analysis: z.object({
+    detectedLanguage: z.string().describe('Programming language detected'),
+    codeType: z.string().describe('Type of code (component, utility, service, etc.)'),
+    mainFunctions: z.array(z.string()).describe('Main functions or exports found'),
+    hasExports: z.boolean().describe('Whether file exports functions/classes'),
+    isComponent: z.boolean().describe('Whether this appears to be a UI component'),
+    suggestedExtension: z.string().describe('Recommended file extension (relevant for fileType="file")'),
+    currentFileNameForFiltering: z.string().optional().describe('The current filename, passed through for filtering.'),
+  }).describe('Analysis of the file content'),
+});
+
 
 const ChatHistoryItemSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -67,12 +87,12 @@ const FileOperationSuggestionSchema = z.object({
 });
 
 const EnhancedGenerateCodeOutputSchema = z.object({
-  code: z.string().nullable().optional().describe('The generated code. This could be a new file content, a snippet, or the modified content of an existing file. Should be minimal or empty if fileOperationSuggestion or filenameSuggestionData is the primary output.'),
-  isNewFile: z.boolean().optional().describe('Whether this should be a new file. Required if code is generated for a new file.'),
-  suggestedFileName: z.string().optional().nullable().describe('Suggested filename for new files.'),
-  targetPath: z.string().optional().nullable().describe('Target path for existing file edits OR the path of the item being operated on by fileOperationSuggestion or targeted by filenameSuggester.'),
-  explanation: z.string().nullable().optional().describe('Explanation of what the code does or the file operation. Should be concise if fileOperationSuggestion or filenameSuggestionData is primary.'),
-  fileOperationSuggestion: FileOperationSuggestionSchema.optional().describe('Suggested file system operation if relevant to the code generation task (e.g., create a new file for the generated code).'),
+  code: z.string().nullable().optional(),
+  isNewFile: z.boolean().optional(),
+  suggestedFileName: z.string().optional().nullable(),
+  targetPath: z.string().optional().nullable(),
+  explanation: z.string().nullable().optional(),
+  fileOperationSuggestion: FileOperationSuggestionSchema.optional(),
   alternativeOptions: z.array(z.object({
     description: z.string(),
     isNewFile: z.boolean(),
@@ -86,7 +106,7 @@ const EnhancedGenerateCodeOutputSchema = z.object({
     isWellDocumented: z.boolean(),
     estimatedComplexity: z.enum(['low', 'medium', 'high']),
   }).optional().describe('Quality assessment of the generated code.'),
-  filenameSuggestionData: z.any().optional().describe('If the user specifically asked for filename suggestions and this flow decided to use the filenameSuggester tool, this field will contain the direct output from the filenameSuggester tool. This indicates the primary action was filename suggestion.'),
+  filenameSuggestionData: FilenameSuggesterOutputSchema.optional().describe('If the user specifically asked for filename suggestions and this flow decided to use the filenameSuggester tool, this field will contain the direct output from the filenameSuggester tool. This indicates the primary action was filename suggestion.'),
 });
 
 export type EnhancedGenerateCodeOutput = z.infer<typeof EnhancedGenerateCodeOutputSchema>;
@@ -228,12 +248,13 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
             // If it's primarily a filename suggestion or file operation, isNewFile should be false
             output.isNewFile = false;
         } else if (output.code && output.isNewFile === undefined && output.suggestedFileName) {
+            // If code is generated for a new file (suggestedFileName is present) and isNewFile is not set, assume true.
             output.isNewFile = true;
         } else if (output.isNewFile === undefined) {
-            output.isNewFile = false; // Default if not otherwise specified
+            // Default to false if not a new file scenario or if code is not present (e.g., just an explanation)
+            output.isNewFile = false;
         }
     }
     return output!;
   }
 );
-

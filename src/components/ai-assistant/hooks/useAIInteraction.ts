@@ -7,11 +7,11 @@ import type { ChatMessage, AttachedFileUIData, UndoOperation, UseAIInteractionPr
 import {
   enhancedGenerateCodeServer,
   summarizeCodeSnippetServer,
-  generateCodeServer,
+  // generateCodeServer, // Keeping enhancedGenerateCodeServer as the primary for now
   refactorCodeServer,
   findExamplesServer,
-  executeFileSystemOperationServer, // For suggesting operations
-  executeFileSystemCommandServer, // For direct execution if needed by AI
+  // executeFileSystemOperationServer, // Handled via enhancedGenerateCode or specific ops like smartFolderOperations
+  // executeFileSystemCommandServer, //  Handled via enhancedGenerateCode or specific ops like actualTerminalCommand
   executeActualTerminalCommandServer,
   suggestFilenameServer,
   smartFolderOperationsServer,
@@ -43,12 +43,12 @@ export function useAIInteraction({
   prompt,
   setPrompt,
   attachedFiles,
-  setAttachedFiles, // Keep this to allow clearing attachments if needed by other UI actions
+  // setAttachedFiles, // Removed, attachments persist
   chatHistory,
   setChatHistory,
   setIsLoading,
   ideContext,
-  performFileOperation, // This is for client-side execution after confirmation
+  performFileOperation,
   showConfirmationDialog,
   setLoadingStates,
   setActionAppliedStates,
@@ -83,17 +83,17 @@ export function useAIInteraction({
 
     const attachedFilesDataForAI = attachedFiles.map(f => ({
       path: f.path,
-      content: f.type === 'file' ? f.content : generateFolderContext(f as FileSystemNode) // generateFolderContext creates a summary string
+      content: f.type === 'file' ? f.content : generateFolderContext(f as FileSystemNode)
     }));
 
-    const projectAnalysis = analyzeFileSystemStructure(fileSystem);
-    const projectContextForAI = projectAnalysis ? {
-      hasPackageJson: projectAnalysis.hasPackageJson,
-      hasReadme: projectAnalysis.hasReadme,
-      hasSrcFolder: projectAnalysis.hasSrcFolder,
-      hasTestFolder: projectAnalysis.hasTestFolder,
-      totalFiles: projectAnalysis.totalFiles,
-      totalFolders: projectAnalysis.totalFolders,
+    const projectAnalysisDetails = analyzeFileSystemStructure(fileSystem);
+    const projectContextForAI = projectAnalysisDetails ? {
+      hasPackageJson: projectAnalysisDetails.hasPackageJson,
+      hasReadme: projectAnalysisDetails.hasReadme,
+      hasSrcFolder: projectAnalysisDetails.hasSrcFolder,
+      hasTestFolder: projectAnalysisDetails.hasTestFolder,
+      totalFiles: projectAnalysisDetails.totalFiles,
+      totalFolders: projectAnalysisDetails.totalFolders,
     } : undefined;
 
     return {
@@ -121,7 +121,7 @@ export function useAIInteraction({
     setIsLoading(true);
     const currentPrompt = prompt.trim();
     setPrompt('');
-    // Do NOT clear attachedFiles here. They should persist.
+    // Attachments are NOT cleared here: setAttachedFiles([]);
 
     const assistantMessageId = generateId();
     const loadingMessage: ChatMessage = {
@@ -143,7 +143,6 @@ export function useAIInteraction({
         projectContextForAI
       } = prepareContextualData();
 
-      // Simple Intent Classification
       const lowerPrompt = currentPrompt.toLowerCase();
       let intentHandled = false;
 
@@ -155,11 +154,11 @@ export function useAIInteraction({
         let targetItemPath: string | undefined;
 
         if (attachedFilesDataForAI.length > 0) {
-            targetContent = attachedFilesDataForAI[0].content; // Use content/summary of the first attachment
+            targetContent = attachedFilesDataForAI[0].content;
             targetCurrentName = attachedFiles[0].name;
             targetItemType = attachedFiles[0].type;
             targetItemPath = attachedFiles[0].path;
-        } else if (activeFilePath && currentFileContentForContext) {
+        } else if (activeFilePath && currentFileContentForContext !== undefined) {
             targetContent = currentFileContentForContext;
             targetCurrentName = currentFileNameForContext;
             const activeNode = getFileSystemNode(activeFilePath);
@@ -167,7 +166,7 @@ export function useAIInteraction({
             targetItemPath = activeFilePath;
         }
 
-        if (targetContent) {
+        if (targetContent) { // Ensure there's content to analyze for name suggestion
             const result = await suggestFilenameServer({
                 fileContent: targetContent,
                 currentFileName: targetCurrentName,
@@ -190,54 +189,62 @@ export function useAIInteraction({
             intentHandled = true;
         }
       }
-      // 2. File System Operation Intents (more robustly handled by enhancedGenerateCode's tools for now)
-      // For direct "rename X to Y", "delete X", "move X to Y", "create file/folder X"
-      // These are complex to parse reliably on client-side. The `enhancedGenerateCode` flow is better equipped
-      // with its tools (`fileSystemOperations`, `smartFolderOperations`, `filenameSuggester`) to understand these.
-      // It will then return a `fileOperationSuggestion` or `filenameSuggestionData`.
-
-      // 3. Terminal Command Intent
+      // 2. Terminal Command Intent
       else if (lowerPrompt.startsWith("run ") || lowerPrompt.startsWith("execute `") || lowerPrompt.startsWith("terminal:")) {
-          const commandToRun = lowerPrompt.replace(/^(run|execute `|terminal:)\s*/, '').replace(/`$/, '');
-          const result = await executeActualTerminalCommandServer({ command: commandToRun, context: "User requested terminal command" });
-          responseMessage = {
-              id: assistantMessageId, role: 'assistant', type: 'terminalCommandExecution',
-              content: `Terminal command status for: \`${result.command}\``,
-              terminalCommandData: result
-          };
-          intentHandled = true;
+          const commandToRun = lowerPrompt.replace(/^(run\s*|execute\s*`|terminal:\s*)/, '').replace(/`$/, '');
+          if (commandToRun) {
+            const result = await executeActualTerminalCommandServer({ command: commandToRun, context: "User requested terminal command" });
+            responseMessage = {
+                id: assistantMessageId, role: 'assistant', type: 'terminalCommandExecution',
+                content: `Terminal command status for: \`${result.command}\``,
+                terminalCommandData: result
+            };
+            intentHandled = true;
+          }
       }
-
-      // 4. Refactor Intent
-      else if (lowerPrompt.includes("refactor") && (currentFileContentForContext || attachedFilesDataForAI.length > 0)) {
-          const codeToRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].content : currentFileContentForContext!;
-          const pathForRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].path : activeFilePath!;
-          const fileNameForRefactor = pathForRefactor.split('/').pop() || "selected code";
-
-          const result = await refactorCodeServer({ codeSnippet: codeToRefactor, fileContext: `File: ${fileNameForRefactor}` });
-          responseMessage = {
-              id: assistantMessageId, role: 'assistant', type: 'refactorSuggestion',
-              content: result.suggestion ? "Here's a refactoring suggestion:" : "No specific refactoring suggestions found.",
-              suggestion: result.suggestion,
-              targetPath: pathForRefactor,
-          };
-          intentHandled = true;
+      // 3. Refactor Intent
+      else if (lowerPrompt.includes("refactor")) {
+          const codeToRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].content : currentFileContentForContext;
+          const pathForRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].path : activeFilePath;
+          
+          if (codeToRefactor && pathForRefactor) {
+            const fileNameForRefactor = pathForRefactor.split('/').pop() || "selected code";
+            const result = await refactorCodeServer({
+                codeSnippet: codeToRefactor,
+                fileContext: `File: ${fileNameForRefactor}`,
+                attachedFilesDataForAI,
+                currentFilePath: activeFilePath || undefined,
+                currentFileContent: currentFileContentForContext,
+            });
+            responseMessage = {
+                id: assistantMessageId, role: 'assistant', type: 'refactorSuggestion',
+                content: result.suggestion ? "Here's a refactoring suggestion:" : "No specific refactoring suggestions found.",
+                suggestion: result.suggestion,
+                targetPath: pathForRefactor,
+            };
+            intentHandled = true;
+          }
       }
-
-      // 5. Summarize Intent
-      else if (lowerPrompt.startsWith("summarize") && (currentFileContentForContext || attachedFilesDataForAI.length > 0)) {
-          const contentToSummarize = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].content : currentFileContentForContext!;
-          const result = await summarizeCodeSnippetServer({ codeSnippet: contentToSummarize });
-          responseMessage = {
-              id: assistantMessageId, role: 'assistant', type: 'text',
-              content: result.summary || "Could not summarize the content."
-          };
-          intentHandled = true;
+      // 4. Summarize Intent
+      else if (lowerPrompt.startsWith("summarize")) {
+          const contentToSummarize = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].content : currentFileContentForContext;
+          if (contentToSummarize) {
+            const result = await summarizeCodeSnippetServer({
+                codeSnippet: contentToSummarize,
+                attachedFilesDataForAI,
+                currentFilePath: activeFilePath || undefined,
+                currentFileContent: currentFileContentForContext,
+            });
+            responseMessage = {
+                id: assistantMessageId, role: 'assistant', type: 'text',
+                content: result.summary || "Could not summarize the content."
+            };
+            intentHandled = true;
+          }
       }
-      
-      // 6. Find Examples Intent
+      // 5. Find Examples Intent
       else if (lowerPrompt.includes("find example") || lowerPrompt.includes("show me how to use")) {
-        const queryForExamples = currentPrompt.replace(/(find example(s)? of|show me how to use)\s*/i, "").trim();
+        const queryForExamples = currentPrompt.replace(/(find\s+example(s)?\s+of|show\s+me\s+how\s+to\s+use)\s*/i, "").trim();
         if (queryForExamples) {
             const result = await findExamplesServer({ query: queryForExamples });
             responseMessage = {
@@ -249,7 +256,6 @@ export function useAIInteraction({
         }
       }
 
-
       // Default: Fallback to enhancedGenerateCode for complex generation, modifications, or general queries
       if (!intentHandled) {
         const enhancedGenInput = {
@@ -259,14 +265,14 @@ export function useAIInteraction({
           currentFileName: currentFileNameForContext,
           attachedFiles: attachedFilesDataForAI,
           fileSystemTree: fsTreeSummary,
-          chatHistory: chatHistory.slice(-5).map(m => ({ role: m.role, content: m.content })),
+          chatHistory: chatHistory.slice(-5).map(m => ({ role: m.role, content: m.content })), // Keep limited history
           projectContext: projectContextForAI,
         };
         const enhancedResult = await enhancedGenerateCodeServer(enhancedGenInput);
 
         if (enhancedResult.filenameSuggestionData) {
             const toolOutput = enhancedResult.filenameSuggestionData as FilenameSuggesterToolOutput;
-            const targetPathForResult = enhancedResult.targetPath;
+            const targetPathForResult = enhancedResult.targetPath; // This should be set by the AI if it used filenameSuggester
             const targetNode = targetPathForResult ? getFileSystemNode(targetPathForResult) : null;
             const itemTypeForResult = (targetNode && !Array.isArray(targetNode)) ? targetNode.type : (enhancedResult.fileOperationSuggestion?.fileType || 'file');
             const currentNameForSuggestion = toolOutput.analysis?.currentFileNameForFiltering || (targetNode && !Array.isArray(targetNode) ? targetNode.name : targetPathForResult?.split('/').pop());
@@ -278,17 +284,16 @@ export function useAIInteraction({
                 suggestions: toolOutput.suggestions,
                 analysis: toolOutput.analysis as ChatFilenameSuggestionData['analysis'],
                 topSuggestion: toolOutput.suggestions.length > 0 ? toolOutput.suggestions[0] : null,
-                currentFileName: currentNameForSuggestion,
-                targetPath: targetPathForResult,
+                currentFileName: currentNameForSuggestion, // The name of the item being targeted
+                targetPath: targetPathForResult,           // The path of the item being targeted
                 itemType: itemTypeForResult,
               },
               targetPath: targetPathForResult,
               explanation: enhancedResult.explanation,
             };
         } else if (enhancedResult.fileOperationSuggestion && enhancedResult.fileOperationSuggestion.type !== 'none') {
-             // Check if smartFolderOperations was used (conceptually, enhancedGenerateCode might return this structure)
-            const sfData = enhancedResult as any; // Assuming enhancedResult might conform to SmartFolderOperationOutput like structure
-            if (sfData.suggestions && sfData.reasoning && sfData.operation) { // Heuristic for smartFolderOp like response
+            const sfData = enhancedResult as any;
+            if (sfData.suggestions && sfData.reasoning && sfData.operation && sfData.targetPath !== undefined) { // Check for smartFolderOp like response
                  responseMessage = {
                     id: assistantMessageId, role: 'assistant', type: 'smartFolderOperation',
                     content: enhancedResult.explanation || `Regarding folder operation for "${sfData.targetPath || 'item'}"`,
@@ -307,11 +312,11 @@ export function useAIInteraction({
                     },
                     explanation: enhancedResult.explanation,
                  };
-            } else { // General file operation suggestion
+            } else {
                 responseMessage = {
-                  id: assistantMessageId, role: 'assistant', type: 'enhancedCodeGeneration', // Or a more specific type if only FOS
+                  id: assistantMessageId, role: 'assistant', type: 'enhancedCodeGeneration',
                   content: enhancedResult.explanation || "I have a file operation suggestion:",
-                  code: enhancedResult.code, // Usually null/empty for pure FOS
+                  code: enhancedResult.code,
                   isNewFile: enhancedResult.isNewFile || false,
                   suggestedFileName: enhancedResult.suggestedFileName,
                   targetPath: enhancedResult.targetPath,
@@ -340,8 +345,9 @@ export function useAIInteraction({
       if (responseMessage) {
         setChatHistory(prev => prev.map(msg => msg.id === assistantMessageId ? responseMessage! : msg));
       } else {
+        // This case should ideally not be reached if intent classification is robust.
         setChatHistory(prev => prev.map(msg => msg.id === assistantMessageId ? {
-          id: assistantMessageId, role: 'assistant', type: 'error', content: "Sorry, I couldn't process that request with a specific handler."
+          id: assistantMessageId, role: 'assistant', type: 'error', content: "Sorry, I couldn't process that request with a specific handler. Could you rephrase?"
         } : msg));
       }
 
@@ -354,30 +360,23 @@ export function useAIInteraction({
       toast({ variant: "destructive", title: "AI Error", description: errorMessage });
     } finally {
       setIsLoading(false);
-      // DO NOT clear attachments here: setAttachedFiles([]);
+      // Attachments are NOT cleared here: setAttachedFiles([]);
     }
   }, [
     prompt,
     setPrompt,
     attachedFiles,
-    // setAttachedFiles, // Not clearing anymore
     chatHistory,
     setChatHistory,
     setIsLoading,
-    ideContext,
+    ideContext, // includes activeFilePath, openedFiles, getFileSystemNode, fileSystem, toast, analyzeFileSystemStructure
     performFileOperation,
     showConfirmationDialog,
     setLoadingStates,
     setActionAppliedStates,
     addToUndoStack,
     setForceReplaceState,
-    activeFilePath,
-    openedFiles,
-    fileSystem,
-    getFileSystemNode,
-    toast,
-    prepareContextualData,
-    analyzeFileSystemStructure
+    prepareContextualData, // Added prepareContextualData as a dependency
   ]);
 
   return { handleSendMessage };
