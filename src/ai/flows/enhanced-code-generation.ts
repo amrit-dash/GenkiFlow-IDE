@@ -20,6 +20,7 @@ import {fileSystemExecutor} from '../tools/file-system-executor';
 import {codebaseDataset} from '../tools/codebase-dataset';
 import {intelligentCodeMerger} from '../tools/intelligent-code-merger';
 import {fileContextAnalyzer} from '../tools/file-context-analyzer';
+import { filenameSuggester } from '../tools/filename-suggester'; // Added filenameSuggester
 
 const ChatHistoryItemSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -28,8 +29,8 @@ const ChatHistoryItemSchema = z.object({
 });
 
 const AttachedFileSchema = z.object({
-  path: z.string().describe('Path of the attached file.'),
-  content: z.string().describe('Content of the attached file.')
+  path: z.string().describe('Path of the attached file or folder.'),
+  content: z.string().describe('Content of the attached file, or a summary string (name, path, direct children) for folders.')
 });
 
 const EnhancedGenerateCodeInputSchema = z.object({
@@ -37,7 +38,7 @@ const EnhancedGenerateCodeInputSchema = z.object({
   currentFilePath: z.string().optional().describe('Path of the currently active file.'),
   currentFileContent: z.string().optional().describe('Content of the currently active file.'),
   currentFileName: z.string().optional().describe('Name of the currently active file.'),
-  attachedFiles: z.array(AttachedFileSchema).optional().describe('Attached files for context.'),
+  attachedFiles: z.array(AttachedFileSchema).optional().describe('Attached files or folders for context. For folders, content is a summary string.'),
   fileSystemTree: z.string().describe('String representation of the current file system structure.'),
   chatHistory: z.array(ChatHistoryItemSchema).optional().describe('Previous chat messages for context.'),
   projectContext: z.object({
@@ -53,20 +54,22 @@ const EnhancedGenerateCodeInputSchema = z.object({
 export type EnhancedGenerateCodeInput = z.infer<typeof EnhancedGenerateCodeInputSchema>;
 
 const FileOperationSuggestionSchema = z.object({
-  type: z.enum(['create', 'rename', 'delete', 'none']),
+  type: z.enum(['create', 'rename', 'delete', 'move', 'none']),
   reasoning: z.string(),
   targetPath: z.string().optional().nullable(),
   newName: z.string().optional().nullable(),
+  fileType: z.enum(['file', 'folder']).optional().describe('Type for create operations or to clarify target type for rename/delete.'),
+  destinationPath: z.string().optional().nullable().describe('Destination path for move operations.'),
   confidence: z.number().min(0).max(1),
 });
 
 const EnhancedGenerateCodeOutputSchema = z.object({
-  code: z.string().describe('The generated code.'),
+  code: z.string().describe('The generated code. This could be a new file content, a snippet, or the modified content of an existing file. Should be minimal or empty if fileOperationSuggestion is the primary output.'),
   isNewFile: z.boolean().describe('Whether this should be a new file.'),
   suggestedFileName: z.string().optional().nullable().describe('Suggested filename for new files.'),
-  targetPath: z.string().optional().nullable().describe('Target path for existing file edits.'),
-  explanation: z.string().describe('Explanation of what the code does and why.'),
-  fileOperationSuggestion: FileOperationSuggestionSchema.optional().describe('Suggested file system operation.'),
+  targetPath: z.string().optional().nullable().describe('Target path for existing file edits OR the path of the item being operated on by fileOperationSuggestion.'),
+  explanation: z.string().describe('Explanation of what the code does or the file operation. Should be concise if fileOperationSuggestion is primary.'),
+  fileOperationSuggestion: FileOperationSuggestionSchema.optional().describe('Suggested file system operation. This should be the primary output for direct file system commands.'),
   alternativeOptions: z.array(z.object({
     description: z.string(),
     isNewFile: z.boolean(),
@@ -80,6 +83,8 @@ const EnhancedGenerateCodeOutputSchema = z.object({
     isWellDocumented: z.boolean(),
     estimatedComplexity: z.enum(['low', 'medium', 'high']),
   }).optional().describe('Quality assessment of the generated code.'),
+  // Allow passthrough for filenameSuggester results if that was the primary action
+  filenameSuggestionData: z.any().optional().describe('If the primary action was to suggest filenames, this field will contain the direct output from the filenameSuggester tool.'),
 });
 
 export type EnhancedGenerateCodeOutput = z.infer<typeof EnhancedGenerateCodeOutputSchema>;
@@ -92,14 +97,15 @@ const prompt = ai.definePrompt({
   name: 'enhancedGenerateCodePrompt',
   input: {schema: EnhancedGenerateCodeInputSchema},
   output: {schema: EnhancedGenerateCodeOutputSchema},
-  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger, fileContextAnalyzer],
-  prompt: `You are an expert AI coding assistant with deep understanding of software architecture and best practices.
+  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger, fileContextAnalyzer, filenameSuggester], // Added filenameSuggester
+  prompt: `You are an expert AI coding assistant with deep understanding of software architecture, file system operations, and best practices.
 
 User Prompt: {{{prompt}}}
 
 CONTEXT ANALYSIS:
-Current File: {{{currentFilePath}}} ({{{currentFileName}}})
-Current File Content:
+Current File Path (Editor): {{{currentFilePath}}}
+Current File Name (Editor): {{{currentFileName}}}
+Current File Content (Editor):
 \`\`\`
 {{{currentFileContent}}}
 \`\`\`
@@ -112,9 +118,10 @@ File System Structure:
 {{#if attachedFiles}}
 {{#each attachedFiles}}
 {{#if @first}}
-Attached Files Context:
+ATTACHED ITEMS CONTEXT:
 {{/if}}
-File: {{this.path}}
+Item Path: {{this.path}}
+Item Content/Summary:
 \`\`\`
 {{{this.content}}}
 \`\`\`
@@ -142,85 +149,58 @@ Project Analysis:
 - Total folders: {{projectContext.totalFolders}}
 {{/if}}
 
-ENHANCED INSTRUCTIONS:
-1. **Before starting**: Use operationProgress tool to explain what you're about to do
-2. **During analysis**: If the user asks about specific functions/components, use codeUsageAnalysis to find how they're used throughout the codebase
-3. **File context analysis**: Use fileContextAnalyzer to understand what existing files do and their suitability for new code
-4. **Smart file targeting**: Analyze generated code language/type and match with appropriate existing files or suggest new file creation
-5. **Code generation**: Create high-quality, contextually appropriate code
-6. **Smart merging**: When modifying existing files, use intelligentCodeMerger to analyze how generated content should be integrated with existing content
-7. **After generation**: Use errorValidation tool to check the generated code for issues.
-8. **File operations**: Use fileSystemOperations when file placement decisions are needed
-9. **File execution**: Use fileSystemExecutor to find, list, delete, rename, or move files when explicitly requested
-10. **Terminal commands**: Use terminalOperations for command execution when requested
-11. **Dataset management**: Use codebaseDataset to create/query codebase knowledge for better context
-12. **Code examples**: Use codebaseSearch to find relevant examples when helpful
+TARGET PRIORITIZATION FOR OPERATIONS (RENAME, DELETE, MOVE, CODE EDITS):
+1. If 'attachedFiles' are provided AND the user's prompt clearly references an attached item (e.g., "this folder", "the attached file X", "rename myAttachment.ts", "rename the folder I attached"), you MUST use the path from 'attachedFiles' as the 'targetPath' for the operation or code modification. The AI response should confirm this target.
+2. If 'attachedFiles' are present but the prompt clearly references the 'currentFilePath' (e.g., "the current file in the editor"), use 'currentFilePath'.
+3. If 'attachedFiles' are present and the prompt is ambiguous (e.g., "rename it"), AND both current file and an attachment seem relevant, ASK FOR CLARIFICATION before proceeding. Explain the ambiguity (e.g., "Do you mean the active file X or the attached folder Y?").
+4. If no 'attachedFiles' are relevant or present, use 'currentFilePath' if available and relevant.
+5. For new code generation, if the prompt doesn't specify a target, determine the best target based on all context.
 
-WORKFLOW:
+ENHANCED INSTRUCTIONS & TOOL USAGE:
+1. **Before starting**: Use operationProgress tool to explain what you're about to do.
+2. **If user asks for filename suggestions** (e.g., "suggest names for this file/folder"):
+   a. Identify the target (file or folder, prioritizing attachments if referenced).
+   b. Use the 'filenameSuggester' tool with the target's content (or summary for folders) and current name.
+   c. Your primary response should be the direct output from 'filenameSuggester'. Populate the 'filenameSuggestionData' field in your output. Make 'explanation' very brief (e.g., "Here are some name suggestions for [target_name]:") and 'code' empty.
+3. **If user gives a direct file system command** (e.g., "rename file X to Y", "delete folder Z", "move file A to folder B"):
+   a. Identify the target(s) and parameters, prioritizing attached items as per TARGET PRIORITIZATION.
+   b. Your primary output MUST be through the 'fileOperationSuggestion' field.
+   c. The 'targetPath' in 'fileOperationSuggestion' must be the path of the item being operated on. For 'rename', include 'newName'. For 'move', include 'destinationPath'. For 'create', include 'fileType' and 'targetPath' (parent directory).
+   d. The 'explanation' field should be a concise confirmation of the understood operation (e.g., "Okay, I will rename file X to Y." or "Preparing to delete folder Z.").
+   e. The 'code' field should be empty or contain a very brief status message only.
+   f. Ensure 'confidence' in 'fileOperationSuggestion' is appropriately set.
+4. **For code generation/modification not primarily a file operation**:
+   a. Follow the workflow below.
+   b. Use 'targetPath' to indicate the file for modification or where new code should be placed.
+5. **During analysis**: If the user asks about specific functions/components, use codeUsageAnalysis.
+6. **File context analysis**: Use fileContextAnalyzer for suitability.
+7. **Smart merging**: For modifications, use intelligentCodeMerger.
+8. **After generation/merge**: Use errorValidation. If high-confidence fixes are available, apply them to 'code' output and mention in 'explanation'.
+9. **Other tool usage**: fileSystemOperations (for suggesting operations if not a direct command), fileSystemExecutor (if explicit execution after confirmation is needed, though direct output via fileOperationSuggestion is preferred), terminalOperations, codebaseDataset, codebaseSearch as appropriate.
+
+WORKFLOW (for code generation/modification):
 1. Start with operationProgress (stage: 'starting', progress: 10)
-2. Initialize/query codebaseDataset for better project context (stage: 'analyzing', progress: 15)
-3. Analyze context and requirements (stage: 'analyzing', progress: 25)
-4. Use fileContextAnalyzer on relevant existing files to understand their purpose and suitability (stage: 'analyzing', progress: 35)
-5. Determine optimal file targeting based on code type and context analysis (stage: 'analyzing', progress: 45)
-6. Generate appropriate code (stage: 'processing', progress: 65)
-7. If modifying existing file: Use intelligentCodeMerger to determine best merge strategy (stage: 'processing', progress: 80)
-8. Validate the generated/merged code with errorValidation. If the tool provides high-confidence \`suggestions\` with \`fixedCode\`, apply these fixes directly to your \`code\` output and mention this in the \`explanation\`. (stage: 'validating', progress: 90)
-9. Complete with final results (stage: 'completing', progress: 100)
+2. Initialize/query codebaseDataset for project context (stage: 'analyzing', progress: 15)
+3. Analyze context, requirements, and TARGET PRIORITIZATION (stage: 'analyzing', progress: 25)
+4. Use fileContextAnalyzer on relevant existing files (stage: 'analyzing', progress: 35)
+5. Determine optimal file targeting (stage: 'analyzing', progress: 45)
+6. Generate/modify code (stage: 'processing', progress: 65)
+7. If modifying: Use intelligentCodeMerger (stage: 'processing', progress: 80)
+8. Validate with errorValidation. Apply high-confidence fixes. (stage: 'validating', progress: 90)
+9. Complete with results (stage: 'completing', progress: 100)
 
-ERROR HANDLING:
-- If the errorValidation tool finds errors and provides high-confidence \`suggestions\` with \`fixedCode\`, incorporate these fixes directly into your \`code\` output. Explain that you've applied these automatic corrections in your \`explanation\` field.
-- If an operation fails (e.g., a tool call returns an error), use operationProgress with stage: 'error' to inform the user.
-- Always explain what you're doing before using tools, especially if it involves file system modifications or command execution.
-
-SPECIAL HANDLING:
-- For blank/untitled files: Suggest appropriate renaming based on the code purpose
-- For mismatched contexts (e.g., Python code but JS file open): Offer to create new file with proper extension
-- For large codebases: Suggest modular approach with multiple files
-- For existing files with content: ALWAYS use intelligentCodeMerger to determine optimal merge strategy
-- For partial updates: Use intelligentCodeMerger to identify exactly what needs to be inserted/updated
-- For file operations requests: Use fileSystemExecutor to list, find, delete, rename, or move files
-- For terminal requests: Use terminalOperations to execute commands with user confirmation
-- Use progress updates throughout the process
-
-SMART FILE TARGETING GUIDELINES:
-- **Language Matching**: Always prefer files that match the generated code's language (Python to .py, JavaScript to .js/.ts, etc.)
-- **Context Relevance**: Use fileContextAnalyzer to check if user's request matches what existing files do
-- **Avoid README Insertion**: Never insert code into README.md, documentation files, or configuration files unless explicitly requested for documentation updates
-- **Purpose Alignment**: Match generated code purpose with file purpose (utilities to utility files, components to component files, etc.)
-- **File Quality Check**: Use context analysis to ensure target file has good structure and isn't overly complex
-- **New File Suggestion**: If no suitable existing file found, suggest creating a new file with appropriate name and extension
-
-INTELLIGENT MERGING GUIDELINES:
-- When user asks to "update this section" or "add function X": Use intelligentCodeMerger with insertionContext
-- When generated content contains complete file: Use intelligentCodeMerger to extract only new/changed parts
-- When user wants to modify existing functionality: Use intelligentCodeMerger to replace specific sections
-- When adding new features: Use intelligentCodeMerger to find optimal insertion points
-- Always pass user's instruction as userInstruction parameter to intelligentCodeMerger
-- If merger returns low confidence, provide both merged result and original full replacement as alternatives
-
-DOCUMENTATION HANDLING:
-- When user explicitly asks to "update README" or "add to documentation": Allow modifications to .md files
-- When user asks to "document the new function" or similar: Update relevant documentation sections
-- When user wants code examples in docs: Insert properly formatted code blocks in documentation files
-
-FILE OPERATION EXAMPLES:
-- "delete untitled files" → Use fileSystemExecutor with operation: 'list' to find untitled files, then 'delete'
-- "rename this file" → Use fileSystemExecutor with operation: 'rename'
-- "move file to components folder" → Use fileSystemExecutor with operation: 'move'
-- "what files are in this project" → Use fileSystemExecutor with operation: 'list'
+ERROR HANDLING & CLARIFICATION:
+- If 'errorValidation' tool finds errors with high-confidence fixes, apply them to 'code' output and explain.
+- If an operation fails or target is ambiguous, use operationProgress (stage: 'error') or ask for clarification.
+- Always explain what you're doing before using tools that modify state or need confirmation.
 
 OUTPUT REQUIREMENTS:
-- Generate clean, production-ready code
-- Include proper imports and dependencies
-- Add TypeScript types where applicable
-- Include error handling where appropriate
-- Provide clear explanation of the code's purpose
-- Suggest file operations when beneficial
-- Assess code quality metrics
-- Include validation results if errors were found
+- For pure file operations or filename suggestions, prioritize 'fileOperationSuggestion' or 'filenameSuggestionData' respectively, keeping 'code' and 'explanation' concise or empty.
+- For code generation, produce clean, production-ready code.
+- Accurately set 'targetPath' based on TARGET PRIORITIZATION.
+- Set 'isNewFile' and 'suggestedFileName' correctly for new code.
 
-Always start by explaining what you're going to do, then proceed with the implementation while providing progress updates.
-Respond with a comprehensive JSON object matching the schema.`, 
+Respond with a comprehensive JSON object matching the schema. Ensure 'targetPath' in the root of your response correctly reflects the primary file/folder being acted upon or targeted for code.`,
   config: {
     safetySettings: [
       {
@@ -241,6 +221,6 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
     const {output} = await prompt(input);
     return output!;
   }
-); 
+);
 
     
