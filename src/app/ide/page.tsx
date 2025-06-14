@@ -28,7 +28,7 @@ export default function IdePage() {
   if (!isClient || isIdeBusy) {
     return (
         <div className="flex h-screen w-screen items-center justify-center bg-background">
-            <Loader2 className="h-6 w-6 animate-spin mr-3 text-primary" /> 
+            <Loader2 className="h-6 w-6 animate-spin mr-3 text-accent" /> 
             <p className="text-muted-foreground">Loading IDE...</p>
         </div>
     );
@@ -103,3 +103,4 @@ export default function IdePage() {
     </div>
   );
 }
+
