@@ -64,11 +64,11 @@ const FileOperationSuggestionSchema = z.object({
 });
 
 const EnhancedGenerateCodeOutputSchema = z.object({
-  code: z.string().describe('The generated code. This could be a new file content, a snippet, or the modified content of an existing file. Should be minimal or empty if fileOperationSuggestion is the primary output.'),
+  code: z.string().nullable().describe('The generated code. This could be a new file content, a snippet, or the modified content of an existing file. Should be minimal or empty if fileOperationSuggestion is the primary output.'),
   isNewFile: z.boolean().describe('Whether this should be a new file.'),
   suggestedFileName: z.string().optional().nullable().describe('Suggested filename for new files.'),
   targetPath: z.string().optional().nullable().describe('Target path for existing file edits OR the path of the item being operated on by fileOperationSuggestion.'),
-  explanation: z.string().describe('Explanation of what the code does or the file operation. Should be concise if fileOperationSuggestion is primary.'),
+  explanation: z.string().nullable().describe('Explanation of what the code does or the file operation. Should be concise if fileOperationSuggestion is primary.'),
   fileOperationSuggestion: FileOperationSuggestionSchema.optional().describe('Suggested file system operation. This should be the primary output for direct file system commands.'),
   alternativeOptions: z.array(z.object({
     description: z.string(),
