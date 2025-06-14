@@ -185,13 +185,13 @@ A. IF THE USER PROMPT IS *PRIMARILY* ABOUT SUGGESTING FILENAMES (e.g., "suggest 
    2. Use the \`filenameSuggester\` tool with this information.
    3. Your *primary response* should be the direct output from \`filenameSuggester\`. Populate the 'filenameSuggestionData' field in your output with the tool's result.
    4. Set 'code' to null or empty.
-   5. Set 'explanation' to a very brief confirmation (e.g., "Here are some name suggestions for [target_name]:").
+   5. Set 'explanation' to a very brief confirmation (e.g., "Here are some name suggestions for [target\_name]:").
    6. Set 'isNewFile' to **false**.
    7. Ensure 'targetPath' in your root output reflects the path of the item for which names were suggested.
 
 B. IF THE USER PROMPT IS *PRIMARILY* A DIRECT FILE SYSTEM COMMAND (e.g., "rename file X to Y", "delete folder Z", "move file A to folder B"):
    1. Identify the target(s) and parameters, prioritizing attached items as per TARGET PRIORITIZATION.
-   2. Your *primary output* MUST be through the 'fileOperationSuggestion' field.
+   2. Your *primary output* MUST be through the 'fileOperationSuggestion' field. Ensure all required sub-fields of 'fileOperationSuggestion' (type, reasoning, confidence) are provided.
    3. 'targetPath' in 'fileOperationSuggestion' must be the path of the item being operated on. For 'rename', include 'newName'. For 'move', include 'destinationPath'. For 'create', include 'fileType' and 'targetPath' (which would be the parent directory).
    4. Set 'code' to null or empty.
    5. Set 'explanation' to a concise confirmation of the understood operation (e.g., "Okay, I will rename file X to Y.").
@@ -221,6 +221,7 @@ GENERAL OUTPUT REQUIREMENTS:
 - Always ensure 'targetPath' in the root of your response correctly reflects the primary file/folder being acted upon or targeted.
 - If 'isNewFile' is true, 'suggestedFileName' is expected. If 'isNewFile' is false, 'suggestedFileName' can be null.
 - If no specific code generation is required or file operation is suggested (e.g., a general question or clarification), respond with a helpful 'explanation' and ensure 'code' and 'fileOperationSuggestion' are null or omitted. 'isNewFile' should be false.
+- Ensure any optional objects like 'codeQuality' or 'alternativeOptions', if included, are fully populated according to their schemas or omitted entirely. Do not provide partially filled optional objects.
 
 Respond with a comprehensive JSON object matching the EnhancedGenerateCodeOutputSchema.
 `,
@@ -240,21 +241,29 @@ const enhancedGenerateCodeFlow = ai.defineFlow(
     inputSchema: EnhancedGenerateCodeInputSchema,
     outputSchema: EnhancedGenerateCodeOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    // Ensure isNewFile is explicitly set if code is present and it's for a new file
-    if (output) {
-        if (output.filenameSuggestionData || (output.fileOperationSuggestion && output.fileOperationSuggestion.type !== 'none')) {
-            // If it's primarily a filename suggestion or file operation, isNewFile should be false
-            output.isNewFile = false;
-        } else if (output.code && output.isNewFile === undefined && output.suggestedFileName) {
-            // If code is generated for a new file (suggestedFileName is present) and isNewFile is not set, assume true.
-            output.isNewFile = true;
-        } else if (output.isNewFile === undefined) {
-            // Default to false if not a new file scenario or if code is not present (e.g., just an explanation)
-            output.isNewFile = false;
-        }
+  async (input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> => {
+    const { output } = await prompt(input);
+
+    if (!output) {
+      console.error("EnhancedGenerateCodeFlow: Prompt output was null or undefined.");
+      // Return a minimal, valid error-like response conforming to the schema
+      return {
+        explanation: "Sorry, I encountered an internal error and couldn't process your request. Please try rephrasing or try again later.",
+        isNewFile: false, 
+        // All other fields are optional or nullable and can be omitted here
+      };
     }
-    return output!;
+
+    if (output.filenameSuggestionData || (output.fileOperationSuggestion && output.fileOperationSuggestion.type !== 'none')) {
+        output.isNewFile = false;
+    } else if (output.code && output.isNewFile === undefined && output.suggestedFileName) {
+        output.isNewFile = true;
+    } else if (output.isNewFile === undefined) {
+        output.isNewFile = false;
+    }
+    return output;
   }
 );
+
+
+    
