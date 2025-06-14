@@ -160,17 +160,18 @@ ENHANCED INSTRUCTIONS & TOOL USAGE:
 2. **If user asks for filename suggestions** (e.g., "suggest names for this file/folder"):
    a. Identify the target (file or folder, prioritizing attachments if referenced).
    b. Use the 'filenameSuggester' tool with the target's content (or summary for folders) and current name.
-   c. Your primary response should be the direct output from 'filenameSuggester'. Populate the 'filenameSuggestionData' field in your output. Make 'explanation' very brief (e.g., "Here are some name suggestions for [target_name]:") and 'code' empty or null.
+   c. Your primary response should be the direct output from 'filenameSuggester'. Populate the 'filenameSuggestionData' field in your output. Set 'isNewFile' to **false**. Make 'explanation' very brief (e.g., "Here are some name suggestions for [target_name]:") and 'code' empty or null.
 3. **If user gives a direct file system command** (e.g., "rename file X to Y", "delete folder Z", "move file A to folder B"):
    a. Identify the target(s) and parameters, prioritizing attached items as per TARGET PRIORITIZATION.
    b. Your primary output MUST be through the 'fileOperationSuggestion' field.
    c. The 'targetPath' in 'fileOperationSuggestion' must be the path of the item being operated on. For 'rename', include 'newName'. For 'move', include 'destinationPath'. For 'create', include 'fileType' and 'targetPath' (parent directory).
    d. The 'explanation' field should be a concise confirmation of the understood operation (e.g., "Okay, I will rename file X to Y." or "Preparing to delete folder Z.").
-   e. The 'code' field should be empty, null, or contain a very brief status message only.
+   e. The 'code' field should be empty, null, or contain a very brief status message only. Set 'isNewFile' to **false**.
    f. Ensure 'confidence' in 'fileOperationSuggestion' is appropriately set.
 4. **For code generation/modification not primarily a file operation**:
    a. Follow the workflow below.
    b. Use 'targetPath' to indicate the file for modification or where new code should be placed.
+   c. Set 'isNewFile' appropriately (true for new files, false for modifications).
 5. **During analysis**: If the user asks about specific functions/components, use codeUsageAnalysis.
 6. **File context analysis**: Use fileContextAnalyzer for suitability.
 7. **Smart merging**: For modifications, use intelligentCodeMerger.
@@ -194,10 +195,10 @@ ERROR HANDLING & CLARIFICATION:
 - Always explain what you're doing before using tools that modify state or need confirmation.
 
 OUTPUT REQUIREMENTS:
-- For pure file operations or filename suggestions, prioritize 'fileOperationSuggestion' or 'filenameSuggestionData' respectively, keeping 'code' and 'explanation' concise, empty, or null.
-- For code generation, produce clean, production-ready code.
+- For pure file operations or filename suggestions, prioritize 'fileOperationSuggestion' or 'filenameSuggestionData' respectively, keeping 'code' and 'explanation' concise, empty, or null. Ensure 'isNewFile' is set to false in these cases.
+- For code generation, produce clean, production-ready code. Set 'isNewFile' appropriately.
 - Accurately set 'targetPath' based on TARGET PRIORITIZATION.
-- Set 'isNewFile' and 'suggestedFileName' correctly for new code.
+- Set 'suggestedFileName' correctly for new code.
 
 Respond with a comprehensive JSON object matching the schema. Ensure 'targetPath' in the root of your response correctly reflects the primary file/folder being acted upon or targeted for code.`,
   config: {
