@@ -189,7 +189,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden
+          "flex items-center py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // overflow-hidden is key for truncate
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
@@ -222,15 +222,20 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameConfirm} 
             onKeyDown={handleRenameKeyDown}
-            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary"
+            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary" // Ensure input can take full width available
             onClick={(e) => e.stopPropagation()} 
           />
         ) : (
           <>
-            <span className="truncate flex-grow min-w-0" title={node.name}>{node.name}</span> 
+            <span 
+              className="truncate flex-grow min-w-0" // Crucial for truncation: flex-grow and min-w-0
+              title={node.name} // Tooltip for the full name
+            >
+              {node.name}
+            </span> 
             
             {showActions && !isRenaming && (
-              <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150 shrink-0"> {/* Added shrink-0 */}
+              <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150 shrink-0"> {/* ml-auto pushes to right, shrink-0 prevents it from shrinking */}
                 {isFolder && (
                   <>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddFile} data-action-button title="Add File">
@@ -294,3 +299,4 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   );
 }
 
+    
