@@ -276,24 +276,22 @@ export const enhancedGenerateCodeFlow = ai.defineFlow(
       const cleanedOutput: any = { ...output };
       if (cleanedOutput.fileOperationSuggestion == null) delete cleanedOutput.fileOperationSuggestion;
       if (cleanedOutput.alternativeOptions == null) delete cleanedOutput.alternativeOptions;
-      if (cleanedOutput.codeQuality == null) delete cleanedOutput.codeQuality;
       if (cleanedOutput.filenameSuggestionData == null) delete cleanedOutput.filenameSuggestionData;
+
+      // If code is generated and a targetPath is provided, actually create/update the file
+      if (cleanedOutput.code && cleanedOutput.targetPath) {
+        await fileSystemExecutor({
+          operation: 'create',
+          targetPath: cleanedOutput.targetPath,
+          content: cleanedOutput.code,
+          fileType: 'file',
+          currentFileSystemTree: input.fileSystemTree,
+        });
+      }
       return cleanedOutput;
     } catch (error) {
-      console.error('Error in enhancedGenerateCodeFlow:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // Attempt to parse Genkit-specific error details if they exist
-      let genkitDetails = '';
-      if (error && typeof error === 'object' && 'details' in error) {
-        try {
-          genkitDetails = ` Details: ${JSON.stringify((error as any).details)}`;
-        } catch (e) { /* ignore stringify error */ }
-      }
-
-
       return {
-        explanation: `An error occurred during code generation: ${errorMessage}${genkitDetails}`,
+        explanation: 'An error occurred during code generation: ' + (error instanceof Error ? error.message : String(error)),
         isNewFile: false,
         code: null,
       } as EnhancedGenerateCodeOutput;
