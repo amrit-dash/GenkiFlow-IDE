@@ -176,7 +176,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
 
   return (
     <div 
-      className="text-sm group/fileitem"
+      className="text-sm group/fileitem w-full" // Added w-full
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       draggable={!isRenaming} 
@@ -188,7 +188,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden here
+          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
@@ -201,15 +201,17 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
-        title={isRenaming ? undefined : node.path} 
+        title={isRenaming ? undefined : node.path} // Tooltip for full path on the row itself
       >
+        {/* Indentation part (shrink-0) */}
         <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0">
           {isFolder && (
             <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
           )}
         </div>
 
-        <div className="shrink-0"> {/* Wrapper for icon to also be shrink-0 */}
+        {/* File/Folder Icon part (shrink-0) */}
+        <div className="shrink-0">
           {isFolder ? (
             <FolderIcon className={cn("w-4 h-4 mr-2", folderIconColorClass, !isFolder && !isRenaming && "ml-5")} />
           ) : (
@@ -217,6 +219,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           )}
         </div>
           
+        {/* Name or Input part (this must grow and allow truncation) */}
         {isRenaming ? (
           <Input
             ref={inputRef}
@@ -225,25 +228,23 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameConfirm} 
             onKeyDown={handleRenameKeyDown}
-            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow min-w-0" 
+            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow min-w-0" // flex-grow min-w-0
             onClick={(e) => e.stopPropagation()} 
           />
         ) : (
-          // This div wrapper helps control the flex behavior for the name span
-          <div className="flex-grow min-w-0 overflow-hidden"> 
-            <span 
-              className="block truncate" // span is block for truncate to work, its parent div handles flex growth
-              title={node.name} 
-            >
+          // Wrapper for the name, this will grow and manage overflow for the span
+          <div className="flex-grow min-w-0 overflow-hidden mr-1"> {/* Added mr-1 for spacing before actions */}
+            <span className="block truncate" title={node.name}> {/* Ensure title is on the span for full name */}
               {node.name}
             </span>
           </div>
         )}
 
+        {/* Action Buttons part (shrink-0, visibility toggled by hover) */}
         {!isRenaming && (
           <div 
             className={cn(
-              "flex items-center space-x-0.5 shrink-0 ml-auto transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100", // Added group-focus-within
+              "flex items-center space-x-0.5 shrink-0 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100",
               showActions ? "opacity-100" : "opacity-0"
             )}
             data-action-button 
