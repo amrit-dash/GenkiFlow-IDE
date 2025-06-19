@@ -25,14 +25,14 @@ interface FileTreeItemProps {
   level?: number;
 }
 
-const HOVER_TO_OPEN_DELAY = 750; 
+const HOVER_TO_OPEN_DELAY = 750;
 
 const FOLDER_ICON_COLOR_MAP: Record<string, string> = {
-  '270 70% 55%': 'text-yellow-500', 
-  '210 70% 55%': 'text-orange-500', 
-  '30 80% 55%': 'text-sky-500',     
-  '330 80% 60%': 'text-teal-500',    
-  '180 60% 45%': 'text-rose-500',   
+  '270 70% 55%': 'text-yellow-500',
+  '210 70% 55%': 'text-orange-500',
+  '30 80% 55%': 'text-sky-500',
+  '330 80% 60%': 'text-teal-500',
+  '180 60% 45%': 'text-rose-500',
 };
 const DEFAULT_FOLDER_ICON_COLOR = 'text-yellow-500';
 
@@ -49,7 +49,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isFolder = node.type === 'folder';
-  const FileIcon = FileText; 
+  const FileIcon = FileText;
   const FolderIcon = Folder;
   const ExpansionIcon = isOpen ? ChevronDown : ChevronRight;
 
@@ -109,7 +109,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     }
     setIsRenaming(false);
   };
-  
+
   const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleRenameConfirm(); else if (e.key === 'Escape') { setIsRenaming(false); setRenameValue(node.name); } };
 
   const sortedChildren = node.children ? [...node.children].sort((a, b) => {
@@ -121,18 +121,18 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.setData("application/genkiflow-node-id", node.id);
     e.dataTransfer.effectAllowed = "move";
-    e.stopPropagation(); 
+    e.stopPropagation();
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault(); 
+    e.preventDefault();
     e.stopPropagation();
     const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
-    if (isFolder && node.id !== draggedNodeId) { 
+    if (isFolder && node.id !== draggedNodeId) {
       setIsDraggingOver(true);
-       if (!isOpen && !hoverTimeoutRef.current) { 
+       if (!isOpen && !hoverTimeoutRef.current) {
         hoverTimeoutRef.current = setTimeout(() => {
-          if (isDraggingOver) { 
+          if (isDraggingOver) {
             setIsOpen(true);
           }
           hoverTimeoutRef.current = null;
@@ -140,7 +140,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       }
     }
   };
-  
+
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -149,7 +149,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
       setIsDraggingOver(true);
     }
   };
-  
+
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -166,33 +166,33 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     setIsDraggingOver(false);
     clearHoverTimeout();
     const draggedNodeId = e.dataTransfer.getData("application/genkiflow-node-id");
-    
+
     if (draggedNodeId && draggedNodeId !== node.id) {
-      if (isFolder) { 
+      if (isFolder) {
         moveNode(draggedNodeId, node.id);
       }
     }
   };
 
   return (
-    <div 
-      className="text-sm group/fileitem w-full" // Added w-full
+    <div
+      className="text-sm group/fileitem w-full"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
-      draggable={!isRenaming} 
+      draggable={!isRenaming}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver} 
-      onDragEnter={handleDragEnter} 
-      onDragLeave={handleDragLeave} 
-      onDrop={handleDrop}   
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <div
         className={cn(
-          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden
+          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden to this row
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-          isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
-          !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
-          !isFolder && "hover:bg-sidebar-accent" 
+          isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary",
+          !isDraggingOver && isFolder && "hover:bg-sidebar-accent",
+          !isFolder && "hover:bg-sidebar-accent"
         )}
         onClick={handleToggle}
         role="button"
@@ -201,16 +201,16 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
-        title={isRenaming ? undefined : node.path} // Tooltip for full path on the row itself
+        title={isRenaming ? undefined : node.path}
       >
-        {/* Indentation part (shrink-0) */}
+        {/* Indentation and Expansion Icon */}
         <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0">
           {isFolder && (
             <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
           )}
         </div>
 
-        {/* File/Folder Icon part (shrink-0) */}
+        {/* File/Folder Type Icon */}
         <div className="shrink-0">
           {isFolder ? (
             <FolderIcon className={cn("w-4 h-4 mr-2", folderIconColorClass, !isFolder && !isRenaming && "ml-5")} />
@@ -218,36 +218,36 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             <FileIcon className={cn("w-4 h-4 mr-2 text-primary", !isFolder && !isRenaming && "ml-5")} />
           )}
         </div>
-          
-        {/* Name or Input part (this must grow and allow truncation) */}
+
+        {/* Name or Input - This is the flexible part */}
         {isRenaming ? (
           <Input
             ref={inputRef}
             type="text"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameConfirm} 
+            onBlur={handleRenameConfirm}
             onKeyDown={handleRenameKeyDown}
             className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow min-w-0" // flex-grow min-w-0
-            onClick={(e) => e.stopPropagation()} 
+            onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          // Wrapper for the name, this will grow and manage overflow for the span
-          <div className="flex-grow min-w-0 overflow-hidden mr-1"> {/* Added mr-1 for spacing before actions */}
-            <span className="block truncate" title={node.name}> {/* Ensure title is on the span for full name */}
+          // Wrapper for the name that handles growth and truncation
+          <div className="flex-grow min-w-0 overflow-hidden mr-1">
+            <span className="block truncate" title={node.name}>
               {node.name}
             </span>
           </div>
         )}
 
-        {/* Action Buttons part (shrink-0, visibility toggled by hover) */}
+        {/* Action Buttons */}
         {!isRenaming && (
-          <div 
+          <div
             className={cn(
               "flex items-center space-x-0.5 shrink-0 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100",
               showActions ? "opacity-100" : "opacity-0"
             )}
-            data-action-button 
+            data-action-button
           >
             {isFolder && (
               <>
@@ -274,13 +274,13 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           {sortedChildren.length > 0 ? sortedChildren.map((child) => (
             <FileTreeItem key={child.id} node={child} level={level + 1} />
           )) : (
-             <div 
+             <div
                 className={cn(
-                    "text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center", 
-                    isDraggingOver && "bg-sidebar-accent/30" 
+                    "text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center",
+                    isDraggingOver && "bg-sidebar-accent/30"
                 )}
-                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} 
-                onDragOver={handleDragOver} 
+                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} // Adjusted padding to align with icons
+                onDragOver={handleDragOver}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -310,4 +310,3 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
-

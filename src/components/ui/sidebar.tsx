@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -505,7 +506,7 @@ const SidebarMenuItem = React.forwardRef<
   <li
     ref={ref}
     data-sidebar="menu-item"
-    className={cn("group/menu-item relative", className)}
+    className={cn("group/menu-item relative w-full", className)} // Added w-full
     {...props}
   />
 ))
