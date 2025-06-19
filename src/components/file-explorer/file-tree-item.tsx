@@ -176,7 +176,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
 
   return (
     <div
-      className="text-sm group/fileitem w-full"
+      className="text-sm group/fileitem w-full" // w-full ensures it respects parent SidebarMenuItem width
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       draggable={!isRenaming}
@@ -188,7 +188,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden to this row
+          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // overflow-hidden on the row
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary",
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent",
@@ -201,50 +201,49 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
-        title={isRenaming ? undefined : node.path}
+        title={isRenaming ? undefined : node.path} // Set title on the row for full path
       >
-        {/* Indentation and Expansion Icon */}
+        {/* Indentation and Expansion Icon - Fixed Size */}
         <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0">
           {isFolder && (
             <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
           )}
         </div>
 
-        {/* File/Folder Type Icon */}
+        {/* File/Folder Type Icon - Fixed Size */}
         <div className="shrink-0">
           {isFolder ? (
-            <FolderIcon className={cn("w-4 h-4 mr-2", folderIconColorClass, !isFolder && !isRenaming && "ml-5")} />
+            <FolderIcon className={cn("w-4 h-4 mr-2", folderIconColorClass, !isFolder && "ml-5" )} />
           ) : (
-            <FileIcon className={cn("w-4 h-4 mr-2 text-primary", !isFolder && !isRenaming && "ml-5")} />
+            <FileIcon className={cn("w-4 h-4 mr-2 text-primary", !isFolder && "ml-5" )} />
           )}
         </div>
 
-        {/* Name or Input - This is the flexible part */}
-        {isRenaming ? (
-          <Input
-            ref={inputRef}
-            type="text"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameConfirm}
-            onKeyDown={handleRenameKeyDown}
-            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow min-w-0" // flex-grow min-w-0
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          // Wrapper for the name that handles growth and truncation
-          <div className="flex-grow min-w-0 overflow-hidden mr-1">
-            <span className="block truncate" title={node.name}>
+        {/* Name or Input - Flexible Part */}
+        <div className="flex-grow min-w-0 overflow-hidden"> {/* Wrapper for name/input, crucial for truncation */}
+          {isRenaming ? (
+            <Input
+              ref={inputRef}
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameConfirm}
+              onKeyDown={handleRenameKeyDown}
+              className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary min-w-0" // min-w-0 also useful for input
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="block truncate w-full" title={node.name}> {/* block truncate w-full on the span */}
               {node.name}
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - Fixed Size, Pushed Right */}
         {!isRenaming && (
           <div
             className={cn(
-              "flex items-center space-x-0.5 shrink-0 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100",
+              "flex items-center space-x-0.5 shrink-0 ml-1 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100", // ml-1 for spacing
               showActions ? "opacity-100" : "opacity-0"
             )}
             data-action-button
@@ -279,7 +278,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
                     "text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center",
                     isDraggingOver && "bg-sidebar-accent/30"
                 )}
-                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} // Adjusted padding to align with icons
+                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }}
                 onDragOver={handleDragOver}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
@@ -310,3 +309,5 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
+
+    
