@@ -10,10 +10,116 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { ChromaClient, Collection, QueryResult } from 'chromadb';
+import { Document } from '@langchain/core/documents';
+import { BaseRetriever } from '@langchain/core/retrievers';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+import { ChatOpenAI } from '@langchain/openai';
+import path from 'path';
+
+type ChunkType = 'function' | 'class' | 'interface' | 'component' | 'import' | 'config' | 'documentation' | 'test';
+type Complexity = 'low' | 'medium' | 'high';
+
+// Initialize embeddings and ChromaDB client
+const embeddings = new OpenAIEmbeddings({
+  modelName: 'text-embedding-ada-002',
+  batchSize: 512,
+});
+
+const client = new ChromaClient();
+let collection: Collection | null = null;
+
+// Text splitter for chunking code
+const textSplitter = new RecursiveCharacterTextSplitter({
+  chunkSize: 1000,
+  chunkOverlap: 200,
+});
+
+// Function to initialize the collection
+async function initCollection(projectId: string) {
+  if (!collection) {
+    try {
+      collection = await client.getOrCreateCollection({
+        name: `genki-code-${projectId}`,
+        metadata: { 
+          'description': 'Code chunks for Genki IDE',
+          'project': projectId,
+        }
+      });
+    } catch (error) {
+      console.error('Failed to initialize ChromaDB collection:', error);
+      throw error;
+    }
+  }
+  return collection;
+}
+
+// Process and index code chunks
+async function processCodeChunks(chunks: z.infer<typeof CodeChunkSchema>[]): Promise<Document[]> {
+  const documents: Document[] = [];
+
+  for (const chunk of chunks) {
+    const doc = new Document({
+      pageContent: chunk.content,
+      metadata: {
+        id: chunk.id,
+        filePath: chunk.filePath,
+        fileName: chunk.fileName,
+        language: chunk.language,
+        chunkType: chunk.chunkType,
+        functionName: chunk.functionName,
+        complexity: chunk.complexity,
+        lineRange: `${chunk.lineRange.start}-${chunk.lineRange.end}`,
+      },
+    });
+    documents.push(doc);
+  }
+
+  // Split documents into smaller chunks
+  const splitDocs = await textSplitter.splitDocuments(documents);
+  return splitDocs;
+}
+
+// Create custom retriever class
+class ChromaDBRetriever extends BaseRetriever {
+  private collection: Collection;
+  private embeddings: OpenAIEmbeddings;
+  
+  constructor(collection: Collection, embeddings: OpenAIEmbeddings) {
+    super();
+    this.collection = collection;
+    this.embeddings = embeddings;
+  }
+
+  get lc_namespace(): string[] {
+    return ['genki', 'retrievers', 'chromadb'];
+  }
+  
+  async _getRelevantDocuments(query: string): Promise<Document[]> {
+    // Get query embedding
+    const queryEmbedding = await this.embeddings.embedQuery(query);
+    
+    // Search the collection
+    const results = await this.collection.query({
+      queryEmbeddings: [queryEmbedding],
+      nResults: 10,
+    });
+    
+    // Convert results to Documents, handling potential nulls
+    return results.documents[0].map((content, i) => {
+      if (!content) return null;
+      return new Document({
+        pageContent: content,
+        metadata: results.metadatas?.[0]?.[i] || {},
+      });
+    }).filter((doc): doc is Document => doc !== null);
+  }
+}
 
 // ===== INDEXER SCHEMAS =====
 
-const CodeChunkSchema = z.object({
+export const CodeChunkSchema = z.object({
   id: z.string().describe('Unique identifier for this code chunk'),
   filePath: z.string().describe('Path to the source file'),
   fileName: z.string().describe('Name of the source file'),
@@ -436,4 +542,164 @@ export const projectAnalyzer = ai.defineTool(
       version: '1.0.0',
     };
   }
-); 
+);
+
+// Main indexing function
+export async function indexCodebase(
+  projectId: string,
+  chunks: z.infer<typeof CodeChunkSchema>[]
+): Promise<z.infer<typeof ProjectIndexSchema>> {
+  const coll = await initCollection(projectId);
+  const documents = await processCodeChunks(chunks);
+  
+  // Prepare data for ChromaDB
+  const ids = documents.map((_, i) => `doc_${i}`);
+  const embeddings_array = await Promise.all(
+    documents.map(doc => embeddings.embedQuery(doc.pageContent))
+  );
+  const metadatas = documents.map(doc => doc.metadata);
+  const documents_content = documents.map(doc => doc.pageContent);
+  
+  // Add documents to ChromaDB
+  await coll.add({
+    ids,
+    embeddings: embeddings_array,
+    metadatas,
+    documents: documents_content,
+  });
+
+  // Create semantic clusters
+  const clusters = await createSemanticClusters(coll, chunks);
+
+  return {
+    projectId,
+    chunks,
+    fileStructure: buildFileStructure(chunks),
+    dependencies: extractDependencies(chunks),
+    semanticClusters: clusters,
+    createdAt: new Date().toISOString(),
+    version: '1.0.0',
+  };
+}
+
+// Main retrieval function
+export async function retrieveCode(
+  projectId: string,
+  query: z.infer<typeof RetrievalQuerySchema>
+): Promise<z.infer<typeof RetrievalResultSchema>> {
+  const coll = await initCollection(projectId);
+  const retriever = new ChromaDBRetriever(coll, embeddings);
+  
+  const startTime = Date.now();
+  const retrievedDocs = await retriever.getRelevantDocuments(query.query);
+  
+  // Transform retrieved documents into required format
+  const chunks = retrievedDocs.map(doc => ({
+    chunk: {
+      id: doc.metadata.id as string,
+      filePath: doc.metadata.filePath as string,
+      fileName: doc.metadata.fileName as string,
+      content: doc.pageContent,
+      language: doc.metadata.language as string,
+      chunkType: doc.metadata.chunkType as ChunkType,
+      functionName: doc.metadata.functionName as string | undefined,
+      complexity: doc.metadata.complexity as Complexity,
+      lineRange: { 
+        start: parseInt((doc.metadata.lineRange as string).split('-')[0]),
+        end: parseInt((doc.metadata.lineRange as string).split('-')[1]),
+      },
+      dependencies: doc.metadata.dependencies as string[] || [],
+      semanticSummary: '', // Generate summary if needed
+      keywords: doc.metadata.keywords as string[] || [],
+      lastModified: doc.metadata.lastModified as string || new Date().toISOString(),
+    },
+    relevanceScore: 0.8, // Default score
+    matchReason: `Relevant to query: ${query.query}`,
+  }));
+
+  const validChunks = chunks.filter(
+    chunk => isValidChunk(chunk.chunk)
+  );
+
+  return {
+    chunks: validChunks.slice(0, query.maxResults),
+    totalResults: validChunks.length,
+    searchMetadata: {
+      queryProcessingTime: Date.now() - startTime,
+      indexVersion: '1.0.0',
+      appliedFilters: Object.entries(query.filters || {})
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => `${key}:${value}`),
+      semanticClusters: [], // Fill from semantic cluster analysis
+    },
+    suggestions: [], // Generate related queries
+  };
+}
+
+function isValidChunk(chunk: any): chunk is z.infer<typeof CodeChunkSchema> {
+  return (
+    typeof chunk.id === 'string' &&
+    typeof chunk.filePath === 'string' &&
+    typeof chunk.fileName === 'string' &&
+    typeof chunk.content === 'string' &&
+    typeof chunk.language === 'string' &&
+    ['function', 'class', 'interface', 'component', 'import', 'config', 'documentation', 'test'].includes(chunk.chunkType) &&
+    (chunk.functionName === undefined || typeof chunk.functionName === 'string') &&
+    ['low', 'medium', 'high'].includes(chunk.complexity) &&
+    Array.isArray(chunk.dependencies) &&
+    typeof chunk.semanticSummary === 'string' &&
+    Array.isArray(chunk.keywords) &&
+    typeof chunk.lastModified === 'string'
+  );
+}
+
+// Helper function to create semantic clusters
+async function createSemanticClusters(
+  collection: Collection,
+  chunks: z.infer<typeof CodeChunkSchema>[]
+) {
+  // TODO: Implement k-means clustering using embeddings
+  return [{
+    clusterId: 'core-logic',
+    theme: 'Core Business Logic',
+    chunks: chunks.filter(c => c.chunkType === 'function').map(c => c.id),
+    keywords: ['business', 'logic', 'core'],
+  }];
+}
+
+// Helper function to build file structure
+function buildFileStructure(chunks: z.infer<typeof CodeChunkSchema>[]) {
+  const structure: Record<string, any> = {};
+  for (const chunk of chunks) {
+    const parts = chunk.filePath.split('/');
+    let current = structure;
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        current[part] = {
+          type: 'file',
+          language: chunk.language,
+        };
+      } else {
+        if (!current[part]) {
+          current[part] = {
+            type: 'folder',
+            children: [],
+          };
+        }
+        current = current[part].children;
+      }
+    }
+  }
+  return structure;
+}
+
+// Helper function to extract dependencies
+function extractDependencies(chunks: z.infer<typeof CodeChunkSchema>[]) {
+  const deps: Record<string, string[]> = {};
+  for (const chunk of chunks) {
+    deps[chunk.filePath] = chunk.dependencies;
+  }
+  return deps;
+}

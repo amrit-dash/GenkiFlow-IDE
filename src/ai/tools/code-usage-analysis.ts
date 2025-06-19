@@ -6,6 +6,9 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import * as ts from 'typescript';
+import * as path from 'path';
+import * as fs from 'fs';
 
 const CodeUsageAnalysisInputSchema = z.object({
   symbolName: z.string().describe('The name of the symbol to find usages for (function, class, variable, etc.)'),
@@ -45,6 +48,216 @@ const CodeUsageAnalysisOutputSchema = z.object({
   }),
 });
 
+// TypeScript program setup
+function createTsProgram(rootPath: string): ts.Program {
+  const configPath = ts.findConfigFile(
+    rootPath,
+    ts.sys.fileExists,
+    'tsconfig.json'
+  );
+
+  if (!configPath) {
+    throw new Error('Could not find tsconfig.json');
+  }
+
+  const { config } = ts.readConfigFile(configPath, ts.sys.readFile);
+  const { options, fileNames } = ts.parseJsonConfigFileContent(
+    config,
+    ts.sys,
+    path.dirname(configPath)
+  );
+
+  return ts.createProgram(fileNames, options);
+}
+
+// Find symbol definition
+function findSymbolDefinition(
+  program: ts.Program,
+  symbolName: string,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker
+): { filePath: string; line: number; code: string } | undefined {
+  let definition: { filePath: string; line: number; code: string } | undefined;
+
+  function visit(node: ts.Node) {
+    if (ts.isIdentifier(node) && node.text === symbolName) {
+      const symbol = checker.getSymbolAtLocation(node);
+      if (symbol) {
+        const declarations = symbol.getDeclarations();
+        if (declarations && declarations.length > 0) {
+          const decl = declarations[0];
+          const declFile = decl.getSourceFile();
+          const { line } = declFile.getLineAndCharacterOfPosition(decl.getStart());
+          
+          definition = {
+            filePath: declFile.fileName,
+            line: line + 1,
+            code: decl.getText(),
+          };
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return definition;
+}
+
+// Find symbol usages
+function findSymbolUsages(
+  program: ts.Program,
+  symbolName: string,
+  checker: ts.TypeChecker
+): Array<{ filePath: string; line: number; context: string; usageType: 'call' | 'import' | 'instantiation' | 'reference' | 'assignment' }> {
+  const usages: Array<{ filePath: string; line: number; context: string; usageType: 'call' | 'import' | 'instantiation' | 'reference' | 'assignment' }> = [];
+
+  program.getSourceFiles().forEach(sourceFile => {
+    function visit(node: ts.Node) {
+      if (ts.isIdentifier(node) && node.text === symbolName) {
+        const symbol = checker.getSymbolAtLocation(node);
+        if (symbol) {
+          const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+          usages.push({
+            filePath: sourceFile.fileName,
+            line: line + 1,
+            context: getNodeContext(node, sourceFile),
+            usageType: determineUsageType(node),
+          });
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  });
+
+  return usages;
+}
+
+// Get code context around a node
+function getNodeContext(node: ts.Node, sourceFile: ts.SourceFile): string {
+  const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+  const lineStarts = sourceFile.getLineStarts();
+  const start = lineStarts[Math.max(0, line - 1)];
+  const end = lineStarts[Math.min(lineStarts.length - 1, line + 2)];
+  return sourceFile.text.slice(start, end).trim();
+}
+
+// Determine how a symbol is being used
+function determineUsageType(node: ts.Node): 'call' | 'import' | 'instantiation' | 'reference' | 'assignment' {
+  let parent = node.parent;
+  while (parent) {
+    if (ts.isCallExpression(parent) && parent.expression === node) {
+      return 'call';
+    }
+    if (ts.isImportDeclaration(parent)) {
+      return 'import';
+    }
+    if (ts.isNewExpression(parent) && parent.expression === node) {
+      return 'instantiation';
+    }
+    if (ts.isBinaryExpression(parent) && parent.left === node && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      return 'assignment';
+    }
+    parent = parent.parent;
+  }
+  return 'reference';
+}
+
+// Find related symbols
+function findRelatedSymbols(
+  program: ts.Program,
+  symbolName: string,
+  checker: ts.TypeChecker
+): Array<{ name: string; relationship: 'extends' | 'implements' | 'imports' | 'exports' | 'calls' | 'overrides'; filePath: string }> {
+  const related: Array<{ name: string; relationship: 'extends' | 'implements' | 'imports' | 'exports' | 'calls' | 'overrides'; filePath: string }> = [];
+
+  program.getSourceFiles().forEach(sourceFile => {
+    function visit(node: ts.Node) {
+      if (ts.isClassDeclaration(node) && node.heritageClauses) {
+        node.heritageClauses.forEach(clause => {
+          clause.types.forEach(type => {
+            if (type.expression.getText() === symbolName) {
+              related.push({
+                name: node.name?.text || 'anonymous',
+                relationship: clause.token === ts.SyntaxKind.ExtendsKeyword ? 'extends' : 'implements',
+                filePath: sourceFile.fileName,
+              });
+            }
+          });
+        });
+      }
+      
+      if (ts.isImportDeclaration(node)) {
+        const importText = node.moduleSpecifier.getText();
+        if (importText.includes(symbolName)) {
+          related.push({
+            name: importText.replace(/['"`]/g, ''),
+            relationship: 'imports',
+            filePath: sourceFile.fileName,
+          });
+        }
+      }
+      
+      ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+  });
+
+  return related;
+}
+
+// Determine symbol type from its declaration
+function inferSymbolTypeFromDeclaration(node: ts.Node): 'function' | 'class' | 'variable' | 'interface' | 'type' | 'component' | 'unknown' {
+  if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) {
+    return 'function';
+  }
+  if (ts.isClassDeclaration(node)) {
+    return 'class';
+  }
+  if (ts.isInterfaceDeclaration(node)) {
+    return 'interface';
+  }
+  if (ts.isTypeAliasDeclaration(node)) {
+    return 'type';
+  }
+  if (ts.isVariableDeclaration(node)) {
+    const name = node.name.getText();
+    if (name[0] === name[0].toUpperCase() && 
+        (name.includes('Component') || name.endsWith('Provider') || name.endsWith('Context'))) {
+      return 'component';
+    }
+    return 'variable';
+  }
+  return 'unknown';
+}
+
+// Find files that might benefit from using the symbol
+function findPotentialUsers(
+  program: ts.Program,
+  symbolType: string,
+  usages: Array<{ filePath: string }>
+): string[] {
+  const potentialUsers: string[] = [];
+  const usedIn = new Set(usages.map(u => u.filePath));
+
+  program.getSourceFiles().forEach(sourceFile => {
+    if (!usedIn.has(sourceFile.fileName)) {
+      const content = sourceFile.getText().toLowerCase();
+      
+      // Look for potential use cases based on symbol type
+      if (symbolType === 'component' && content.includes('react')) {
+        potentialUsers.push(sourceFile.fileName);
+      } else if (symbolType === 'function' && content.includes('function')) {
+        potentialUsers.push(sourceFile.fileName);
+      }
+      // Add more heuristics based on symbol type
+    }
+  });
+
+  return potentialUsers;
+}
+
 export const codeUsageAnalysis = ai.defineTool(
   {
     name: 'codeUsageAnalysis',
@@ -55,205 +268,108 @@ export const codeUsageAnalysis = ai.defineTool(
   async (input) => {
     console.log(`Code usage analysis called for symbol: ${input.symbolName}`);
     
-    // In a real implementation, this would parse the actual codebase
-    // For now, we'll provide intelligent mock responses based on common patterns
-    
-    const symbolType = inferSymbolType(input.symbolName);
-    const mockUsages = generateMockUsages(input.symbolName, symbolType, input.currentFilePath);
-    const mockDefinition = generateMockDefinition(input.symbolName, symbolType);
-    const relatedSymbols = findRelatedSymbols(input.symbolName, symbolType);
-    
-    const summary = {
-      totalUsages: mockUsages.length,
-      filesWithUsages: new Set(mockUsages.map(u => u.filePath)).size,
-      mostUsedIn: findMostUsedFile(mockUsages),
-    };
-    
-    return {
-      symbolInfo: {
-        name: input.symbolName,
-        type: symbolType,
-        definition: mockDefinition,
-      },
-      usages: mockUsages,
-      relatedSymbols,
-      summary,
-    };
+    try {
+      const rootPath = input.currentFilePath 
+        ? path.dirname(input.currentFilePath)
+        : process.cwd();
+
+      // Create TypeScript program
+      const program = createTsProgram(rootPath);
+      const checker = program.getTypeChecker();
+
+      // Find source file
+      const sourceFile = input.currentFilePath 
+        ? program.getSourceFile(input.currentFilePath) 
+        : program.getSourceFiles()[0];
+
+      if (!sourceFile) {
+        throw new Error('Could not find source file');
+      }
+
+      // Find symbol definition
+      const definition = input.includeDefinitions !== false
+        ? findSymbolDefinition(program, input.symbolName, sourceFile, checker)
+        : undefined;
+
+      // Determine symbol type from definition
+      let symbolType: 'function' | 'class' | 'variable' | 'interface' | 'type' | 'component' | 'unknown' = 'unknown';
+      if (definition) {
+        const sourceFile = program.getSourceFile(definition.filePath);
+        if (sourceFile) {
+          const node = findNodeAtPosition(sourceFile, definition.line);
+          if (node) {
+            symbolType = inferSymbolTypeFromDeclaration(node);
+          }
+        }
+      }
+
+      // Find all usages
+      const usages = input.includeReferences !== false
+        ? findSymbolUsages(program, input.symbolName, checker)
+        : [];
+
+      // Find related symbols
+      const relatedSymbols = findRelatedSymbols(program, input.symbolName, checker);
+
+      // Calculate usage statistics
+      const filesWithUsages = new Set(usages.map(u => u.filePath));
+      const usagesByFile = new Map<string, number>();
+      usages.forEach(u => {
+        usagesByFile.set(u.filePath, (usagesByFile.get(u.filePath) || 0) + 1);
+      });
+
+      // Find most used file
+      let mostUsedFile: string | undefined;
+      let maxUsages = 0;
+      usagesByFile.forEach((count, file) => {
+        if (count > maxUsages) {
+          maxUsages = count;
+          mostUsedFile = file;
+        }
+      });
+
+      // Find potential users
+      const unusedFiles = findPotentialUsers(program, symbolType, usages);
+
+      return {
+        symbolInfo: {
+          name: input.symbolName,
+          type: symbolType,
+          definition,
+        },
+        usages,
+        relatedSymbols: relatedSymbols.length > 0 ? relatedSymbols : undefined,
+        summary: {
+          totalUsages: usages.length,
+          filesWithUsages: filesWithUsages.size,
+          mostUsedIn: mostUsedFile,
+          unusedFiles: unusedFiles.length > 0 ? unusedFiles : undefined,
+        },
+      };
+    } catch (error) {
+      console.error('Error in code usage analysis:', error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to analyze code usage: ${error.message}`);
+      } else {
+        throw new Error('Failed to analyze code usage: Unknown error');
+      }
+    }
   }
 );
 
-function inferSymbolType(symbolName: string): 'function' | 'class' | 'variable' | 'interface' | 'type' | 'component' | 'unknown' {
-  // Heuristics to infer symbol type
-  if (symbolName.startsWith('use') && symbolName.length > 3) {
-    return 'function'; // Likely a React hook
-  }
-  if (symbolName[0] === symbolName[0].toUpperCase()) {
-    if (symbolName.includes('Component') || symbolName.includes('Provider') || symbolName.includes('Context')) {
-      return 'component';
+// Helper function to find a node at a specific line
+function findNodeAtPosition(sourceFile: ts.SourceFile, line: number): ts.Node | undefined {
+  let result: ts.Node | undefined;
+
+  function visit(node: ts.Node) {
+    const nodeLine = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+    if (nodeLine === line) {
+      result = node;
+      return;
     }
-    return 'class'; // PascalCase suggests class or component
+    ts.forEachChild(node, visit);
   }
-  if (symbolName.includes('Type') || symbolName.includes('Interface')) {
-    return 'interface';
-  }
-  if (symbolName.includes('handle') || symbolName.includes('get') || symbolName.includes('set') || symbolName.includes('create')) {
-    return 'function';
-  }
-  return 'variable';
-}
 
-function generateMockUsages(symbolName: string, symbolType: string, currentFilePath?: string) {
-  const usages = [];
-  
-  // Generate realistic usage examples based on symbol type
-  switch (symbolType) {
-    case 'function':
-      usages.push(
-        {
-          filePath: '/src/components/Button.tsx',
-          line: 15,
-          context: `const result = ${symbolName}(params);`,
-          usageType: 'call' as const,
-        },
-        {
-          filePath: '/src/hooks/useAuth.ts',
-          line: 8,
-          context: `import { ${symbolName} } from './utils';`,
-          usageType: 'import' as const,
-        },
-        {
-          filePath: '/src/pages/Home.tsx',
-          line: 23,
-          context: `  const data = await ${symbolName}();`,
-          usageType: 'call' as const,
-        }
-      );
-      break;
-      
-    case 'component':
-      usages.push(
-        {
-          filePath: '/src/pages/Dashboard.tsx',
-          line: 45,
-          context: `<${symbolName} onClick={handleClick} />`,
-          usageType: 'reference' as const,
-        },
-        {
-          filePath: '/src/components/Layout.tsx',
-          line: 12,
-          context: `import ${symbolName} from './${symbolName}';`,
-          usageType: 'import' as const,
-        },
-        {
-          filePath: '/src/app/page.tsx',
-          line: 67,
-          context: `  return <${symbolName} {...props} />;`,
-          usageType: 'reference' as const,
-        }
-      );
-      break;
-      
-    case 'class':
-      usages.push(
-        {
-          filePath: '/src/services/ApiClient.ts',
-          line: 34,
-          context: `const instance = new ${symbolName}();`,
-          usageType: 'instantiation' as const,
-        },
-        {
-          filePath: '/src/models/User.ts',
-          line: 5,
-          context: `class User extends ${symbolName} {`,
-          usageType: 'reference' as const,
-        }
-      );
-      break;
-      
-    case 'variable':
-      usages.push(
-        {
-          filePath: '/src/config/constants.ts',
-          line: 18,
-          context: `export const API_URL = ${symbolName}.baseUrl;`,
-          usageType: 'reference' as const,
-        },
-        {
-          filePath: '/src/utils/helpers.ts',
-          line: 42,
-          context: `if (${symbolName} && ${symbolName}.length > 0) {`,
-          usageType: 'reference' as const,
-        }
-      );
-      break;
-  }
-  
-  return usages;
+  visit(sourceFile);
+  return result;
 }
-
-function generateMockDefinition(symbolName: string, symbolType: string) {
-  const definitionExamples: Record<string, { filePath: string; line: number; code: string }> = {
-    function: {
-      filePath: '/src/utils/helpers.ts',
-      line: 12,
-      code: `export function ${symbolName}(param: string): string {\n  // Implementation\n  return param.toLowerCase();\n}`,
-    },
-    component: {
-      filePath: `/src/components/${symbolName}.tsx`,
-      line: 8,
-      code: `export function ${symbolName}({ children }: { children: React.ReactNode }) {\n  return <div>{children}</div>;\n}`,
-    },
-    class: {
-      filePath: `/src/models/${symbolName}.ts`,
-      line: 3,
-      code: `export class ${symbolName} {\n  constructor() {\n    // Initialization\n  }\n}`,
-    },
-    variable: {
-      filePath: '/src/config/constants.ts',
-      line: 7,
-      code: `export const ${symbolName} = {\n  baseUrl: 'https://api.example.com',\n  timeout: 5000,\n};`,
-    },
-  };
-  
-  return definitionExamples[symbolType] || definitionExamples.variable;
-}
-
-function findRelatedSymbols(symbolName: string, symbolType: string) {
-  const related = [];
-  
-  switch (symbolType) {
-    case 'component':
-      related.push(
-        { name: `${symbolName}Props`, relationship: 'implements' as const, filePath: `/src/components/${symbolName}.tsx` },
-        { name: `use${symbolName}`, relationship: 'calls' as const, filePath: `/src/hooks/use${symbolName}.ts` }
-      );
-      break;
-      
-    case 'function':
-      if (symbolName.startsWith('use')) {
-        related.push(
-          { name: symbolName.replace('use', ''), relationship: 'calls' as const, filePath: '/src/components/Example.tsx' }
-        );
-      }
-      break;
-      
-    case 'class':
-      related.push(
-        { name: `${symbolName}Interface`, relationship: 'implements' as const, filePath: `/src/interfaces/${symbolName}.ts` },
-        { name: `Base${symbolName}`, relationship: 'extends' as const, filePath: `/src/base/Base${symbolName}.ts` }
-      );
-      break;
-  }
-  
-  return related;
-}
-
-function findMostUsedFile(usages: any[]): string | undefined {
-  const fileCounts = usages.reduce((acc, usage) => {
-    acc[usage.filePath] = (acc[usage.filePath] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  
-  return Object.entries(fileCounts)
-    .sort(([,a], [,b]) => (b as number) - (a as number))[0]?.[0];
-} 

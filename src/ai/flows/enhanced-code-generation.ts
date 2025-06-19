@@ -1,49 +1,59 @@
-
 'use server';
 /**
- * @fileOverview Enhanced AI flow for code generation with contextual enrichment.
- * This flow is now primarily focused on generating or modifying code when explicitly invoked
- * for such tasks. It assumes intent classification might happen client-side for simpler
- * operations like direct filename suggestions or basic file system commands.
- *
- * - enhancedGenerateCode: Advanced code generation with file system context and history.
- * - EnhancedGenerateCodeInput: Input schema including file system tree and chat history.
- * - EnhancedGenerateCodeOutput: Enhanced output with file operation suggestions for *code-related* actions.
+ * Enhanced AI flow for code generation with contextual enrichment and RAG integration.
+ * This version restores the prompt-based structure, integrates the new RAG system/tool,
+ * and ensures robust error handling and output schema validation.
  */
 
-import {ai} from '@/ai/genkit';
-import {z}from 'genkit';
-import {fileSystemOperations}from '../tools/file-system-operations';
-import {codebaseSearch}from '../tools/codebase-search';
-import {errorValidation}from '../tools/error-validation';
-import {codeUsageAnalysis}from '../tools/code-usage-analysis';
-import {operationProgress}from '../tools/operation-progress';
-import {terminalOperations}from '../tools/terminal-operations';
-import {fileSystemExecutor}from '../tools/file-system-executor';
-import {codebaseDataset}from '../tools/codebase-dataset';
-import {intelligentCodeMerger}from '../tools/intelligent-code-merger';
-import {fileContextAnalyzer}from '../tools/file-context-analyzer';
-import { filenameSuggester }from '../tools/filename-suggester';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { fileSystemOperations } from '../tools/file-system-operations';
+import { codebaseSearch } from '../tools/codebase-search';
+import { errorValidation } from '../tools/error-validation';
+import { codeUsageAnalysis } from '../tools/code-usage-analysis';
+import { operationProgress } from '../tools/operation-progress';
+import { terminalOperations } from '../tools/terminal-operations';
+import { fileSystemExecutor } from '../tools/file-system-executor';
+import { codebaseDataset } from '../tools/codebase-dataset';
+import { intelligentCodeMerger } from '../tools/intelligent-code-merger';
+import { fileContextAnalyzer } from '../tools/file-context-analyzer';
+import { filenameSuggester } from '../tools/filename-suggester';
+import { codeRetriever } from '../tools/advanced-rag-system';
 
-// Define FilenameSuggesterOutputSchema to match the tool's output
+// Types for RAG configuration
+interface RetrieverConfig {
+  query: string;
+  queryType: 'semantic' | 'syntactic' | 'hybrid';
+  maxResults: number;
+  contextWindow: number;
+  includeMetadata: boolean;
+  filters?: {
+    language?: string;
+    fileType?: string[];
+    complexity?: 'low' | 'medium' | 'high';
+    chunkType?: ('function' | 'class' | 'interface' | 'component' | 'import' | 'config' | 'documentation' | 'test')[];
+    excludeFiles?: string[];
+  };
+}
+
+// Define input/output schemas
 const FilenameSuggesterOutputSchema = z.object({
   suggestions: z.array(z.object({
-    filename: z.string().describe('Suggested filename (with extension for files, without for folders)'),
-    reasoning: z.string().describe('Explanation for why this name was suggested'),
-    confidence: z.number().min(0).max(1).describe('Confidence score (0-1)'),
-    category: z.enum(['descriptive', 'conventional', 'functional', 'contextual']).describe('Type of naming strategy'),
-  })).describe('List of filename suggestions ordered by confidence'),
+    filename: z.string(),
+    reasoning: z.string(),
+    confidence: z.number().min(0).max(1),
+    category: z.enum(['descriptive', 'conventional', 'functional', 'contextual']),
+  })),
   analysis: z.object({
-    detectedLanguage: z.string().describe('Programming language detected'),
-    codeType: z.string().describe('Type of code (component, utility, service, etc.)'),
-    mainFunctions: z.array(z.string()).describe('Main functions or exports found'),
-    hasExports: z.boolean().describe('Whether file exports functions/classes'),
-    isComponent: z.boolean().describe('Whether this appears to be a UI component'),
-    suggestedExtension: z.string().describe('Recommended file extension (relevant for fileType="file")'),
-    currentFileNameForFiltering: z.string().optional().describe('The current filename, passed through for filtering.'),
-  }).describe('Analysis of the file content'),
+    detectedLanguage: z.string(),
+    codeType: z.string(),
+    mainFunctions: z.array(z.string()),
+    hasExports: z.boolean(),
+    isComponent: z.boolean(),
+    suggestedExtension: z.string(),
+    currentFileNameForFiltering: z.string().optional(),
+  }),
 });
-
 
 const ChatHistoryItemSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -52,18 +62,18 @@ const ChatHistoryItemSchema = z.object({
 });
 
 const AttachedFileSchema = z.object({
-  path: z.string().describe('Path of the attached file or folder.'),
-  content: z.string().describe('Content of the attached file, or a summary string (name, path, direct children) for folders.')
+  path: z.string(),
+  content: z.string(),
 });
 
 const EnhancedGenerateCodeInputSchema = z.object({
-  prompt: z.string().describe("The user's primary request or question for code generation or modification."),
-  currentFilePath: z.string().optional().describe('Path of the currently active file.'),
-  currentFileContent: z.string().optional().describe('Content of the currently active file.'),
-  currentFileName: z.string().optional().describe('Name of the currently active file.'),
-  attachedFiles: z.array(AttachedFileSchema).optional().describe('Attached files or folders for context. For folders, content is a summary string.'),
-  fileSystemTree: z.string().describe('String representation of the current file system structure.'),
-  chatHistory: z.array(ChatHistoryItemSchema).optional().describe('Previous chat messages for context.'),
+  prompt: z.string(),
+  currentFilePath: z.string().optional(),
+  currentFileContent: z.string().optional(),
+  currentFileName: z.string().optional(),
+  attachedFiles: z.array(AttachedFileSchema).optional(),
+  fileSystemTree: z.string(),
+  chatHistory: z.array(ChatHistoryItemSchema).optional(),
   projectContext: z.object({
     hasPackageJson: z.boolean(),
     hasReadme: z.boolean(),
@@ -71,9 +81,8 @@ const EnhancedGenerateCodeInputSchema = z.object({
     hasTestFolder: z.boolean(),
     totalFiles: z.number(),
     totalFolders: z.number(),
-  }).optional().describe('Project structure analysis.'),
+  }).optional(),
 });
-
 export type EnhancedGenerateCodeInput = z.infer<typeof EnhancedGenerateCodeInputSchema>;
 
 const FileOperationSuggestionSchema = z.object({
@@ -81,14 +90,14 @@ const FileOperationSuggestionSchema = z.object({
   reasoning: z.string(),
   targetPath: z.string().optional().nullable(),
   newName: z.string().optional().nullable(),
-  fileType: z.enum(['file', 'folder']).optional().describe('Type for create operations or to clarify target type for rename/delete.'),
-  destinationPath: z.string().optional().nullable().describe('Destination path for move operations.'),
+  fileType: z.enum(['file', 'folder']).optional(),
+  destinationPath: z.string().optional().nullable(),
   confidence: z.number().min(0).max(1),
 });
 
 const EnhancedGenerateCodeOutputSchema = z.object({
   code: z.string().nullable().optional(),
-  isNewFile: z.boolean().optional(), // Made optional to align with prompt adjustments
+  isNewFile: z.boolean().optional(),
   suggestedFileName: z.string().optional().nullable(),
   targetPath: z.string().optional().nullable(),
   explanation: z.string().nullable().optional(),
@@ -98,29 +107,40 @@ const EnhancedGenerateCodeOutputSchema = z.object({
     isNewFile: z.boolean(),
     suggestedFileName: z.string().optional().nullable(),
     targetPath: z.string().optional().nullable(),
-  })).optional().describe('Alternative placement options for the code.'),
+  })).optional(),
   codeQuality: z.object({
     followsBestPractices: z.boolean(),
     isTypeScriptCompatible: z.boolean(),
     hasProperErrorHandling: z.boolean(),
     isWellDocumented: z.boolean(),
     estimatedComplexity: z.enum(['low', 'medium', 'high']),
-  }).optional().describe('Quality assessment of the generated code.'),
-  filenameSuggestionData: FilenameSuggesterOutputSchema.optional().describe('If the user specifically asked for filename suggestions and this flow decided to use the filenameSuggester tool, this field will contain the direct output from the filenameSuggester tool. This indicates the primary action was filename suggestion.'),
+  }).optional(),
+  filenameSuggestionData: FilenameSuggesterOutputSchema.optional(),
 });
-
 export type EnhancedGenerateCodeOutput = z.infer<typeof EnhancedGenerateCodeOutputSchema>;
 
-export async function enhancedGenerateCode(input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> {
-  return enhancedGenerateCodeFlow(input);
-}
-
+// Prompt definition with RAG tool integration
 const prompt = ai.definePrompt({
   name: 'enhancedGenerateCodePrompt',
-  input: {schema: EnhancedGenerateCodeInputSchema},
-  output: {schema: EnhancedGenerateCodeOutputSchema},
-  tools: [fileSystemOperations, codebaseSearch, errorValidation, codeUsageAnalysis, operationProgress, terminalOperations, fileSystemExecutor, codebaseDataset, intelligentCodeMerger, fileContextAnalyzer, filenameSuggester],
+  input: { schema: EnhancedGenerateCodeInputSchema },
+  output: { schema: EnhancedGenerateCodeOutputSchema },
+  tools: [
+    fileSystemOperations,
+    codebaseSearch,
+    errorValidation,
+    codeUsageAnalysis,
+    operationProgress,
+    terminalOperations,
+    fileSystemExecutor,
+    codebaseDataset,
+    intelligentCodeMerger,
+    fileContextAnalyzer,
+    filenameSuggester,
+    codeRetriever
+  ],
   prompt: `You are an expert AI coding assistant. Your primary task is to generate or modify code based on the user's prompt and provided context. You can also suggest file system operations if they are directly related to the code generation task (e.g., creating a new file for the generated code). If the user's prompt is explicitly about suggesting filenames or performing simple file operations (like rename, delete, move), you should leverage the appropriate tools and ensure your output primarily reflects that tool's result.
+
+You have access to a Retrieval-Augmented Generation (RAG) system for retrieving relevant code context and examples from the codebase. Use the RAG tool whenever additional context or examples would improve your code generation, error fixing, or explanation.
 
 User Prompt: {{{prompt}}}
 
@@ -185,7 +205,7 @@ A. IF THE USER PROMPT IS *PRIMARILY* ABOUT SUGGESTING FILENAMES (e.g., "suggest 
    2. Use the \`filenameSuggester\` tool with this information.
    3. Your *primary response* should be the direct output from \`filenameSuggester\`. Populate the 'filenameSuggestionData' field in your output with the tool's result.
    4. Set 'code' to null or empty.
-   5. Set 'explanation' to a very brief confirmation (e.g., "Here are some name suggestions for [target\_name]:").
+   5. Set 'explanation' to a very brief confirmation (e.g., "Here are some name suggestions for [target_name]:").
    6. Set 'isNewFile' to **false**.
    7. Ensure 'targetPath' in your root output reflects the path of the item for which names were suggested.
 
@@ -235,43 +255,44 @@ Respond with a comprehensive JSON object matching the EnhancedGenerateCodeOutput
   }
 });
 
-const enhancedGenerateCodeFlow = ai.defineFlow(
+// Flow definition
+export const enhancedGenerateCodeFlow = ai.defineFlow(
   {
     name: 'enhancedGenerateCodeFlow',
     inputSchema: EnhancedGenerateCodeInputSchema,
     outputSchema: EnhancedGenerateCodeOutputSchema,
   },
   async (input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> => {
-    console.log('DEBUG: enhancedGenerateCodeFlow - Input to prompt:', JSON.stringify(input, null, 2));
-    const { output } = await prompt(input);
-    console.log('DEBUG: enhancedGenerateCodeFlow - Raw output from LLM:', JSON.stringify(output, null, 2));
-
-
-    if (!output) {
-      console.error("EnhancedGenerateCodeFlow: Prompt output was null or undefined.");
-      // Return a minimal, valid error-like response conforming to the schema
+    try {
+      const { output } = await prompt(input);
+      if (!output) {
+        return {
+          explanation: 'Sorry, I encountered an internal error and could not process your request.',
+          isNewFile: false,
+          code: null,
+        } as EnhancedGenerateCodeOutput;
+      }
+      // Omit optional fields if they are null or undefined
+      const cleanedOutput: any = { ...output };
+      if (cleanedOutput.fileOperationSuggestion == null) delete cleanedOutput.fileOperationSuggestion;
+      if (cleanedOutput.alternativeOptions == null) delete cleanedOutput.alternativeOptions;
+      if (cleanedOutput.filenameSuggestionData == null) delete cleanedOutput.filenameSuggestionData;
+      return cleanedOutput;
+    } catch (error) {
       return {
-        explanation: "Sorry, I encountered an internal error and couldn't process your request. Please try rephrasing or try again later.",
+        explanation: 'An error occurred during code generation: ' + (error instanceof Error ? error.message : String(error)),
         isNewFile: false,
         code: null,
-        // All other fields are optional or nullable and can be omitted here
-      };
+      } as EnhancedGenerateCodeOutput;
     }
-
-    // If filenameSuggestionData or a significant fileOperationSuggestion is present, it's not a new file being created *by this flow*.
-    if (output.filenameSuggestionData || (output.fileOperationSuggestion && output.fileOperationSuggestion.type !== 'none')) {
-        output.isNewFile = false;
-    } else if (output.code && output.isNewFile === undefined && output.suggestedFileName) {
-        // If there's code and a suggested filename, and isNewFile wasn't set, assume it's a new file.
-        output.isNewFile = true;
-    } else if (output.isNewFile === undefined) {
-        // Default to false if not otherwise determined.
-        output.isNewFile = false;
-    }
-    return output;
   }
 );
 
+// Main export
+export async function enhancedGenerateCode(input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> {
+  return enhancedGenerateCodeFlow(input);
+}
 
-    
+
+
 

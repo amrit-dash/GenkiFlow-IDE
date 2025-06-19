@@ -7,6 +7,9 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { CodeChunkSchema } from './advanced-rag-system';
+import path from 'path';
+import type { FileInfo } from './types';
 
 const FileContextAnalyzerInputSchema = z.object({
   filePath: z.string().describe('Path of the file to analyze'),
@@ -137,4 +140,237 @@ export const fileContextAnalyzer = ai.defineTool(
     const result = await fileContextAnalyzerPrompt(input);
     return result.output!;
   }
-); 
+);
+
+/**
+ * Extracts code chunks from files for analysis.
+ */
+export async function extractCodeChunks(files: FileInfo[]): Promise<z.infer<typeof CodeChunkSchema>[]> {
+  const chunks: z.infer<typeof CodeChunkSchema>[] = [];
+  let chunkId = 0;
+
+  for (const file of files) {
+    const language = inferLanguage(file.path);
+    const fileChunks = await analyzeFile(file.content, {
+      filePath: file.path,
+      fileName: path.basename(file.path),
+      language,
+    });
+
+    chunks.push(...fileChunks.map(chunk => ({
+      ...chunk,
+      id: `chunk_${chunkId++}`,
+    })));
+  }
+
+  return chunks;
+}
+
+interface FileAnalysisOptions {
+  filePath: string;
+  fileName: string;
+  language: string;
+}
+
+/**
+ * Analyzes file content and splits it into logical chunks.
+ */
+async function analyzeFile(
+  content: string,
+  options: FileAnalysisOptions
+): Promise<Omit<z.infer<typeof CodeChunkSchema>, 'id'>[]> {
+  const chunks: Omit<z.infer<typeof CodeChunkSchema>, 'id'>[] = [];
+  let currentChunk: {
+    content: string[];
+    start: number;
+    type: z.infer<typeof CodeChunkSchema>['chunkType'];
+    name?: string;
+  } | null = null;
+
+  // Split content into lines
+  const lines = content.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Detect chunk boundaries
+    if (isChunkStart(line, options.language)) {
+      if (currentChunk) {
+        chunks.push(createChunk(currentChunk, options));
+      }
+      currentChunk = {
+        content: [line],
+        start: i + 1,
+        type: detectChunkType(line, options.language),
+        name: extractName(line, options.language),
+      };
+    } else if (currentChunk) {
+      currentChunk.content.push(line);
+    }
+  }
+
+  // Add the last chunk
+  if (currentChunk) {
+    chunks.push(createChunk(currentChunk, options));
+  }
+
+  return chunks;
+}
+
+function inferLanguage(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  const langMap: Record<string, string> = {
+    '.js': 'javascript',
+    '.ts': 'typescript',
+    '.jsx': 'javascript',
+    '.tsx': 'typescript',
+    '.py': 'python',
+    '.rb': 'ruby',
+    '.java': 'java',
+    '.go': 'go',
+    '.cpp': 'cpp',
+    '.c': 'c',
+    '.rs': 'rust',
+    '.swift': 'swift',
+    '.kt': 'kotlin',
+    '.php': 'php',
+    '.cs': 'csharp',
+  };
+  return langMap[ext] || 'plain';
+}
+
+function isChunkStart(line: string, language: string): boolean {
+  const patterns: Record<string, RegExp[]> = {
+    javascript: [/^(export\s+)?(async\s+)?function\s+\w+/, /^(export\s+)?class\s+\w+/, /^interface\s+\w+/],
+    typescript: [/^(export\s+)?(async\s+)?function\s+\w+/, /^(export\s+)?class\s+\w+/, /^(export\s+)?interface\s+\w+/],
+    python: [/^def\s+\w+/, /^class\s+\w+/],
+    java: [/^(public|private|protected)\s+(static\s+)?(class|interface)\s+\w+/, /^(public|private|protected)\s+(static\s+)?\w+\s+\w+\s*\(/],
+  };
+
+  const defaultPatterns = [/^function\s+\w+/, /^class\s+\w+/];
+  const languagePatterns = patterns[language] || defaultPatterns;
+
+  return languagePatterns.some(pattern => pattern.test(line.trim()));
+}
+
+function detectChunkType(
+  line: string,
+  language: string
+): z.infer<typeof CodeChunkSchema>['chunkType'] {
+  const trimmedLine = line.trim();
+
+  if (trimmedLine.includes('class')) return 'class';
+  if (trimmedLine.includes('interface')) return 'interface';
+  if (trimmedLine.includes('function') || trimmedLine.includes('def ')) return 'function';
+  if (trimmedLine.includes('test') || trimmedLine.includes('describe') || trimmedLine.includes('it(')) return 'test';
+  if (trimmedLine.includes('import') || trimmedLine.includes('require')) return 'import';
+  if (trimmedLine.startsWith('/*') || trimmedLine.startsWith('/**')) return 'documentation';
+  
+  return 'function';
+}
+
+function extractName(line: string, language: string): string | undefined {
+  const patterns: Record<string, RegExp> = {
+    javascript: /(?:function|class|interface)\s+(\w+)/,
+    typescript: /(?:function|class|interface)\s+(\w+)/,
+    python: /(?:def|class)\s+(\w+)/,
+    java: /(?:class|interface)\s+(\w+)|\s+(\w+)\s*\(/,
+  };
+
+  const pattern = patterns[language] || /(?:function|class)\s+(\w+)/;
+  const match = line.trim().match(pattern);
+  return match ? match[1] || match[2] : undefined;
+}
+
+function createChunk(
+  chunk: {
+    content: string[];
+    start: number;
+    type: z.infer<typeof CodeChunkSchema>['chunkType'];
+    name?: string;
+  },
+  options: FileAnalysisOptions
+): Omit<z.infer<typeof CodeChunkSchema>, 'id'> {
+  const content = chunk.content.join('\n');
+  
+  return {
+    filePath: options.filePath,
+    fileName: options.fileName,
+    content,
+    language: options.language,
+    chunkType: chunk.type,
+    functionName: chunk.name,
+    dependencies: extractDependencies(content, options.language),
+    semanticSummary: generateSummary(content, chunk.type),
+    keywords: extractKeywords(content),
+    complexity: calculateComplexity(content),
+    lastModified: new Date().toISOString(),
+    lineRange: {
+      start: chunk.start,
+      end: chunk.start + chunk.content.length,
+    },
+  };
+}
+
+function extractDependencies(content: string, language: string): string[] {
+  const deps = new Set<string>();
+  const lines = content.split('\n');
+
+  const importPatterns: Record<string, RegExp[]> = {
+    javascript: [
+      /import\s+.*\s+from\s+['"]([^'"]+)['"]/,
+      /require\s*\(\s*['"]([^'"]+)['"]\s*\)/,
+    ],
+    typescript: [
+      /import\s+.*\s+from\s+['"]([^'"]+)['"]/,
+      /import\s*\(\s*['"]([^'"]+)['"]\s*\)/,
+    ],
+    python: [
+      /(?:from|import)\s+([^\s]+)/,
+    ],
+  };
+
+  const patterns = importPatterns[language] || importPatterns.javascript;
+
+  for (const line of lines) {
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match && match[1]) {
+        deps.add(match[1]);
+      }
+    }
+  }
+
+  return Array.from(deps);
+}
+
+function generateSummary(content: string, type: string): string {
+  // Basic summary generation
+  const lines = content.trim().split('\n');
+  const firstLine = lines[0].trim();
+  return `${type}: ${firstLine.slice(0, 100)}...`;
+}
+
+function extractKeywords(content: string): string[] {
+  const words = content
+    .split(/[\s{}()[\]<>.,;=+\-*/&|!?:]+/)
+    .filter(word => word.length > 2)
+    .filter(word => !word.match(/^\d+$/));
+  
+  return Array.from(new Set(words)).slice(0, 10);
+}
+
+function calculateComplexity(
+  content: string
+): z.infer<typeof CodeChunkSchema>['complexity'] {
+  // Basic complexity calculation
+  const lines = content.split('\n').length;
+  const branches = (content.match(/if|else|for|while|switch|catch/g) || []).length;
+  const nested = (content.match(/{\s*{/g) || []).length;
+
+  const score = lines + branches * 2 + nested * 3;
+
+  if (score > 50) return 'high';
+  if (score > 20) return 'medium';
+  return 'low';
+}

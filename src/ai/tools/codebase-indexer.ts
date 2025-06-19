@@ -104,7 +104,7 @@ async function indexCodebase(input: any) {
       type: detectFileType(file),
       keywords: extractKeywords(file),
     })),
-    content: openFiles.map(file => ({
+    content: openFiles.map((file: { path: string; content: string; language?: string }) => ({
       path: file.path,
       language: file.language || detectLanguage(file.path),
       functions: extractFunctions(file.content),
@@ -142,18 +142,18 @@ async function retrieveRelevantCode(input: any) {
   }
   
   const relevantFiles = openFiles
-    .map(file => ({
+    .map((file: { path: string; content: string; language?: string }) => ({
       ...file,
       relevanceScore: calculateRelevanceScore(file, query),
       matchedPatterns: findMatchedPatterns(file, query),
     }))
-    .filter(file => file.relevanceScore > 0.3)
-    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+    .filter((file: any) => file.relevanceScore > 0.3)
+    .sort((a: any, b: any) => b.relevanceScore - a.relevanceScore);
   
   return {
     success: true,
     operation: 'retrieve' as const,
-    retrievedContent: relevantFiles.map(file => ({
+    retrievedContent: relevantFiles.map((file: { path: string; content: string; relevanceScore: number; matchedPatterns: string[] }) => ({
       filePath: file.path,
       content: file.content.substring(0, 1000) + '...',
       relevanceScore: file.relevanceScore,
@@ -176,9 +176,9 @@ async function evaluateCodePlacement(input: any) {
   }
   
   const suggestions = openFiles
-    .map(file => evaluateFileForCodePlacement(file, query, codeToAdd))
-    .filter(suggestion => suggestion.confidence > 0.4)
-    .sort((a, b) => b.confidence - a.confidence)
+    .map((file: { path: string; content: string; language?: string }) => evaluateFileForCodePlacement(file, query, codeToAdd))
+    .filter((suggestion: any) => suggestion.confidence > 0.4)
+    .sort((a: any, b: any) => b.confidence - a.confidence)
     .slice(0, 5); // Top 5 suggestions
   
   return {
@@ -259,8 +259,8 @@ function detectFileType(filePath: string): string {
   return 'general';
 }
 
-function extractKeywords(filePath: string): string[] {
-  return filePath.split(/[\/\-_\.]/).filter(word => word.length > 2);
+function extractKeywords(file: string): string[] {
+  return file.split(/[\/\-_\.]/).filter(word => word.length > 2);
 }
 
 function extractFunctions(content: string): string[] {
@@ -337,17 +337,27 @@ function calculateLanguageDistribution(files: string[]): Record<string, number> 
   return distribution;
 }
 
-function extractCodePatterns(openFiles: any[]): string[] {
-  const patterns = new Set<string>();
-  
-  openFiles.forEach(file => {
-    extractPatterns(file.content).forEach(pattern => patterns.add(pattern));
+function extractCodePatterns(openFiles: { content: string }[]): string[] {
+  const patterns: string[] = [];
+  openFiles.forEach((file: { content: string }) => {
+    extractPatterns(file.content).forEach(pattern => patterns.push(pattern));
   });
-  
-  return Array.from(patterns);
+  return patterns;
 }
 
-function generateIndexRecommendations(index: any): string[] {
+function extractDependencies(file: { content: string }): string[] {
+  const dependencyRegex = /(?:import\s+.*?from\s+|require\(\s*['"])(.+?)(?:['"]\s*\))/g;
+  const dependencies: string[] = [];
+  let match;
+  
+  while ((match = dependencyRegex.exec(file.content)) !== null) {
+    dependencies.push(match[1]);
+  }
+  
+  return dependencies;
+}
+
+function generateIndexRecommendations(index: any): any[] {
   const recommendations: string[] = [];
   
   if (index.files.length > 50) {
@@ -361,7 +371,7 @@ function generateIndexRecommendations(index: any): string[] {
   return recommendations;
 }
 
-function calculateRelevanceScore(file: any, query: any): number {
+function calculateRelevanceScore(file: { path: string; content: string }, query: any): number {
   let score = 0;
   
   // Language match
@@ -384,14 +394,14 @@ function calculateRelevanceScore(file: any, query: any): number {
   if (query.description) {
     const descWords = query.description.toLowerCase().split(' ');
     const contentLower = file.content.toLowerCase();
-    const matchingWords = descWords.filter(word => contentLower.includes(word));
+    const matchingWords = descWords.filter((word: string) => contentLower.includes(word));
     score += (matchingWords.length / descWords.length) * 0.2;
   }
   
   return Math.min(score, 1);
 }
 
-function findMatchedPatterns(file: any, query: any): string[] {
+function findMatchedPatterns(file: { content: string }, query: any): string[] {
   const patterns: string[] = [];
   
   if (query.type === 'function' && file.content.includes('function')) {
@@ -405,12 +415,12 @@ function findMatchedPatterns(file: any, query: any): string[] {
   return patterns;
 }
 
-function evaluateFileForCodePlacement(file: any, query: any, codeToAdd: string): any {
+function evaluateFileForCodePlacement(file: { path: string; content: string; language?: string }, query: any, codeToAdd: string): any {
   const languageMatch = detectLanguage(file.path).toLowerCase().includes(query.language?.toLowerCase() || '');
   const typeMatch = detectFileType(file.path) === query.type;
   const namePatternMatch = query.name ? file.content.includes(query.name) : false;
   const dependencyMatch = query.dependencies ? 
-    query.dependencies.some(dep => file.content.includes(dep)) : false;
+    query.dependencies.some((dep: string) => file.content.includes(dep)) : false;
   
   // Calculate structure match
   const hasImports = file.content.includes('import');
@@ -456,16 +466,16 @@ function generatePlacementReason(languageMatch: boolean, typeMatch: boolean, nam
   return `Strong match: ${reasons.join(', ')}`;
 }
 
-function determineBestLocation(fileContent: string, codeToAdd: string, query: any): 'top' | 'bottom' | 'after-imports' | 'before-exports' | 'best-fit' {
+function determineBestLocation(content: string, codeToAdd: string, query: any): string {
   if (query.type === 'function' || query.type === 'utility') {
-    if (fileContent.includes('export')) return 'before-exports';
+    if (content.includes('export')) return 'before-exports';
     return 'bottom';
   }
   
   if (query.type === 'interface' || query.type === 'type') {
-    if (fileContent.includes('import')) return 'after-imports';
+    if (content.includes('import')) return 'after-imports';
     return 'top';
   }
   
   return 'best-fit';
-} 
+}

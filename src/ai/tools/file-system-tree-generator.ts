@@ -180,4 +180,199 @@ export function analyzeFileSystemStructure(nodes: FileSystemNode[]): {
     hasTestFolder,
     maxDepth,
   };
-} 
+}
+
+/**
+ * @fileOverview File System Tree Generator - Parse and analyze project structure
+ */
+
+import { z } from 'genkit';
+
+interface FileNode {
+  type: 'file' | 'folder';
+  name: string;
+  path: string;
+  language?: string;
+  children?: FileNode[];
+}
+
+/**
+ * Parse file system tree string into structured format.
+ */
+export function parseFileSystemTree(treeString: string): {
+  files: string[];
+  folders: string[];
+  structure: FileNode;
+} {
+  const files: string[] = [];
+  const folders = new Set<string>();
+  const lines = treeString.split('\n');
+  const root: FileNode = { type: 'folder', name: '', path: '', children: [] };
+  let currentPath: string[] = [];
+  let currentIndent = 0;
+  let currentParent = root;
+  const parentStack: FileNode[] = [root];
+
+  for (const line of lines) {
+    const trimmedLine = line.trimEnd();
+    if (!trimmedLine) continue;
+    
+    // Calculate indent level
+    const indent = line.search(/\S/);
+    const isFile = !trimmedLine.endsWith('/');
+    const name = trimmedLine.slice(indent).replace(/\/$/, '');
+
+    // Handle indentation changes
+    if (indent > currentIndent) {
+      parentStack.push(currentParent);
+    } else if (indent < currentIndent) {
+      const levels = Math.floor((currentIndent - indent) / 2);
+      for (let i = 0; i < levels; i++) {
+        parentStack.pop();
+      }
+      currentParent = parentStack[parentStack.length - 1];
+    }
+    currentIndent = indent;
+
+    // Update current path
+    currentPath = currentPath.slice(0, Math.floor(indent / 2));
+    currentPath.push(name);
+    const fullPath = currentPath.join('/');
+
+    // Create node
+    const node: FileNode = {
+      type: isFile ? 'file' : 'folder',
+      name,
+      path: fullPath,
+      language: isFile ? inferLanguage(name) : undefined,
+    };
+
+    if (!isFile) {
+      node.children = [];
+      folders.add(fullPath);
+    } else {
+      files.push(fullPath);
+    }
+
+    // Add to parent
+    currentParent = parentStack[parentStack.length - 1];
+    currentParent.children?.push(node);
+
+    // Update current parent for next iteration
+    if (!isFile) {
+      currentParent = node;
+    }
+  }
+
+  return {
+    files,
+    folders: Array.from(folders),
+    structure: root,
+  };
+}
+
+/**
+ * Infer language from file extension.
+ */
+function inferLanguage(fileName: string): string | undefined {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (!ext) return undefined;
+
+  const langMap: Record<string, string> = {
+    js: 'javascript',
+    jsx: 'javascript',
+    ts: 'typescript',
+    tsx: 'typescript',
+    py: 'python',
+    rb: 'ruby',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    cs: 'csharp',
+    go: 'go',
+    rs: 'rust',
+    php: 'php',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    md: 'markdown',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+  };
+
+  return langMap[ext];
+}
+
+/**
+ * Analyzes project structure and returns common patterns.
+ */
+export function analyzeProjectStructure(tree: FileNode): {
+  framework?: string;
+  buildSystem?: string;
+  mainLanguage: string;
+  languages: string[];
+  isMonorepo: boolean;
+} {
+  const languages = new Set<string>();
+  const frameworks = new Set<string>();
+  let buildSystem: string | undefined;
+  let isMonorepo = false;
+
+  function traverse(node: FileNode) {
+    if (node.type === 'file' && node.language) {
+      languages.add(node.language);
+    }
+
+    // Detect common patterns
+    switch (node.name.toLowerCase()) {
+      case 'package.json':
+        frameworks.add('node');
+        break;
+      case 'webpack.config.js':
+        buildSystem = 'webpack';
+        break;
+      case 'vite.config.ts':
+      case 'vite.config.js':
+        buildSystem = 'vite';
+        break;
+      case 'tsconfig.json':
+        languages.add('typescript');
+        break;
+      case 'next.config.js':
+      case 'next.config.ts':
+        frameworks.add('next.js');
+        break;
+      case 'angular.json':
+        frameworks.add('angular');
+        break;
+      case 'requirements.txt':
+      case 'pyproject.toml':
+        languages.add('python');
+        break;
+      case 'cargo.toml':
+        languages.add('rust');
+        break;
+      case 'lerna.json':
+      case 'pnpm-workspace.yaml':
+      case 'rush.json':
+        isMonorepo = true;
+        break;
+    }
+
+    node.children?.forEach(traverse);
+  }
+
+  traverse(tree);
+
+  const langArray = Array.from(languages);
+  const mainLanguage = langArray[0] || 'unknown';
+
+  return {
+    framework: frameworks.size ? Array.from(frameworks)[0] : undefined,
+    buildSystem,
+    mainLanguage,
+    languages: langArray,
+    isMonorepo,
+  };
+}

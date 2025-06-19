@@ -6,6 +6,14 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import {
+  indexCodebase,
+  retrieveCode,
+} from './advanced-rag-system';
+
+import { parseFileSystemTree } from './file-system-tree-generator';
+import { extractCodeChunks } from './file-context-analyzer';
+import type { FileInfo } from './types';
 
 // Define the input schema for dataset operations
 const CodebaseDatasetInputSchema = z.object({
@@ -14,7 +22,7 @@ const CodebaseDatasetInputSchema = z.object({
   openFiles: z.array(z.object({
     path: z.string(),
     content: z.string(),
-    language: z.string().optional(),
+    // Remove language property to match FileInfo
   })).optional().describe('Currently open files and their content'),
   projectContext: z.object({
     name: z.string().optional(),
@@ -46,6 +54,169 @@ const CodebaseDatasetOutputSchema = z.object({
   }).optional().describe('High-level project summary'),
 });
 
+class DatasetError extends Error {
+  constructor(message: string, public cause?: unknown) {
+    super(message);
+    this.name = 'DatasetError';
+  }
+}
+
+// Handle an error and return a standardized error response
+function handleError(
+  operation: z.infer<typeof CodebaseDatasetInputSchema>['operation'],
+  error: unknown
+): z.infer<typeof CodebaseDatasetOutputSchema> {
+  console.error(`Error in ${operation} operation:`, error);
+  
+  const message = error instanceof Error ? error.message : 'Unknown error';
+  
+  return {
+    success: false,
+    operation,
+    message: `Failed to ${operation} dataset: ${message}`,
+  };
+}
+
+// Handle errors in async operations
+async function handleAsync<T>(
+  operation: z.infer<typeof CodebaseDatasetInputSchema>['operation'],
+  fn: () => Promise<T>
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    throw new DatasetError(`Failed to ${operation} dataset`, err);
+  }
+}
+
+async function handleCreate(
+  input: z.infer<typeof CodebaseDatasetInputSchema>
+): Promise<z.infer<typeof CodebaseDatasetOutputSchema>> {
+  try {
+    return await handleAsync('create', async () => {
+      // Parse file system tree
+      const fileTree = parseFileSystemTree(input.fileSystemTree);
+      
+      // Extract code chunks for indexing
+      const chunks = await extractCodeChunks((input.openFiles || []) as FileInfo[]);
+      
+      // Index the codebase using RAG
+      const indexResult = await indexCodebase(
+        input.projectContext?.name || 'default-project',
+        chunks
+      );
+      
+      return {
+        success: true,
+        operation: 'create',
+        message: `Created dataset with ${chunks.length} code chunks`,
+        datasetSize: chunks.length,
+        projectSummary: {
+          totalFiles: fileTree.files.length,
+          mainLanguages: input.projectContext?.languages || [],
+          keyComponents: chunks
+            .filter(c => c.chunkType === 'component' || c.chunkType === 'class')
+            .map(c => c.functionName || c.fileName)
+            .filter((name): name is string => Boolean(name)),
+          architecture: 'modern-web-app', // TODO: Detect from project structure
+        },
+      };
+    });
+  } catch (err) {
+    return handleError('create', err);
+  }
+}
+
+async function handleQuery(
+  input: z.infer<typeof CodebaseDatasetInputSchema>
+): Promise<z.infer<typeof CodebaseDatasetOutputSchema>> {
+  if (!input.query) {
+    return {
+      success: false,
+      operation: 'query',
+      message: 'Query string is required',
+    };
+  }
+
+  try {
+    return await handleAsync('query', async () => {
+      // Query the RAG system
+      const results = await retrieveCode(
+        input.projectContext?.name || 'default-project',
+        {
+          query: input.query as string, // We've checked it's not undefined above
+          queryType: 'semantic',
+          maxResults: 10,
+          contextWindow: 5,
+          includeMetadata: true,
+          filters: {},
+        }
+      );
+
+      return {
+        success: true,
+        operation: 'query',
+        message: `Found ${results.totalResults} relevant code chunks`,
+        queryResults: results.chunks.map(result => ({
+          file: result.chunk.filePath,
+          content: result.chunk.content,
+          relevance: result.relevanceScore,
+          summary: result.chunk.semanticSummary,
+        })),
+        datasetSize: results.totalResults,
+      };
+    });
+  } catch (err) {
+    return handleError('query', err);
+  }
+}
+
+async function handleRefresh(
+  input: z.infer<typeof CodebaseDatasetInputSchema>
+): Promise<z.infer<typeof CodebaseDatasetOutputSchema>> {
+  try {
+    return await handleCreate(input);
+  } catch (err) {
+    return handleError('refresh', err);
+  }
+}
+
+async function handleUpdate(
+  input: z.infer<typeof CodebaseDatasetInputSchema>
+): Promise<z.infer<typeof CodebaseDatasetOutputSchema>> {
+  if (!input.openFiles?.length) {
+    return {
+      success: false,
+      operation: 'update',
+      message: 'No files provided for update',
+    };
+  }
+
+  try {
+    return await handleAsync('update', async () => {
+      // Extract chunks from updated files
+      const files = (input.openFiles || []) as FileInfo[];
+      const chunks = await extractCodeChunks(files);
+      
+      // Update the RAG index
+      await indexCodebase(
+        input.projectContext?.name || 'default-project',
+        chunks
+      );
+
+      return {
+        success: true,
+        operation: 'update',
+        message: `Updated dataset with ${chunks.length} code chunks`,
+        datasetSize: chunks.length,
+      };
+    });
+  } catch (err) {
+    return handleError('update', err);
+  }
+}
+
+// Main tool definition
 export const codebaseDataset = ai.defineTool(
   {
     name: 'codebaseDataset',
@@ -56,65 +227,25 @@ export const codebaseDataset = ai.defineTool(
   async (input) => {
     console.log(`Codebase dataset tool called with operation: ${input.operation}`);
     
-    switch (input.operation) {
-      case 'create':
-      case 'refresh':
-        // Analyze the file system tree to create dataset entries
-        const files = extractFilesFromTree(input.fileSystemTree);
-        const languages = detectLanguages(files);
-        const frameworks = detectFrameworks(files, input.openFiles);
-        
-        const projectSummary = {
-          totalFiles: files.length,
-          mainLanguages: languages,
-          keyComponents: extractKeyComponents(files),
-          architecture: detectArchitecture(input.fileSystemTree, languages),
-        };
-        
-        return {
-          success: true,
-          operation: input.operation,
-          message: `Dataset ${input.operation === 'create' ? 'created' : 'refreshed'} with ${files.length} files`,
-          datasetSize: files.length,
-          projectSummary,
-        };
-        
-      case 'update':
-        // Update dataset with new file information
-        const updatedFiles = input.openFiles || [];
-        
-        return {
-          success: true,
-          operation: 'update' as const,
-          message: `Dataset updated with ${updatedFiles.length} files`,
-          datasetSize: updatedFiles.length,
-        };
-        
-      case 'query':
-        if (!input.query) {
+    try {
+      switch (input.operation) {
+        case 'create':
+          return await handleCreate(input);
+        case 'update':
+          return await handleUpdate(input);
+        case 'query':
+          return await handleQuery(input);
+        case 'refresh':
+          return await handleRefresh(input);
+        default:
           return {
             success: false,
-            operation: 'query' as const,
-            message: 'Query string is required for dataset search',
+            operation: input.operation,
+            message: `Unsupported operation: ${input.operation}`,
           };
-        }
-        
-        // Perform semantic search across the codebase
-        const results = performSemanticSearch(input.query, input.fileSystemTree, input.openFiles);
-        
-        return {
-          success: true,
-          operation: 'query' as const,
-          message: `Found ${results.length} relevant results for "${input.query}"`,
-          queryResults: results,
-        };
-        
-      default:
-        return {
-          success: false,
-          operation: input.operation,
-          message: `Unknown dataset operation: ${input.operation}`,
-        };
+      }
+    } catch (err) {
+      return handleError(input.operation, err);
     }
   }
 );
@@ -297,4 +428,4 @@ function calculateRelevance(query: string, content: string): number {
   const occurrences = (content.match(new RegExp(query, 'gi')) || []).length;
   const density = occurrences / content.length;
   return Math.min(density * 1000, 1); // Normalize to 0-1
-} 
+}
