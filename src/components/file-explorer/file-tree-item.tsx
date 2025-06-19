@@ -28,11 +28,11 @@ interface FileTreeItemProps {
 const HOVER_TO_OPEN_DELAY = 750;
 
 const FOLDER_ICON_COLOR_MAP: Record<string, string> = {
-  '270 70% 55%': 'text-yellow-500',
-  '210 70% 55%': 'text-orange-500',
-  '30 80% 55%': 'text-sky-500',
-  '330 80% 60%': 'text-teal-500',
-  '180 60% 45%': 'text-rose-500',
+  '270 70% 55%': 'text-yellow-500', // Default Purple -> Yellow
+  '210 70% 55%': 'text-orange-500', // Vibrant Blue -> Orange
+  '30 80% 55%': 'text-sky-500',     // Sunset Orange -> Sky Blue
+  '330 80% 60%': 'text-teal-500',    // Hot Pink -> Teal
+  '180 60% 45%': 'text-rose-500',    // Teal Aqua -> Rose
 };
 const DEFAULT_FOLDER_ICON_COLOR = 'text-yellow-500';
 
@@ -176,7 +176,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
 
   return (
     <div
-      className="text-sm group/fileitem w-full" // w-full ensures it respects parent SidebarMenuItem width
+      className="text-sm group/fileitem w-full"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       draggable={!isRenaming}
@@ -201,16 +201,16 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
-        title={isRenaming ? undefined : node.path} // Set title on the row for full path
+        title={isRenaming ? undefined : node.path}
       >
-        {/* Indentation and Expansion Icon - Fixed Size */}
+        {/* Indentation and Expansion Icon */}
         <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0">
           {isFolder && (
             <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
           )}
         </div>
 
-        {/* File/Folder Type Icon - Fixed Size */}
+        {/* File/Folder Type Icon */}
         <div className="shrink-0">
           {isFolder ? (
             <FolderIcon className={cn("w-4 h-4 mr-2", folderIconColorClass, !isFolder && "ml-5" )} />
@@ -220,30 +220,30 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
         </div>
 
         {/* Name or Input - Flexible Part */}
-        <div className="flex-grow min-w-0 overflow-hidden"> {/* Wrapper for name/input, crucial for truncation */}
-          {isRenaming ? (
-            <Input
-              ref={inputRef}
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={handleRenameConfirm}
-              onKeyDown={handleRenameKeyDown}
-              className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary min-w-0" // min-w-0 also useful for input
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="block truncate w-full" title={node.name}> {/* block truncate w-full on the span */}
+        {isRenaming ? (
+          <Input
+            ref={inputRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={handleRenameConfirm}
+            onKeyDown={handleRenameKeyDown}
+            className="h-6 px-1 py-0 text-sm bg-input border-primary ring-primary flex-grow min-w-0" // flex-grow and min-w-0 for input
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <div className="flex-grow min-w-0 overflow-hidden"> {/* Wrapper for name, this takes flex-grow and handles overflow */}
+            <span className="block truncate" title={node.name}> {/* Span just truncates */}
               {node.name}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Action Buttons - Fixed Size, Pushed Right */}
         {!isRenaming && (
           <div
             className={cn(
-              "flex items-center space-x-0.5 shrink-0 ml-1 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100", // ml-1 for spacing
+              "flex items-center space-x-0.5 shrink-0 ml-2 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100", // ml-2 for spacing
               showActions ? "opacity-100" : "opacity-0"
             )}
             data-action-button
@@ -278,7 +278,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
                     "text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center",
                     isDraggingOver && "bg-sidebar-accent/30"
                 )}
-                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }}
+                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} // Adjusted padding for (empty) text
                 onDragOver={handleDragOver}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
@@ -309,5 +309,3 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
-
-    
