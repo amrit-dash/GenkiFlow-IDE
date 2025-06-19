@@ -27,13 +27,12 @@ interface FileTreeItemProps {
 
 const HOVER_TO_OPEN_DELAY = 750; // ms
 
-// Define a mapping for accent colors to folder icon Tailwind classes
 const FOLDER_ICON_COLOR_MAP: Record<string, string> = {
-  '270 70% 55%': 'text-yellow-500', // Default Purple Accent -> Yellow Folder
-  '210 70% 55%': 'text-orange-500', // Vibrant Blue Accent -> Orange Folder
-  '30 80% 55%': 'text-sky-500',     // Sunset Orange Accent -> Sky Blue Folder
-  '330 80% 60%': 'text-teal-500',    // Hot Pink Accent -> Teal Folder
-  '180 60% 45%': 'text-rose-500',   // Teal Aqua Accent -> Rose Folder
+  '270 70% 55%': 'text-yellow-500', 
+  '210 70% 55%': 'text-orange-500', 
+  '30 80% 55%': 'text-sky-500',     
+  '330 80% 60%': 'text-teal-500',    
+  '180 60% 45%': 'text-rose-500',   
 };
 const DEFAULT_FOLDER_ICON_COLOR = 'text-yellow-500';
 
@@ -50,7 +49,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isFolder = node.type === 'folder';
-  const FileIcon = FileText; // File icon will use text-primary by default
+  const FileIcon = FileText; 
   const FolderIcon = Folder;
   const ExpansionIcon = isOpen ? ChevronDown : ChevronRight;
 
@@ -177,7 +176,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
 
   return (
     <div 
-      className="text-sm group/fileitem relative"
+      className="text-sm group/fileitem relative" // Added relative for positioning actions
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       draggable={!isRenaming} 
@@ -189,13 +188,12 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center py-1.5 px-2 rounded-md cursor-pointer overflow-hidden",
+          "flex items-center py-1.5 pr-2 rounded-md cursor-pointer", // Removed px-2, left padding handled by inner div
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
           !isFolder && "hover:bg-sidebar-accent" 
         )}
-        style={{ paddingLeft: `${level * 1.25 + (isFolder ? 0 : 1.25) + (isRenaming ? 0.1 : 0.5)}rem` }}
         onClick={handleToggle}
         role="button"
         tabIndex={0}
@@ -205,61 +203,69 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
         }}
         title={node.path}      
       >
-        {isFolder && (
-          <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
-        )}
-        {isFolder ? (
-          <FolderIcon className={cn("w-4 h-4 mr-2 shrink-0", folderIconColorClass)} />
-        ) : (
-          <FileIcon className={cn("w-4 h-4 mr-2 shrink-0 text-primary")} />
-        )}
-        
-        {isRenaming ? (
-          <Input
-            ref={inputRef}
-            type="text"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameConfirm} 
-            onKeyDown={handleRenameKeyDown}
-            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary"
-            onClick={(e) => e.stopPropagation()} 
-          />
-        ) : (
-          <>
-            {/* This div will handle the growing and shrinking of the name */}
-            <div className="flex-grow min-w-0 overflow-hidden">
-              <span 
-                className="block truncate" // 'block' helps truncate work reliably in flex context
-                title={node.name} 
-              >
-                {node.name}
-              </span> 
-            </div>
-            
-            {showActions && !isRenaming && (
-              <div className="ml-auto flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150 shrink-0">
-                {isFolder && (
-                  <>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddFile} data-action-button title="Add File">
-                      <PlusCircle className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddFolder} data-action-button title="Add Folder">
-                      <FolderPlus className="h-3.5 w-3.5" />
-                    </Button>
-                  </>
-                )}
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRenameStart} data-action-button title="Rename (F2)">
-                  <Edit3 className="h-3.5 w-3.5" />
+        {/* This div handles indentation and contains the icon and name */}
+        <div 
+          className="flex items-center flex-grow min-w-0 overflow-hidden" // flex-grow and min-w-0 are key for truncation
+          style={{ paddingLeft: `${level * 1.25 + (isRenaming ? 0.1 : 0.5)}rem` }}
+        >
+          {isFolder && (
+            <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
+          )}
+          {isFolder ? (
+            <FolderIcon className={cn("w-4 h-4 mr-2 shrink-0", folderIconColorClass)} />
+          ) : (
+            // For files, add equivalent left padding as expansion icon to align names if desired, or adjust base paddingLeft
+            <FileIcon className={cn("w-4 h-4 mr-2 shrink-0 text-primary", !isFolder && "ml-[1.25rem]")} />
+          )}
+          
+          {isRenaming ? (
+            <Input
+              ref={inputRef}
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameConfirm} 
+              onKeyDown={handleRenameKeyDown}
+              className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow" // Added flex-grow to input
+              onClick={(e) => e.stopPropagation()} 
+            />
+          ) : (
+            // Name span is now directly inside the growing, overflowing container
+            <span 
+              className="block truncate" // block + truncate for ellipsis
+              title={node.name} 
+            >
+              {node.name}
+            </span> 
+          )}
+        </div> {/* End of icon and name wrapper */}
+
+        {/* Action buttons absolutely positioned */}
+        {!isRenaming && showActions && (
+          <div 
+            className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150 z-10"
+            data-action-button // To prevent toggle on click
+          >
+            {isFolder && (
+              <>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddFile} data-action-button title="Add File">
+                  <PlusCircle className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={handleDeleteInitiate} data-action-button title="Delete">
-                  <Trash2 className="h-3.5 w-3.5" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleAddFolder} data-action-button title="Add Folder">
+                  <FolderPlus className="h-3.5 w-3.5" />
                 </Button>
-              </div>
+              </>
             )}
-          </>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRenameStart} data-action-button title="Rename (F2)">
+              <Edit3 className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive/80" onClick={handleDeleteInitiate} data-action-button title="Delete">
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         )}
-      </div>
+      </div> {/* End of main clickable row */}
+
       {isFolder && isOpen && !isRenaming && node.children && (
         <div>
           {sortedChildren.length > 0 ? sortedChildren.map((child) => (
@@ -267,10 +273,10 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
           )) : (
              <div 
                 className={cn(
-                    "pl-4 text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center", 
+                    "text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center", 
                     isDraggingOver && "bg-sidebar-accent/30" 
                 )}
-                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25}rem` }}
+                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} // Adjusted padding for (empty)
                 onDragOver={handleDragOver} 
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
