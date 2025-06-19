@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * Enhanced AI flow for code generation with contextual enrichment and RAG integration.
@@ -19,6 +20,7 @@ import { intelligentCodeMerger } from '../tools/intelligent-code-merger';
 import { fileContextAnalyzer } from '../tools/file-context-analyzer';
 import { filenameSuggester } from '../tools/filename-suggester';
 import { codeRetriever } from '../tools/advanced-rag-system';
+// import path from 'path'; // No longer needed as fileSystemExecutor is removed from this flow
 
 // Types for RAG configuration
 interface RetrieverConfig {
@@ -107,15 +109,15 @@ const EnhancedGenerateCodeOutputSchema = z.object({
     isNewFile: z.boolean(),
     suggestedFileName: z.string().optional().nullable(),
     targetPath: z.string().optional().nullable(),
-  })).optional().nullable(), // Added .nullable()
+  })).optional().nullable(),
   codeQuality: z.object({
     followsBestPractices: z.boolean(),
     isTypeScriptCompatible: z.boolean(),
     hasProperErrorHandling: z.boolean(),
     isWellDocumented: z.boolean(),
     estimatedComplexity: z.enum(['low', 'medium', 'high']),
-  }).optional().nullable(), // Added .nullable()
-  filenameSuggestionData: FilenameSuggesterOutputSchema.optional().nullable(), // Added .nullable()
+  }).optional().nullable(),
+  filenameSuggestionData: FilenameSuggesterOutputSchema.optional().nullable(),
 });
 export type EnhancedGenerateCodeOutput = z.infer<typeof EnhancedGenerateCodeOutputSchema>;
 
@@ -225,7 +227,7 @@ C. FOR ALL OTHER REQUESTS (Primarily Code Generation/Modification):
       a. Set 'isNewFile' to true.
       b. Set 'suggestedFileName' (use \`filenameSuggester\` if the user's prompt gives clues for a name, otherwise derive a sensible default like "newComponent.tsx").
       c. 'targetPath' should be the directory for the new file.
-      d. 'code' should be the full content of the new file.
+      d. 'code' MUST be the full content of the new file. This field is CRITICAL and cannot be null or omitted when 'isNewFile' is true. The primary purpose of this request type is to obtain this code.
    4. If modifying existing code:
       a. Set 'isNewFile' to false.
       b. 'targetPath' MUST be the path of the file being modified (respecting TARGET PRIORITIZATION).
@@ -237,7 +239,7 @@ C. FOR ALL OTHER REQUESTS (Primarily Code Generation/Modification):
 
 GENERAL OUTPUT REQUIREMENTS:
 - For scenarios A and B, prioritize 'filenameSuggestionData' or 'fileOperationSuggestion' respectively. 'code' should be null/empty, 'isNewFile' false, and 'explanation' concise.
-- For scenario C, 'code', 'isNewFile', 'targetPath', and 'explanation' are key.
+- For scenario C, 'code', 'isNewFile', 'targetPath', and 'explanation' are key. IF 'isNewFile' IS TRUE, THE 'code' FIELD IS MANDATORY.
 - Always ensure 'targetPath' in the root of your response correctly reflects the primary file/folder being acted upon or targeted.
 - If 'isNewFile' is true, 'suggestedFileName' is expected. If 'isNewFile' is false, 'suggestedFileName' can be null.
 - If no specific code generation is required or file operation is suggested (e.g., a general question or clarification), respond with a helpful 'explanation' and ensure 'code' and 'fileOperationSuggestion' are null or omitted. 'isNewFile' should be false.
@@ -266,32 +268,49 @@ export const enhancedGenerateCodeFlow = ai.defineFlow(
     try {
       const { output } = await prompt(input);
       if (!output) {
+        console.error("enhancedGenerateCodeFlow: AI prompt returned no output.");
         return {
-          explanation: 'Sorry, I encountered an internal error and could not process your request.',
+          explanation: 'Sorry, I encountered an internal error and could not process your request (no output from AI).',
           isNewFile: false,
           code: null,
         } as EnhancedGenerateCodeOutput;
       }
+
       // Omit optional fields if they are null or undefined
       const cleanedOutput: any = { ...output };
-      if (cleanedOutput.fileOperationSuggestion == null) delete cleanedOutput.fileOperationSuggestion;
-      if (cleanedOutput.alternativeOptions == null) delete cleanedOutput.alternativeOptions;
-      if (cleanedOutput.filenameSuggestionData == null) delete cleanedOutput.filenameSuggestionData;
-
-      // If code is generated and a targetPath is provided, actually create/update the file
-      if (cleanedOutput.code && cleanedOutput.targetPath) {
-        await fileSystemExecutor({
-          operation: 'create',
-          targetPath: cleanedOutput.targetPath,
-          content: cleanedOutput.code,
-          fileType: 'file',
-          currentFileSystemTree: input.fileSystemTree,
-        });
+      if (cleanedOutput.fileOperationSuggestion === null || cleanedOutput.fileOperationSuggestion === undefined) delete cleanedOutput.fileOperationSuggestion;
+      if (cleanedOutput.alternativeOptions === null || cleanedOutput.alternativeOptions === undefined) delete cleanedOutput.alternativeOptions;
+      if (cleanedOutput.codeQuality === null || cleanedOutput.codeQuality === undefined) delete cleanedOutput.codeQuality;
+      if (cleanedOutput.filenameSuggestionData === null || cleanedOutput.filenameSuggestionData === undefined) delete cleanedOutput.filenameSuggestionData;
+      
+      // Explicitly check if code is missing when it's expected for a new file
+      if (cleanedOutput.isNewFile && (cleanedOutput.code === null || cleanedOutput.code === undefined || cleanedOutput.code.trim() === "")) {
+        console.warn("enhancedGenerateCodeFlow: AI suggested a new file but did not provide code content. Input prompt:", input.prompt);
+        // Return an explanation to the user that code was expected but not provided
+        return {
+          ...cleanedOutput, // Keep other suggestions if any
+          code: null, // Ensure code is null
+          explanation: cleanedOutput.explanation ? 
+            `${cleanedOutput.explanation}\n\nHowever, the AI did not provide the actual code content for the new file. You might need to ask for the code specifically.` :
+            "The AI suggested creating a new file but didn't provide the code content. Please try asking for the code itself.",
+        };
       }
+
       return cleanedOutput;
     } catch (error) {
+      console.error("enhancedGenerateCodeFlow: Error during flow execution:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      // Check if it's a schema validation error from Genkit itself
+      if (errorMessage.includes("Schema validation failed") || errorMessage.includes("Parse Errors")) {
+         console.error("enhancedGenerateCodeFlow: Schema validation error details:", JSON.stringify(error, null, 2));
+         return {
+          explanation: `An error occurred during code generation: Schema validation failed. Details: ${errorMessage}`,
+          isNewFile: false,
+          code: null,
+        } as EnhancedGenerateCodeOutput;
+      }
       return {
-        explanation: 'An error occurred during code generation: ' + (error instanceof Error ? error.message : String(error)),
+        explanation: 'An error occurred during code generation: ' + errorMessage,
         isNewFile: false,
         code: null,
       } as EnhancedGenerateCodeOutput;
@@ -303,3 +322,5 @@ export const enhancedGenerateCodeFlow = ai.defineFlow(
 export async function enhancedGenerateCode(input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> {
   return enhancedGenerateCodeFlow(input);
 }
+
+    
