@@ -25,7 +25,7 @@ interface FileTreeItemProps {
   level?: number;
 }
 
-const HOVER_TO_OPEN_DELAY = 750; // ms
+const HOVER_TO_OPEN_DELAY = 750; 
 
 const FOLDER_ICON_COLOR_MAP: Record<string, string> = {
   '270 70% 55%': 'text-yellow-500', 
@@ -176,7 +176,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
 
   return (
     <div 
-      className="text-sm group/fileitem relative" // Added relative for positioning actions
+      className="text-sm group/fileitem"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       draggable={!isRenaming} 
@@ -188,7 +188,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center py-1.5 pr-2 rounded-md cursor-pointer", // Removed px-2, left padding handled by inner div
+          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer", 
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
@@ -201,50 +201,48 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
-        title={node.path}      
+        title={isRenaming ? undefined : node.path} // Show full path on item hover, unless renaming      
       >
-        {/* This div handles indentation and contains the icon and name */}
-        <div 
-          className="flex items-center flex-grow min-w-0 overflow-hidden" // flex-grow and min-w-0 are key for truncation
-          style={{ paddingLeft: `${level * 1.25 + (isRenaming ? 0.1 : 0.5)}rem` }}
-        >
+        <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0"> {/* Indentation for expansion icon */}
           {isFolder && (
             <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
           )}
-          {isFolder ? (
-            <FolderIcon className={cn("w-4 h-4 mr-2 shrink-0", folderIconColorClass)} />
-          ) : (
-            // For files, add equivalent left padding as expansion icon to align names if desired, or adjust base paddingLeft
-            <FileIcon className={cn("w-4 h-4 mr-2 shrink-0 text-primary", !isFolder && "ml-[1.25rem]")} />
-          )}
-          
-          {isRenaming ? (
-            <Input
-              ref={inputRef}
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={handleRenameConfirm} 
-              onKeyDown={handleRenameKeyDown}
-              className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow" // Added flex-grow to input
-              onClick={(e) => e.stopPropagation()} 
-            />
-          ) : (
-            // Name span is now directly inside the growing, overflowing container
-            <span 
-              className="block truncate" // block + truncate for ellipsis
-              title={node.name} 
-            >
-              {node.name}
-            </span> 
-          )}
-        </div> {/* End of icon and name wrapper */}
+        </div>
 
-        {/* Action buttons absolutely positioned */}
-        {!isRenaming && showActions && (
+        {isFolder ? (
+          <FolderIcon className={cn("w-4 h-4 mr-2 shrink-0", folderIconColorClass, !isFolder && !isRenaming && "ml-5")} /> // If not folder and not renaming, push file icon a bit right
+        ) : (
+          <FileIcon className={cn("w-4 h-4 mr-2 shrink-0 text-primary", !isFolder && !isRenaming && "ml-5")} />
+        )}
+          
+        {isRenaming ? (
+          <Input
+            ref={inputRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={handleRenameConfirm} 
+            onKeyDown={handleRenameKeyDown}
+            className="h-6 px-1 py-0 text-sm w-full bg-input border-primary ring-primary flex-grow min-w-0" 
+            onClick={(e) => e.stopPropagation()} 
+          />
+        ) : (
+          <span 
+            className="block truncate flex-grow min-w-0" // Name span takes remaining space and truncates
+            title={node.name} // Show full name on name hover
+          >
+            {node.name}
+          </span> 
+        )}
+
+        {/* Action buttons in flow, controlled by showActions */}
+        {!isRenaming && (
           <div 
-            className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center space-x-0.5 opacity-0 group-hover/fileitem:opacity-100 transition-opacity duration-150 z-10"
-            data-action-button // To prevent toggle on click
+            className={cn(
+              "flex items-center space-x-0.5 shrink-0 ml-auto transition-opacity duration-150 z-10",
+              showActions ? "opacity-100" : "opacity-0"
+            )}
+            data-action-button 
           >
             {isFolder && (
               <>
@@ -276,7 +274,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
                     "text-xs text-muted-foreground py-1 italic min-h-[24px] flex items-center", 
                     isDraggingOver && "bg-sidebar-accent/30" 
                 )}
-                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} // Adjusted padding for (empty)
+                style={{ paddingLeft: `${(level + 1) * 1.25 + 0.5 + 1.25 + 0.5}rem` }} 
                 onDragOver={handleDragOver} 
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
@@ -307,3 +305,4 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     </div>
   );
 }
+
