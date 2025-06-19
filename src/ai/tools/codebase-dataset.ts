@@ -250,6 +250,15 @@ export const codebaseDataset = ai.defineTool(
   }
 );
 
+// Utility to clean output for schema compliance
+function cleanEnhancedCodegenOutput(output: any) {
+  if (output.fileOperationSuggestion == null) delete output.fileOperationSuggestion;
+  if (output.alternativeOptions == null) delete output.alternativeOptions;
+  if (output.codeQuality == null) delete output.codeQuality;
+  if (output.filenameSuggestionData == null) delete output.filenameSuggestionData;
+  return output;
+}
+
 // Helper functions for dataset operations
 function extractFilesFromTree(tree: string): string[] {
   const lines = tree.split('\n');
