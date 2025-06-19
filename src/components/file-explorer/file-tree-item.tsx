@@ -1,4 +1,3 @@
-
 "use client";
 
 import type React from 'react';
@@ -188,7 +187,8 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // overflow-hidden on the row
+          // Set a fixed width so the row never stretches beyond 260px
+          "flex items-center w-[238px] py-1.5 pl-1 pr-1 rounded-md cursor-pointer overflow-hidden",
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary",
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent",
@@ -202,6 +202,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
         title={isRenaming ? undefined : node.path}
+        style={{ minWidth: 0 }} // allow flex children to shrink
       >
         {/* Indentation and Expansion Icon */}
         <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0">
@@ -228,12 +229,13 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameConfirm}
             onKeyDown={handleRenameKeyDown}
-            className="h-6 px-1 py-0 text-sm bg-input border-primary ring-primary flex-grow min-w-0" // flex-grow and min-w-0 for input
+            className="h-6 px-1 py-0 text-sm bg-input border-primary ring-primary flex-grow min-w-0"
             onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '180px' }} // limit input width
           />
         ) : (
-          <div className="flex-grow min-w-0 overflow-hidden"> {/* Wrapper for name, this takes flex-grow and handles overflow */}
-            <span className="block truncate" title={node.name}> {/* Span just truncates */}
+          <div className="flex-grow min-w-0 overflow-hidden">
+            <span className="block truncate" title={node.name}>
               {node.name}
             </span>
           </div>
@@ -243,10 +245,11 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
         {!isRenaming && (
           <div
             className={cn(
-              "flex items-center space-x-0.5 shrink-0 ml-2 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100", // ml-2 for spacing
+              "flex items-center space-x-0.5 shrink-0 ml-2 transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100",
               showActions ? "opacity-100" : "opacity-0"
             )}
             data-action-button
+            style={{ flexShrink: 0 }}
           >
             {isFolder && (
               <>
