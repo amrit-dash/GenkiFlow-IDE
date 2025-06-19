@@ -101,21 +101,21 @@ const EnhancedGenerateCodeOutputSchema = z.object({
   suggestedFileName: z.string().optional().nullable(),
   targetPath: z.string().optional().nullable(),
   explanation: z.string().nullable().optional(),
-  fileOperationSuggestion: FileOperationSuggestionSchema.optional(),
+  fileOperationSuggestion: FileOperationSuggestionSchema.optional().nullable(),
   alternativeOptions: z.array(z.object({
     description: z.string(),
     isNewFile: z.boolean(),
     suggestedFileName: z.string().optional().nullable(),
     targetPath: z.string().optional().nullable(),
-  })).optional(),
+  })).optional().nullable(), // Added .nullable()
   codeQuality: z.object({
     followsBestPractices: z.boolean(),
     isTypeScriptCompatible: z.boolean(),
     hasProperErrorHandling: z.boolean(),
     isWellDocumented: z.boolean(),
     estimatedComplexity: z.enum(['low', 'medium', 'high']),
-  }).optional(),
-  filenameSuggestionData: FilenameSuggesterOutputSchema.optional(),
+  }).optional().nullable(), // Added .nullable()
+  filenameSuggestionData: FilenameSuggesterOutputSchema.optional().nullable(), // Added .nullable()
 });
 export type EnhancedGenerateCodeOutput = z.infer<typeof EnhancedGenerateCodeOutputSchema>;
 
@@ -241,7 +241,7 @@ GENERAL OUTPUT REQUIREMENTS:
 - Always ensure 'targetPath' in the root of your response correctly reflects the primary file/folder being acted upon or targeted.
 - If 'isNewFile' is true, 'suggestedFileName' is expected. If 'isNewFile' is false, 'suggestedFileName' can be null.
 - If no specific code generation is required or file operation is suggested (e.g., a general question or clarification), respond with a helpful 'explanation' and ensure 'code' and 'fileOperationSuggestion' are null or omitted. 'isNewFile' should be false.
-- Ensure any optional objects like 'codeQuality' or 'alternativeOptions', if included, are fully populated according to their schemas or omitted entirely. Do not provide partially filled optional objects.
+- Ensure any optional objects like 'codeQuality' or 'alternativeOptions', if included, are fully populated according to their schemas or omitted entirely. Do not provide partially filled optional objects. If an optional field of type array or object is not applicable, omit the field entirely rather than setting it to null.
 
 Respond with a comprehensive JSON object matching the EnhancedGenerateCodeOutputSchema.
 `,
@@ -276,11 +276,24 @@ export const enhancedGenerateCodeFlow = ai.defineFlow(
       const cleanedOutput: any = { ...output };
       if (cleanedOutput.fileOperationSuggestion == null) delete cleanedOutput.fileOperationSuggestion;
       if (cleanedOutput.alternativeOptions == null) delete cleanedOutput.alternativeOptions;
+      if (cleanedOutput.codeQuality == null) delete cleanedOutput.codeQuality;
       if (cleanedOutput.filenameSuggestionData == null) delete cleanedOutput.filenameSuggestionData;
       return cleanedOutput;
     } catch (error) {
+      console.error('Error in enhancedGenerateCodeFlow:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Attempt to parse Genkit-specific error details if they exist
+      let genkitDetails = '';
+      if (error && typeof error === 'object' && 'details' in error) {
+        try {
+          genkitDetails = ` Details: ${JSON.stringify((error as any).details)}`;
+        } catch (e) { /* ignore stringify error */ }
+      }
+
+
       return {
-        explanation: 'An error occurred during code generation: ' + (error instanceof Error ? error.message : String(error)),
+        explanation: `An error occurred during code generation: ${errorMessage}${genkitDetails}`,
         isNewFile: false,
         code: null,
       } as EnhancedGenerateCodeOutput;
@@ -292,7 +305,3 @@ export const enhancedGenerateCodeFlow = ai.defineFlow(
 export async function enhancedGenerateCode(input: EnhancedGenerateCodeInput): Promise<EnhancedGenerateCodeOutput> {
   return enhancedGenerateCodeFlow(input);
 }
-
-
-
-
