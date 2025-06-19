@@ -188,7 +188,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
     >
       <div
         className={cn(
-          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer", 
+          "flex items-center w-full py-1.5 px-2 rounded-md cursor-pointer overflow-hidden", // Added overflow-hidden here
           !isFolder && activeFilePath === node.path && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
           isDraggingOver && isFolder && "bg-sidebar-accent/50 ring-1 ring-sidebar-primary", 
           !isDraggingOver && isFolder && "hover:bg-sidebar-accent", 
@@ -201,19 +201,21 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             if (e.key === 'Enter' && !isRenaming) handleToggle(e);
             if (e.key === 'F2' && !isRenaming) { e.preventDefault(); handleRenameStart(e as any); }
         }}
-        title={isRenaming ? undefined : node.path} // Show full path on item hover, unless renaming      
+        title={isRenaming ? undefined : node.path} 
       >
-        <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0"> {/* Indentation for expansion icon */}
+        <div style={{ paddingLeft: `${level * 1.25}rem` }} className="shrink-0">
           {isFolder && (
             <ExpansionIcon className="w-4 h-4 mr-1 shrink-0" />
           )}
         </div>
 
-        {isFolder ? (
-          <FolderIcon className={cn("w-4 h-4 mr-2 shrink-0", folderIconColorClass, !isFolder && !isRenaming && "ml-5")} /> // If not folder and not renaming, push file icon a bit right
-        ) : (
-          <FileIcon className={cn("w-4 h-4 mr-2 shrink-0 text-primary", !isFolder && !isRenaming && "ml-5")} />
-        )}
+        <div className="shrink-0"> {/* Wrapper for icon to also be shrink-0 */}
+          {isFolder ? (
+            <FolderIcon className={cn("w-4 h-4 mr-2", folderIconColorClass, !isFolder && !isRenaming && "ml-5")} />
+          ) : (
+            <FileIcon className={cn("w-4 h-4 mr-2 text-primary", !isFolder && !isRenaming && "ml-5")} />
+          )}
+        </div>
           
         {isRenaming ? (
           <Input
@@ -227,19 +229,21 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             onClick={(e) => e.stopPropagation()} 
           />
         ) : (
-          <span 
-            className="block truncate flex-grow min-w-0" // Name span takes remaining space and truncates
-            title={node.name} // Show full name on name hover
-          >
-            {node.name}
-          </span> 
+          // This div wrapper helps control the flex behavior for the name span
+          <div className="flex-grow min-w-0 overflow-hidden"> 
+            <span 
+              className="block truncate" // span is block for truncate to work, its parent div handles flex growth
+              title={node.name} 
+            >
+              {node.name}
+            </span>
+          </div>
         )}
 
-        {/* Action buttons in flow, controlled by showActions */}
         {!isRenaming && (
           <div 
             className={cn(
-              "flex items-center space-x-0.5 shrink-0 ml-auto transition-opacity duration-150 z-10",
+              "flex items-center space-x-0.5 shrink-0 ml-auto transition-opacity duration-150 z-10 group-focus-within/fileitem:opacity-100", // Added group-focus-within
               showActions ? "opacity-100" : "opacity-0"
             )}
             data-action-button 
@@ -262,7 +266,7 @@ export function FileTreeItem({ node, level = 0 }: FileTreeItemProps) {
             </Button>
           </div>
         )}
-      </div> {/* End of main clickable row */}
+      </div>
 
       {isFolder && isOpen && !isRenaming && node.children && (
         <div>
