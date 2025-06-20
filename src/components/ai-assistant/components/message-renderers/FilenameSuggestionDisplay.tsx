@@ -1,135 +1,362 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Brain, Check, CheckCircle2 } from 'lucide-react';
-import { cleanFolderName, getDisplayNameForAttachment } from '@/components/ai-assistant/ai-assistant-utils';
+import { Check, FileText, Lightbulb, Star, Undo2, File, Code, Folder } from 'lucide-react';
+import { ActionButton } from './ActionButton';
 import type { FilenameSuggestionDisplayProps } from '@/components/ai-assistant/types';
-import { cn } from '@/lib/utils';
 
 export const FilenameSuggestionDisplay: React.FC<FilenameSuggestionDisplayProps> = ({
   msg,
   isLoading,
-  actionAppliedStates,
+  activeFilePath,
+  currentCode,
+  getFileSystemNode,
   handleFileOperation,
-  setChatHistory,
+  copiedStates,
+  actionAppliedStates,
+  loadingStates,
+  expandedCodePreviews,
+  toggleCodePreview,
+  forceReplaceState,
+  setForceReplaceState,
+  handleCopyCode,
+  updateAttachedFiles,
 }) => {
-  if (!msg.filenameSuggestionData) return <p>{msg.content}</p>;
+  const messageId = (msg as any).id;
+  const messageContent = (msg as any).content;
+  const suggestionData = (msg as any).filenameSuggestionData;
+  
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [originalName, setOriginalName] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<string | null>(null);
 
-  const { suggestions, analysis, topSuggestion, currentFileName, targetPath, itemType } = msg.filenameSuggestionData;
+  if (!suggestionData) {
+    return (
+      <div className="space-y-2">
+        <p className="whitespace-pre-wrap">{messageContent}</p>
+      </div>
+    );
+  }
 
-  const anySuggestionApplied = (messageId: string, prefix: string) => {
-    return Object.keys(actionAppliedStates).some(k => k.startsWith(`${messageId}-${prefix}-`) && actionAppliedStates[k]);
+  // Helper function to get icon for strategy type
+  const getStrategyIcon = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'descriptive':
+        return File;
+      case 'functional':
+        return Code;
+      case 'conventional':
+        return FileText;
+      case 'contextual':
+        return Folder;
+      default:
+        return File;
+    }
+  };
+
+  const handleChooseName = async (selectedName: string, buttonKey: string) => {
+    if (selectedOption) return;
+
+    console.log('Starting operation:', {
+      targetPath: suggestionData.targetPath,
+      selectedName,
+      currentFileName: suggestionData.currentFileName,
+      itemType: suggestionData.itemType
+    });
+
+    setOriginalName(suggestionData.currentFileName);
+    setSelectedOption(selectedName);
+
+    let result;
+    
+    if (suggestionData.currentFileName) {
+      // This is a rename operation for existing item
+      if (!suggestionData.targetPath) {
+        console.error('No target path for rename operation');
+        setSelectedOption(null);
+        setOriginalName(null);
+        return;
+      }
+      
+      setCurrentPath(suggestionData.targetPath);
+      
+      result = await handleFileOperation('rename', {
+        targetPath: suggestionData.targetPath,
+        newName: selectedName,
+      });
+
+      console.log('Rename result:', result);
+
+      if (result?.success && updateAttachedFiles) {
+        // Update attached files to reflect the name change
+        const oldPath = suggestionData.targetPath;
+        const pathParts = oldPath.split('/');
+        pathParts[pathParts.length - 1] = selectedName;
+        const newPath = pathParts.join('/');
+        
+        setCurrentPath(newPath);
+        
+        updateAttachedFiles(prev => 
+          prev.map(file => 
+            file.path === oldPath 
+              ? { ...file, path: newPath, name: selectedName }
+              : file
+          )
+        );
+        
+        console.log(`Successfully renamed ${oldPath} to ${newPath}`);
+      }
+    } else {
+      // This is a create operation for new item
+      const parentPath = suggestionData.targetPath || '/';
+      const newItemPath = parentPath === '/' ? `/${selectedName}` : `${parentPath}/${selectedName}`;
+      
+      setCurrentPath(newItemPath);
+      
+      result = await handleFileOperation('create', {
+        parentPath: parentPath,
+        fileName: selectedName,
+        fileType: suggestionData.itemType || 'file',
+        content: suggestionData.itemType === 'folder' ? undefined : '',
+        openInIDE: suggestionData.itemType === 'file'
+      });
+
+      console.log('Create result:', result);
+
+      if (result?.success && updateAttachedFiles) {
+        // Add the new item to attached files if it's a file
+        if (suggestionData.itemType === 'file') {
+          updateAttachedFiles(prev => [...prev, {
+            path: newItemPath,
+            name: selectedName,
+            type: 'file',
+            content: ''
+          }]);
+        }
+        
+        console.log(`Successfully created ${suggestionData.itemType}: ${newItemPath}`);
+      }
+    }
+
+    if (!result?.success) {
+      // Reset state if operation failed
+      console.error('Operation failed, resetting state');
+      setSelectedOption(null);
+      setOriginalName(null);
+      setCurrentPath(null);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!currentPath || !selectedOption) return;
+
+    console.log('Starting undo operation:', {
+      currentPath,
+      originalName,
+      selectedOption,
+      isRename: !!originalName
+    });
+    
+    let result;
+    
+    if (originalName) {
+      // This was a rename operation - rename back to original
+      result = await handleFileOperation('rename', {
+        targetPath: currentPath,
+        newName: originalName,
+      });
+
+      console.log('Undo rename result:', result);
+
+      if (result?.success && updateAttachedFiles) {
+        // Update attached files back to original name
+        const pathParts = currentPath.split('/');
+        pathParts[pathParts.length - 1] = originalName;
+        const revertedPath = pathParts.join('/');
+        
+        updateAttachedFiles(prev => 
+          prev.map(file => 
+            file.path === currentPath 
+              ? { ...file, path: revertedPath, name: originalName }
+              : file
+          )
+        );
+        
+        console.log(`Successfully reverted ${currentPath} to ${revertedPath}`);
+      }
+    } else {
+      // This was a create operation - delete the created item
+      result = await handleFileOperation('delete', {
+        targetPath: currentPath,
+      });
+
+      console.log('Undo create result:', result);
+
+      if (result?.success && updateAttachedFiles) {
+        // Remove the created item from attached files
+        updateAttachedFiles(prev => 
+          prev.filter(file => file.path !== currentPath)
+        );
+        
+        console.log(`Successfully deleted created item: ${currentPath}`);
+      }
+    }
+
+    setSelectedOption(null);
+    setOriginalName(null);
+    setCurrentPath(null);
   };
 
   return (
-    <div className="space-y-3 overflow-x-hidden">
-      <p className="whitespace-pre-wrap font-medium text-sm mb-2">{msg.content}</p>
-
-      {analysis.mainFunctions.length > 0 && (
-        <div className="p-2 bg-primary/10 dark:bg-primary/15 rounded border border-primary/20 dark:border-primary/30">
-          <div className="text-xs font-medium text-primary dark:text-primary">
-            📝 Functions Found: {analysis.mainFunctions.join(', ')}
-          </div>
-        </div>
-      )}
-
-      <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
-        <CardContent className="p-3 overflow-hidden">
-          <div className="flex items-center gap-2 mb-2">
-            <Brain className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary dark:text-primary">AI Filename Analysis</span>
-          </div>
-          <div className="text-xs text-primary/90 dark:text-primary/90 mb-3">
-            {analysis.detectedLanguage} • {analysis.codeType}
-            {itemType === 'folder' && " (Folder)"}
+    <div className="space-y-3">
+      <p className="whitespace-pre-wrap">{messageContent}</p>
+      
+      <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30 max-w-md">
+        <CardContent className="p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-primary dark:text-primary">
+              Choose a name for {suggestionData.currentFileName || 'this item'}
+            </span>
           </div>
 
-          <div className="space-y-2">
-            {suggestions.slice(0, 3).map((suggestion, idx) => {
-              const buttonKey = `${msg.id}-rename-${idx}`;
-              const isApplied = actionAppliedStates[buttonKey];
-              const anyApplied = anySuggestionApplied(msg.id, "rename");
-              let displayName = suggestion.filename;
-              if (itemType === 'folder') {
-                displayName = cleanFolderName(suggestion.filename);
-              }
+          {/* Current File Info */}
+          {suggestionData.currentFileName && (
+            <div className="mb-3 p-2 bg-background/50 rounded border">
+              <div className="flex items-center gap-2">
+                <FileText className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs font-medium">Current: {suggestionData.currentFileName}</span>
+              </div>
+              {suggestionData.analysis && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {suggestionData.analysis.detectedLanguage} • {suggestionData.analysis.codeType}
+                  {suggestionData.analysis.mainFunctions.length > 0 && (
+                    <span> • {suggestionData.analysis.mainFunctions.slice(0, 2).join(', ')}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
+          {/* Name Suggestions */}
+          <div className="space-y-1.5">
+            <div className="text-xs font-medium text-primary/80 mb-2">
+              Suggested Names:
+            </div>
+            
+            {suggestionData.suggestions.slice(0, 3).map((suggestion: any, idx: number) => {
+              const buttonKey = `${messageId}-name-${idx}`;
+              const isTopChoice = idx === 0;
+              const isSelected = selectedOption === suggestion.filename;
+              const isDisabled = selectedOption && !isSelected;
+              const StrategyIcon = isTopChoice ? Star : getStrategyIcon(suggestion.category);
+              
               return (
-                <div key={idx} className="relative p-2 bg-card/80 dark:bg-card/50 rounded border border-border mb-2">
-                  <span className="absolute top-1.5 right-1.5 text-xs px-1.5 py-0.5 rounded-full bg-primary/20 text-primary dark:bg-primary/25 dark:text-primary font-medium z-10">
-                    {Math.round(suggestion.confidence * 100)}%
-                  </span>
-                  <div className="pr-12">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="font-mono text-sm font-medium truncate block flex-shrink min-w-0" title={suggestion.filename}>
-                          {displayName}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" align="start">
-                        <p>Full suggested name: {suggestion.filename}</p>
-                        <p>Category: {suggestion.category}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <div className="text-xs text-muted-foreground mt-1 capitalize">
-                      <span>{suggestion.category} Suggestion</span>
+                <div 
+                  key={idx} 
+                  className={`flex items-start justify-between p-2 rounded border transition-colors ${
+                    isSelected 
+                      ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/30'
+                      : isTopChoice 
+                        ? 'bg-primary/5 border-primary/30' 
+                        : 'bg-background/50 border-border'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    {/* Filename row */}
+                    <div className="flex items-center gap-2 mb-1">
+                      {!isSelected && (
+                        <StrategyIcon className={`h-3 w-3 flex-shrink-0 ${
+                          isTopChoice ? 'text-primary fill-current' : 'text-muted-foreground'
+                        }`} />
+                      )}
+                      {isSelected && (
+                        <Check className="h-3 w-3 text-green-600 dark:text-green-400 flex-shrink-0" />
+                      )}
+                      <span className={`text-sm font-medium ${
+                        isSelected ? 'text-green-700 dark:text-green-300' :
+                        isTopChoice ? 'text-primary' : 'text-foreground'
+                      }`}>
+                        {suggestion.filename}
+                      </span>
+                    </div>
+                    
+                    {/* Metadata row - aligned with filename */}
+                    <div className="flex items-center gap-1.5 text-xs ml-5">
+                      <span className="text-primary/70 capitalize">
+                        {suggestion.category}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {Math.round(suggestion.confidence * 100)}%
+                      </span>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "absolute h-7 w-7 hover:bg-transparent",
-                      "bottom-2 right-2",
-                      isApplied ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground hover:text-primary',
-                      (isLoading || (anyApplied && !isApplied)) && 'opacity-50 pointer-events-none',
-                      anyApplied && isApplied && 'text-green-600 cursor-default hover:text-green-600'
+                  
+                  <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                    {isSelected ? (
+                      <Button
+                        onClick={handleUndo}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        title="Undo rename"
+                      >
+                        <Undo2 className="h-3 w-3" />
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => handleChooseName(suggestion.filename, buttonKey)}
+                        disabled={isDisabled || loadingStates[buttonKey]}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        title="Use this name"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
                     )}
-                    title={isApplied ? 'Applied' : `Apply name: ${displayName}`}
-                    disabled={isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)}
-                    onClick={async () => {
-                      if (isLoading || (anyApplied && !isApplied) || (anyApplied && isApplied)) return;
-                      if (targetPath) {
-                        const nameToApply = itemType === 'folder' ? cleanFolderName(suggestion.filename) : suggestion.filename;
-                        const result = await handleFileOperation('rename', { targetPath, newName: nameToApply });
-                        if (result?.success) {
-                          // This state update might need to be lifted if actionAppliedStates is not directly mutable here
-                          // For now, assuming it's part of props passed down that can be updated in parent
-                          setChatHistory(prev => prev.map(m => {
-                            if (m.id === msg.id && m.filenameSuggestionData) {
-                              return {
-                                ...m,
-                                filenameSuggestionData: {
-                                  ...m.filenameSuggestionData,
-                                  suggestions: m.filenameSuggestionData.suggestions.map(s =>
-                                    s.filename === suggestion.filename ? { ...s, applied: true } : s
-                                  ),
-                                },
-                                _internalActionAppliedStates: { ...(m as any)._internalActionAppliedStates, [buttonKey]: true }
-                              };
-                            }
-                            return m;
-                          }));
-                        }
-                      }
-                    }}
-                  >
-                    {isApplied ? <CheckCircle2 className="h-5 w-5" /> : <Check className="h-5 w-5" />}
-                  </Button>
+                  </div>
                 </div>
               );
             })}
           </div>
-          <div className="mt-3 pt-2 border-t border-primary/20 dark:border-primary/30">
-            <div className="text-xs text-primary/90 dark:text-primary/90 space-y-0.5">
-              <div>💡 Current: {currentFileName}</div>
-              <div>→ Suggested: {
-                topSuggestion ? (itemType === 'folder' ? cleanFolderName(topSuggestion.filename) : topSuggestion.filename) : 'N/A'
-              }</div>
+
+          {/* Keep Current Option */}
+          {suggestionData.currentFileName && !selectedOption && (
+            <div className="mt-3 pt-2 border-t border-primary/20">
+              <div className="flex items-center justify-between p-2 bg-background/30 rounded border-dashed border-border">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3 w-3 text-muted-foreground" />
+                  <div>
+                    <div className="text-xs text-muted-foreground">Keep current name</div>
+                    <div className="text-xs font-medium">{suggestionData.currentFileName}</div>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => {
+                    console.log('Keeping current name');
+                  }}
+                >
+                  Keep
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Success Status */}
+          {selectedOption && (
+            <div className="mt-3 p-2 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800/30 rounded flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <span className="text-sm text-green-700 dark:text-green-300">
+                  Renamed to: {selectedOption}
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

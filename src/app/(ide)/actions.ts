@@ -1,4 +1,3 @@
-
 "use server";
 
 import { 
@@ -163,6 +162,9 @@ export async function validateCodeServer(input: { code: string; filePath: string
       filePath: input.filePath,
       language: input.language,
       projectContext: input.projectContext,
+      validateTypes: true,
+      validateLinting: true,
+      validateBestPractices: true,
     });
   } catch (error: any) {
     logDetailedError("validateCodeServer", error);
@@ -588,5 +590,47 @@ export async function smartFolderOperationsServer(input: {
   } catch (error: any) {
     logDetailedError("smartFolderOperationsServer", error);
     throw new Error(formatErrorForClient("Failed smart folder operations. Please check console for details.", error));
+  }
+}
+
+export async function triggerRAGIndexingServer(input: {
+  attachedFiles: Array<{
+    path: string;
+    content: string;
+    language?: string;
+  }>;
+  fileSystemTree: string;
+  projectContext?: {
+    name?: string;
+    description?: string;
+    languages?: string[];
+    frameworks?: string[];
+  };
+}) {
+  try {
+    const { triggerAutoIndexing } = await import('@/ai/tools/codebase-dataset');
+    
+    // Map the attached files to FileInfo format
+    const fileInfos = input.attachedFiles.map(file => ({
+      path: file.path,
+      content: file.content,
+      extension: file.path.split('.').pop() || '',
+      size: file.content.length,
+      lastModified: Date.now(),
+    }));
+    
+    const result = await triggerAutoIndexing(
+      input.fileSystemTree,
+      fileInfos,
+      input.projectContext
+    );
+    return { 
+      success: result.success, 
+      indexed: result.chunksIndexed,
+      message: result.message 
+    };
+  } catch (error: any) {
+    logDetailedError("triggerRAGIndexingServer", error);
+    throw new Error(formatErrorForClient("Failed to index files for RAG system. Please check console for details.", error));
   }
 }

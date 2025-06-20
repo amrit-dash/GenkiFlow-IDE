@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Defines a Genkit tool for AI-powered filename suggestions.
  *
@@ -10,11 +9,26 @@ import {z} from 'genkit';
 
 // Define the input schema for the tool
 const FilenameSuggesterInputSchema = z.object({
-  fileContent: z.string().describe('The content of the file to analyze'),
+  fileContent: z.string().describe('The content of the file to analyze (for folders, this would be a description of the folder context or purpose)'),
   currentFileName: z.string().optional().describe('The current filename if any (e.g., "untitled.txt", "myComponent.tsx")'),
   fileType: z.enum(['file', 'folder']).default('file').describe('Type of the item to suggest name for (file or folder)'),
-  context: z.string().optional().describe('Additional context about the file purpose'),
+  context: z.string().optional().describe('Additional context about the file/folder purpose, including user intent and desired location'),
   projectStructure: z.string().optional().describe('Project file structure for context'),
+  folderContents: z.array(z.object({
+    name: z.string().describe('File/folder name'),
+    type: z.enum(['file', 'folder']).describe('Type of the item'),
+    path: z.string().describe('Full path of the item'),
+    content: z.string().optional().describe('File content (for files only)'),
+    language: z.string().optional().describe('Detected programming language'),
+    purpose: z.string().optional().describe('Inferred purpose of the file'),
+  })).optional().describe('Contents of the folder being renamed/analyzed (for folder operations)'),
+  targetLocation: z.string().optional().describe('Desired location/parent directory path parsed from user context'),
+  userIntent: z.object({
+    operation: z.enum(['create', 'rename', 'move']).describe('The intended operation'),
+    locationHint: z.string().optional().describe('Location preference extracted from user query'),
+    purposeHint: z.string().optional().describe('Purpose/function hint from user query'),
+    domainContext: z.string().optional().describe('Domain-specific context (e.g., "components", "utils", "api")'),
+  }).optional().describe('Parsed user intent and context'),
 });
 
 // Define the output schema for the tool
@@ -24,56 +38,88 @@ const FilenameSuggesterOutputSchema = z.object({
     reasoning: z.string().describe('Explanation for why this name was suggested'),
     confidence: z.number().min(0).max(1).describe('Confidence score (0-1)'),
     category: z.enum(['descriptive', 'conventional', 'functional', 'contextual']).describe('Type of naming strategy'),
+    suggestedLocation: z.string().optional().describe('Recommended location/parent directory for this item'),
   })).describe('List of filename suggestions ordered by confidence'),
   analysis: z.object({
-    detectedLanguage: z.string().describe('Programming language detected'),
-    codeType: z.string().describe('Type of code (component, utility, service, etc.)'),
-    mainFunctions: z.array(z.string()).describe('Main functions or exports found'),
-    hasExports: z.boolean().describe('Whether file exports functions/classes'),
-    isComponent: z.boolean().describe('Whether this appears to be a UI component'),
-    suggestedExtension: z.string().describe('Recommended file extension (relevant for fileType="file")'),
-    currentFileNameForFiltering: z.string().optional().describe('The current filename, passed through for filtering.'),
-  }).describe('Analysis of the file content'),
+    detectedLanguage: z.string().describe('Programming language detected (or "Folder" for folders)'),
+    codeType: z.string().describe('Type of code/content (component, utility, service, folder-type, etc.)'),
+    mainFunctions: z.array(z.string()).describe('Main functions/exports found (or key files for folders)'),
+    hasExports: z.boolean().describe('Whether file exports functions/classes (or folder contains modules)'),
+    isComponent: z.boolean().describe('Whether this appears to be a UI component (or component folder)'),
+    suggestedExtension: z.string().describe('Recommended file extension (empty for folders)'),
+    currentFileNameForFiltering: z.string().optional().describe('The current filename, passed through for filtering'),
+    folderPurpose: z.string().optional().describe('Inferred purpose of the folder based on contents'),
+    folderDomain: z.string().optional().describe('Domain category (e.g., "frontend", "backend", "shared", "config")'),
+    isEmpty: z.boolean().describe('Whether the folder is empty (for folder operations)'),
+    dominantLanguage: z.string().optional().describe('Most common programming language in folder'),
+    recommendedParent: z.string().optional().describe('Suggested parent directory path'),
+  }).describe('Analysis of the file/folder content'),
+  locationSuggestions: z.array(z.object({
+    path: z.string().describe('Suggested location path'),
+    reasoning: z.string().describe('Why this location is recommended'),
+    confidence: z.number().min(0).max(1).describe('Confidence in this location suggestion'),
+  })).optional().describe('Suggested locations for creating/moving the item'),
 });
 
 export const filenameSuggester = ai.defineTool(
   {
     name: 'filenameSuggester',
-    description: 'Analyzes file content deeply and suggests exactly 3 contextual, non-repetitive filenames based on code structure, functions, and purpose. Provides intelligent naming based on actual code content and distinguishes between file and folder naming conventions. Filters out suggestions identical to the current name.',
+    description: 'Analyzes file/folder content deeply and suggests exactly 3 contextual, non-repetitive names based on content, structure, functions, and user context. Provides intelligent naming with location suggestions for both files and folders. Handles folder analysis based on contents and user intent.',
     inputSchema: FilenameSuggesterInputSchema,
     outputSchema: FilenameSuggesterOutputSchema,
   },
   async (input) => {
     console.log(`Filename suggester called for ${input.fileType}: ${input.currentFileName || 'New Item'}`);
+    console.log(`Context: ${input.context || 'None'}`);
+    console.log(`User intent: ${input.userIntent ? JSON.stringify(input.userIntent) : 'None'}`);
     
     const content = input.fileContent;
     const currentName = input.currentFileName;
     const fileType = input.fileType || 'file';
+    const folderContents = input.folderContents || [];
+    const userIntent = input.userIntent;
+    const targetLocation = input.targetLocation;
     
-    const analysis = analyzeFileContentDeep(content, fileType, currentName);
+    // Enhanced analysis for files and folders
+    const analysis = analyzeContentWithContext(content, fileType, currentName, folderContents, userIntent, input.projectStructure);
     
-    let generatedSuggestions = generateIntelligentSuggestions(analysis, fileType, input.context, currentName);
+    // Generate intelligent suggestions with location awareness
+    let generatedSuggestions = generateContextualSuggestions(
+      analysis, 
+      fileType, 
+      input.context, 
+      currentName,
+      folderContents,
+      userIntent,
+      input.projectStructure
+    );
+    
+    // Generate location suggestions
+    const locationSuggestions = generateLocationSuggestions(
+      analysis,
+      fileType,
+      input.context,
+      userIntent,
+      input.projectStructure,
+      targetLocation
+    );
     
     // Filter out suggestions that are identical to the current file name
     let finalSuggestions = generatedSuggestions;
     if (currentName) {
         if (fileType === 'file') {
             const currentNameLower = currentName.toLowerCase();
-            const currentFileParts = currentName.split('.');
-            // Handle dotfiles like ".gitignore" where base is "" and ext is ".gitignore"
-            // Or ".babelrc.js" where base is ".babelrc" and ext is ".js"
             let currentFileExt = '';
             let currentFileBase = currentNameLower;
 
             const lastDotIndex = currentName.lastIndexOf('.');
-            if (lastDotIndex > 0) { // Regular file like "file.ts" or dotfile with extension like ".config.js"
+            if (lastDotIndex > 0) {
                 currentFileExt = currentName.substring(lastDotIndex).toLowerCase();
                 currentFileBase = currentName.substring(0, lastDotIndex).toLowerCase();
-            } else if (lastDotIndex === 0) { // Dotfile like ".gitignore"
-                currentFileExt = currentName.toLowerCase(); // The whole name is the "extension"
-                currentFileBase = ""; // No base before the dot
+            } else if (lastDotIndex === 0) {
+                currentFileExt = currentName.toLowerCase();
+                currentFileBase = "";
             }
-            // If no dot, base is the whole name, ext is empty (handled by suggestion logic)
 
             finalSuggestions = generatedSuggestions.filter(s => {
                 const suggestionNameLower = s.filename.toLowerCase();
@@ -89,16 +135,13 @@ export const filenameSuggester = ai.defineTool(
                     suggestionBase = "";
                 }
                 
-                // If both current and suggestion have no discernible standard extension (e.g. "Makefile" or ".gitattributes")
                 if (currentFileExt === '' && suggestionExt === '') {
                     return suggestionBase !== currentFileBase;
                 }
-                 // If one is a dotfile (ext is the full name like ".gitignore") and other is regular (ext is like ".ts")
                 if ((currentFileBase === "" && currentFileExt !== "") !== (suggestionBase === "" && suggestionExt !== "")) {
-                    return true; // They are structurally different
+                    return true;
                 }
 
-                // Direct comparison if both are similar structure
                 if (currentFileBase === suggestionBase && currentFileExt === suggestionExt) {
                     return false;
                 }
@@ -114,7 +157,11 @@ export const filenameSuggester = ai.defineTool(
     
     return {
       suggestions: finalSuggestions.slice(0, 3), 
-      analysis: { ...analysis, currentFileNameForFiltering: currentName }
+      analysis: { 
+        ...analysis, 
+        currentFileNameForFiltering: currentName 
+      },
+      locationSuggestions: locationSuggestions.length > 0 ? locationSuggestions : undefined
     };
   }
 );
@@ -128,11 +175,42 @@ function cleanFolderName(name: string): string {
   return cleaned.replace(/\/$/, '');
 }
 
-function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder', currentFileName?: string) {
+// Enhanced analysis function that handles both files and folders with context
+function analyzeContentWithContext(
+  content: string, 
+  fileType: 'file' | 'folder', 
+  currentFileName?: string,
+  folderContents?: any[],
+  userIntent?: any,
+  projectStructure?: string
+) {
   const lowerContent = content.toLowerCase();
   
   let detectedLanguage = 'Text';
   let suggestedExtension = '.txt';
+
+  // Handle empty content edge case
+  if (!content || content.trim() === '') {
+    detectedLanguage = 'Text';
+    suggestedExtension = '.txt';
+    if (currentFileName) {
+      // Preserve the extension from current filename for empty files
+      const lastDotIndex = currentFileName.lastIndexOf('.');
+      if (lastDotIndex > 0) {
+        suggestedExtension = currentFileName.substring(lastDotIndex);
+        // Try to determine language from extension
+        const ext = suggestedExtension.toLowerCase();
+        if (ext === '.js') detectedLanguage = 'JavaScript';
+        else if (ext === '.ts') detectedLanguage = 'TypeScript';
+        else if (ext === '.py') detectedLanguage = 'Python';
+        else if (ext === '.md') detectedLanguage = 'Markdown';
+        else if (ext === '.json') detectedLanguage = 'JSON';
+        else if (ext === '.html') detectedLanguage = 'HTML';
+        else if (ext === '.css') detectedLanguage = 'CSS';
+        else detectedLanguage = 'Text';
+      }
+    }
+  }
 
   if (fileType === 'folder') {
     detectedLanguage = 'Folder';
@@ -240,16 +318,162 @@ function analyzeFileContentDeep(content: string, fileType: 'file' | 'folder', cu
     codeType = 'functions-module';
   }
   
+  // Analyze folder contents if this is a folder
+  let folderPurpose = '';
+  let folderDomain = '';
+  let isEmpty = true;
+  let dominantLanguage = '';
+  let recommendedParent = '';
+
+  if (fileType === 'folder') {
+    isEmpty = !folderContents || folderContents.length === 0;
+    
+    if (!isEmpty && folderContents) {
+      // First, try to parse rich context if available
+      if (content && content.includes('Main purposes:')) {
+        const purposeMatch = content.match(/Main purposes:\s*([^.]+)/);
+        if (purposeMatch) {
+          const mainPurpose = purposeMatch[1].trim();
+          // Map main purposes to folder names
+          if (mainPurpose.toLowerCase().includes('web scraping') || mainPurpose.toLowerCase().includes('scraping')) {
+            folderPurpose = 'Web Scraping Tools';
+            folderDomain = 'data-extraction';
+          } else if (mainPurpose.toLowerCase().includes('data processing') || mainPurpose.toLowerCase().includes('data analysis')) {
+            folderPurpose = 'Data Processing';
+            folderDomain = 'data-analysis';
+          } else if (mainPurpose.toLowerCase().includes('api') || mainPurpose.toLowerCase().includes('service')) {
+            folderPurpose = 'API Services';
+            folderDomain = 'backend';
+          } else if (mainPurpose.toLowerCase().includes('component') || mainPurpose.toLowerCase().includes('ui')) {
+            folderPurpose = 'UI Components';
+            folderDomain = 'frontend';
+          } else if (mainPurpose.toLowerCase().includes('util') || mainPurpose.toLowerCase().includes('helper')) {
+            folderPurpose = 'Utility Functions';
+            folderDomain = 'shared';
+          } else if (mainPurpose.toLowerCase().includes('automation') || mainPurpose.toLowerCase().includes('script')) {
+            folderPurpose = 'Automation Scripts';
+            folderDomain = 'automation';
+          } else if (mainPurpose.toLowerCase().includes('testing') || mainPurpose.toLowerCase().includes('test')) {
+            folderPurpose = 'Testing Suite';
+            folderDomain = 'testing';
+          } else {
+            // Use the actual purpose text but clean it up
+            folderPurpose = mainPurpose.charAt(0).toUpperCase() + mainPurpose.slice(1);
+            folderDomain = 'shared';
+          }
+        }
+      }
+      
+      // If no rich context, fall back to original filename-based analysis
+      if (!folderPurpose) {
+        // Analyze folder contents to determine purpose and domain
+        const fileTypes = folderContents.map(item => item.language).filter(Boolean);
+        const filePurposes = folderContents.map(item => item.purpose).filter(Boolean);
+        
+        // Check for specific patterns in file contents if available
+        const hasScrapingContent = folderContents.some(item => 
+          item.content && (
+            item.content.includes('requests.get') || 
+            item.content.includes('BeautifulSoup') || 
+            item.content.includes('scraper') ||
+            item.content.includes('web scraping')
+          )
+        );
+        
+        const hasDataProcessing = folderContents.some(item =>
+          item.content && (
+            item.content.includes('pandas') ||
+            item.content.includes('numpy') ||
+            item.content.includes('data processing') ||
+            item.content.includes('csv') ||
+            item.content.includes('json')
+          )
+        );
+        
+        const hasApiContent = folderContents.some(item =>
+          item.content && (
+            item.content.includes('fetch(') ||
+            item.content.includes('axios') ||
+            item.content.includes('/api/') ||
+            item.content.includes('endpoint')
+          )
+        );
+        
+        // Set purpose based on content analysis
+        if (hasScrapingContent) {
+          folderPurpose = 'Web Scraping Tools';
+          folderDomain = 'data-extraction';
+        } else if (hasDataProcessing) {
+          folderPurpose = 'Data Processing';
+          folderDomain = 'data-analysis';
+        } else if (hasApiContent) {
+          folderPurpose = 'API Services';
+          folderDomain = 'backend';
+        } else if (folderContents.some(item => item.name.includes('component') || item.name.includes('Component'))) {
+          folderPurpose = 'UI Components Container';
+          folderDomain = 'frontend';
+        } else if (folderContents.some(item => item.name.includes('util') || item.name.includes('helper'))) {
+          folderPurpose = 'Utility Functions';
+          folderDomain = 'shared';
+        } else if (folderContents.some(item => item.name.includes('api') || item.name.includes('service'))) {
+          folderPurpose = 'API/Service Layer';
+          folderDomain = 'backend';
+        } else if (folderContents.some(item => item.name.includes('type') || item.name.includes('interface'))) {
+          folderPurpose = 'Type Definitions';
+          folderDomain = 'shared';
+        } else if (folderContents.some(item => item.name.includes('config') || item.name.includes('setting'))) {
+          folderPurpose = 'Configuration';
+          folderDomain = 'config';
+        } else {
+          folderPurpose = 'General Purpose';
+          folderDomain = 'shared';
+        }
+      }
+      
+      // Determine dominant language
+      const fileTypes = folderContents.map(item => item.language).filter(Boolean);
+      const languageCounts = fileTypes.reduce((acc: any, lang: string) => {
+        acc[lang] = (acc[lang] || 0) + 1;
+        return acc;
+      }, {});
+      dominantLanguage = Object.keys(languageCounts).reduce((a, b) => 
+        languageCounts[a] > languageCounts[b] ? a : b, ''
+      ) || 'Mixed';
+    }
+
+    // Suggest parent directory based on purpose and user intent
+    if (userIntent?.locationHint) {
+      recommendedParent = userIntent.locationHint;
+    } else if (folderPurpose.includes('Scraping') || folderPurpose.includes('Data')) {
+      recommendedParent = 'src/tools';
+    } else if (folderPurpose.includes('Component')) {
+      recommendedParent = 'src/components';
+    } else if (folderPurpose.includes('Utility')) {
+      recommendedParent = 'src/utils';
+    } else if (folderPurpose.includes('API')) {
+      recommendedParent = 'src/api';
+    } else if (folderPurpose.includes('Type')) {
+      recommendedParent = 'src/types';
+    } else if (folderPurpose.includes('Automation')) {
+      recommendedParent = 'src/scripts';
+    }
+  }
+
   const mainFunctions = extractMeaningfulFunctions(content, detectedLanguage);
   const hasExports = content.includes('export') || content.includes('module.exports');
   
   return {
-    detectedLanguage,
-    codeType,
+    detectedLanguage: detectedLanguage || 'Text',
+    codeType: codeType || 'general',
     mainFunctions: mainFunctions.slice(0, 5), 
-    hasExports,
-    isComponent,
-    suggestedExtension,
+    hasExports: hasExports || false,
+    isComponent: isComponent || false,
+    suggestedExtension: suggestedExtension || '.txt',
+    folderPurpose: folderPurpose || undefined,
+    folderDomain: folderDomain || undefined,
+    isEmpty: isEmpty,
+    dominantLanguage: dominantLanguage || undefined,
+    recommendedParent: recommendedParent || undefined,
   };
 }
 
@@ -379,14 +603,358 @@ const commandLikeWords = new Set([
     'set', 'get', 'put', 'post', 'style', 'config', 'setting', 'main', 'init'
 ]);
 
+// New enhanced function for contextual suggestions
+function generateContextualSuggestions(
+    analysis: ReturnType<typeof analyzeContentWithContext>, 
+    fileType: 'file' | 'folder', 
+    context?: string,
+    currentFileName?: string,
+    folderContents?: any[],
+    userIntent?: any,
+    projectStructure?: string
+) {
+  const suggestions: Array<{
+    filename: string, 
+    reasoning: string, 
+    confidence: number, 
+    category: 'descriptive' | 'conventional' | 'functional' | 'contextual',
+    suggestedLocation?: string
+  }> = [];
+  const usedNames = new Set<string>();
+
+  const addSuggestion = (
+    baseNameInput: string, 
+    reason: string, 
+    conf: number, 
+    cat: 'descriptive' | 'conventional' | 'functional' | 'contextual',
+    location?: string
+  ) => {
+    if (!baseNameInput || baseNameInput.trim() === "") return;
+
+    let baseNameOriginal = baseNameInput.trim();
+    let cleanBase = baseNameOriginal;
+
+    if (fileType === 'file') {
+        cleanBase = baseNameOriginal
+            .replace(/\.[^/.]+$/, "")
+            .replace(/[^a-zA-Z0-9_-]+/g, '_')
+            .replace(/_{2,}/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .replace(/^-+|-+$/g, '');
+
+        if (baseNameOriginal.startsWith('.') && !cleanBase.startsWith('.')) {
+            cleanBase = '.' + cleanBase;
+        }
+        if (!cleanBase && baseNameOriginal.startsWith('.')) {
+             cleanBase = baseNameOriginal.replace(/[^a-zA-Z0-9_.-]+/g, '_').replace(/[,]$/, "");
+        }
+        if (!cleanBase && !baseNameOriginal.startsWith('.')) cleanBase = "suggestion";
+    }
+
+    let finalName = cleanBase;
+
+    if (fileType === 'file') {
+        const extensionToUse = analysis.suggestedExtension.startsWith('.')
+                               ? analysis.suggestedExtension
+                               : (analysis.suggestedExtension ? '.' + analysis.suggestedExtension : '');
+        
+        if (finalName.startsWith('.')) {
+            if (finalName === "." || finalName === "..") {
+                 finalName = (analysis.codeType !== 'general' && analysis.codeType !== 'folder') ? analysis.codeType : 'config';
+            }
+            const standardExtensions = ['.ts', '.js', '.json', '.md', '.py', '.html', '.css', '.xml', '.yaml', '.yml', '.sh', '.java', '.cs', '.go', '.rb', '.php'];
+            if (standardExtensions.includes(extensionToUse) && !finalName.endsWith(extensionToUse)) {
+                finalName += extensionToUse;
+            } else if (!finalName.includes('.') && extensionToUse.startsWith('.')){
+                finalName = extensionToUse;
+            } else if (finalName.includes('.') && extensionToUse && finalName.split('.').pop() !== extensionToUse.substring(1)) {
+                 if (extensionToUse && !finalName.endsWith(extensionToUse) && !standardExtensions.includes(extensionToUse) && extensionToUse.startsWith('.')) {
+                    finalName += extensionToUse;
+                 } else if (!finalName.startsWith('.')) {
+                     finalName = extensionToUse;
+                 }
+            }
+        } else {
+            finalName = finalName + extensionToUse;
+        }
+        if (finalName.startsWith('.') && !/[a-zA-Z0-9]/.test(finalName.substring(1))) {
+            finalName = `file${finalName}`;
+        }
+        if (finalName === extensionToUse) {
+            finalName = `untitled${extensionToUse}`;
+        }
+    } else {
+      finalName = cleanFolderName(finalName); 
+    }
+    
+    if (finalName && !usedNames.has(finalName.toLowerCase()) && suggestions.length < 5) {
+      suggestions.push({ 
+        filename: finalName, 
+        reasoning: reason, 
+        confidence: Math.min(0.95, Math.max(0.1, conf)), 
+        category: cat,
+        suggestedLocation: location
+      });
+      usedNames.add(finalName.toLowerCase());
+    }
+  };
+
+  // Enhanced suggestions based on folder analysis and user intent
+  if (fileType === 'folder') {
+    // Handle folder-specific suggestions based on contents and user intent
+    if (analysis.isEmpty) {
+      if (userIntent?.purposeHint) {
+        const purposeWords = userIntent.purposeHint.toLowerCase().split(/\s+/);
+        const meaningfulWords = purposeWords.filter((word: string) => 
+          word.length > 2 && !commandLikeWords.has(word)
+        );
+        if (meaningfulWords.length > 0) {
+          const purposeName = meaningfulWords.slice(0, 2).join('-');
+          addSuggestion(purposeName, `Based on your intended purpose: ${userIntent.purposeHint}`, 0.85, 'contextual', analysis.recommendedParent);
+        }
+      }
+      
+      if (userIntent?.domainContext) {
+        addSuggestion(userIntent.domainContext, `Domain-specific folder for ${userIntent.domainContext}`, 0.8, 'conventional', analysis.recommendedParent);
+      }
+      
+      // Default suggestions for empty folders
+      addSuggestion('new-modules', 'General purpose modules folder', 0.6, 'descriptive', 'src');
+      addSuggestion('workspace', 'Development workspace folder', 0.5, 'contextual', '.');
+    } else {
+      // Folder has contents - suggest based on analysis
+      if (analysis.folderPurpose && analysis.folderPurpose !== 'General Purpose') {
+        // Enhanced suggestions based on specific folder purposes
+        if (analysis.folderPurpose === 'Web Scraping Tools') {
+          addSuggestion('WebScrapers', 'Dedicated folder for web scraping modules and tools', 0.95, 'functional', analysis.recommendedParent);
+          addSuggestion('ScrapingTools', 'Collection of web scraping utilities', 0.9, 'functional', analysis.recommendedParent);
+          addSuggestion('DataExtractors', 'Tools for extracting data from web sources', 0.85, 'functional', analysis.recommendedParent);
+        } else if (analysis.folderPurpose === 'Data Processing') {
+          addSuggestion('DataProcessing', 'Data analysis and processing modules', 0.95, 'functional', analysis.recommendedParent);
+          addSuggestion('DataUtils', 'Data manipulation utilities', 0.9, 'functional', analysis.recommendedParent);
+          addSuggestion('Analytics', 'Data analytics and processing tools', 0.85, 'functional', analysis.recommendedParent);
+        } else if (analysis.folderPurpose === 'API Services') {
+          addSuggestion('ApiServices', 'API service modules', 0.95, 'functional', analysis.recommendedParent);
+          addSuggestion('Services', 'Service layer modules', 0.9, 'conventional', analysis.recommendedParent);
+          addSuggestion('ApiClient', 'API client implementations', 0.85, 'functional', analysis.recommendedParent);
+        } else if (analysis.folderPurpose === 'Automation Scripts') {
+          addSuggestion('AutomationScripts', 'Automation and scripting tools', 0.95, 'functional', analysis.recommendedParent);
+          addSuggestion('Scripts', 'Collection of utility scripts', 0.9, 'conventional', analysis.recommendedParent);
+          addSuggestion('Automation', 'Automated task modules', 0.85, 'functional', analysis.recommendedParent);
+        } else {
+          // Generic purpose-based suggestions
+          const purposeBasedName = analysis.folderPurpose.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+          addSuggestion(purposeBasedName, `Based on folder contents: ${analysis.folderPurpose}`, 0.9, 'functional', analysis.recommendedParent);
+        }
+      }
+      
+      if (analysis.dominantLanguage && analysis.dominantLanguage !== 'Mixed') {
+        const langName = analysis.dominantLanguage.toLowerCase().replace(/\s+/g, '-');
+        // Create language-specific suggestions based on purpose
+        if (analysis.folderPurpose === 'Web Scraping Tools') {
+          addSuggestion(`${analysis.dominantLanguage}Scrapers`, `${analysis.dominantLanguage} web scraping modules`, 0.85, 'descriptive', analysis.recommendedParent);
+        } else {
+          addSuggestion(`${langName}-modules`, `${analysis.dominantLanguage} modules collection`, 0.75, 'descriptive', analysis.recommendedParent);
+        }
+      }
+      
+      if (folderContents && folderContents.length > 0) {
+        const firstFile = folderContents[0];
+        if (firstFile.name && !firstFile.name.startsWith('.')) {
+          const baseName = firstFile.name.split('.')[0];
+          // Create contextual suggestions based on main file
+          if (analysis.folderPurpose === 'Web Scraping Tools') {
+            addSuggestion(`${baseName}Tools`, `Tools related to ${firstFile.name}`, 0.8, 'contextual', analysis.recommendedParent);
+          } else {
+            addSuggestion(`${baseName}-group`, `Related to primary file: ${firstFile.name}`, 0.7, 'contextual', analysis.recommendedParent);
+          }
+        }
+      }
+    }
+  } else {
+    // File suggestions - enhanced with location awareness
+    if (analysis.mainFunctions.length > 0) {
+      const primaryFunc = analysis.mainFunctions[0];
+      let suggestedLocation = '';
+      
+      if (analysis.isComponent) {
+        suggestedLocation = 'src/components';
+      } else if (analysis.codeType === 'utility') {
+        suggestedLocation = 'src/utils';
+      } else if (analysis.codeType === 'service') {
+        suggestedLocation = 'src/services';
+      } else if (analysis.codeType === 'types') {
+        suggestedLocation = 'src/types';
+      }
+      
+      addSuggestion(primaryFunc, `Based on the primary function: ${primaryFunc}`, 0.9, 'functional', suggestedLocation);
+    }
+
+    if (analysis.codeType !== 'general') {
+      let conventionalBase = '';
+      let suggestedLocation = '';
+      
+      if (analysis.codeType === 'component') {
+        conventionalBase = analysis.mainFunctions[0] || 'NewComponent';
+        suggestedLocation = 'src/components';
+      } else if (analysis.codeType === 'hook') {
+        conventionalBase = analysis.mainFunctions[0] || 'useNewHook';
+        suggestedLocation = 'src/hooks';
+      } else if (analysis.codeType === 'utility') {
+        conventionalBase = 'utils';
+        suggestedLocation = 'src/utils';
+      } else if (analysis.codeType === 'service') {
+        conventionalBase = analysis.mainFunctions[0] ? `${analysis.mainFunctions[0]}Service` : 'apiService';
+        suggestedLocation = 'src/services';
+      } else if (analysis.codeType === 'types') {
+        conventionalBase = 'types';
+        suggestedLocation = 'src/types';
+      }
+
+      if (conventionalBase) {
+         addSuggestion(conventionalBase, `Conventional name for a ${analysis.codeType}`, 0.8, 'conventional', suggestedLocation);
+      }
+    }
+  }
+
+  // Context-based suggestions
+  if (context) {
+    const allWords = context.toLowerCase().split(/\s+/);
+    const meaningfulContextWords = allWords
+        .map(word => word.replace(/[^a-z0-9_-]/gi, ''))
+        .filter(word => word.length >= 3 && !commandLikeWords.has(word.toLowerCase()));
+
+    if (meaningfulContextWords.length > 0) {
+        let contextBase = meaningfulContextWords.slice(0, 2).join('_');
+        contextBase = contextBase.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 35);
+        if (contextBase) {
+             addSuggestion(contextBase, `From your instruction: "${context.length > 30 ? context.substring(0,27) + '...' : context}"`, 0.75, 'contextual');
+        }
+    }
+  }
+
+  // Fill with fallbacks if needed
+  const fallbacks = fileType === 'folder' 
+    ? [
+        { name: 'shared-modules', reason: 'Shared components and utilities', conf: 0.5, cat: 'descriptive' as const, loc: 'src' },
+        { name: 'common-utils', reason: 'Common utility functions', conf: 0.4, cat: 'descriptive' as const, loc: 'src' },
+        { name: 'workspace', reason: 'General workspace folder', conf: 0.3, cat: 'contextual' as const, loc: '.' },
+      ]
+    : [
+        { name: 'main', reason: 'Standard entry point file', conf: 0.5, cat: 'conventional' as const, loc: 'src' },
+        { name: 'index', reason: 'Common index file name', conf: 0.4, cat: 'conventional' as const, loc: 'src' },
+        { name: 'utils', reason: 'Utility functions file', conf: 0.3, cat: 'descriptive' as const, loc: 'src/utils' },
+      ];
+  
+  for (const fallback of fallbacks) {
+    if (suggestions.length >= 3) break;
+    addSuggestion(fallback.name, fallback.reason, fallback.conf, fallback.cat, fallback.loc);
+  }
+
+  return suggestions.slice(0, 3).sort((a, b) => b.confidence - a.confidence);
+}
+
+// Generate location suggestions based on context and analysis
+function generateLocationSuggestions(
+  analysis: ReturnType<typeof analyzeContentWithContext>,
+  fileType: 'file' | 'folder',
+  context?: string,
+  userIntent?: any,
+  projectStructure?: string,
+  targetLocation?: string
+) {
+  const suggestions: Array<{
+    path: string,
+    reasoning: string,
+    confidence: number
+  }> = [];
+
+  // Priority: explicit target location from user
+  if (targetLocation) {
+    suggestions.push({
+      path: targetLocation,
+      reasoning: 'Explicitly specified target location',
+      confidence: 0.95
+    });
+  }
+
+  // User intent location hint
+  if (userIntent?.locationHint && userIntent.locationHint !== targetLocation) {
+    suggestions.push({
+      path: userIntent.locationHint,
+      reasoning: 'Based on your location preference',
+      confidence: 0.9
+    });
+  }
+
+  // Analysis-based recommendations
+  if (analysis.recommendedParent) {
+    suggestions.push({
+      path: analysis.recommendedParent,
+      reasoning: `Recommended for ${fileType} type: ${analysis.codeType}`,
+      confidence: 0.8
+    });
+  }
+
+  // Content-type based suggestions
+  if (fileType === 'file') {
+    if (analysis.isComponent) {
+      suggestions.push({
+        path: 'src/components',
+        reasoning: 'Standard location for React components',
+        confidence: 0.75
+      });
+    } else if (analysis.codeType === 'utility') {
+      suggestions.push({
+        path: 'src/utils',
+        reasoning: 'Standard location for utility functions',
+        confidence: 0.75
+      });
+    } else if (analysis.codeType === 'service') {
+      suggestions.push({
+        path: 'src/services',
+        reasoning: 'Standard location for service modules',
+        confidence: 0.75
+      });
+    }
+  } else if (fileType === 'folder') {
+    if (analysis.folderDomain === 'frontend') {
+      suggestions.push({
+        path: 'src',
+        reasoning: 'Frontend modules belong in src directory',
+        confidence: 0.7
+      });
+    } else if (analysis.folderDomain === 'shared') {
+      suggestions.push({
+        path: 'src/shared',
+        reasoning: 'Shared utilities and components location',
+        confidence: 0.7
+      });
+    }
+  }
+
+  // Remove duplicates and return top 3
+  const uniqueSuggestions = suggestions.filter((item, index, self) =>
+    index === self.findIndex(t => t.path === item.path)
+  );
+
+  return uniqueSuggestions.slice(0, 3).sort((a, b) => b.confidence - a.confidence);
+}
+
 function generateIntelligentSuggestions(
-    analysis: ReturnType<typeof analyzeFileContentDeep>, 
+    analysis: ReturnType<typeof analyzeContentWithContext>, 
     fileType: 'file' | 'folder', 
     context?: string,
     currentFileName?: string
 ) {
   const suggestions: Array<{filename: string, reasoning: string, confidence: number, category: 'descriptive' | 'conventional' | 'functional' | 'contextual'}> = [];
   const usedNames = new Set<string>();
+
+  // Check if this is an empty file that needs better suggestions
+  const isEmpty = !context || context.trim() === '';
+  const hasNoFunctions = !analysis.mainFunctions || analysis.mainFunctions.length === 0;
 
   const addSuggestion = (baseNameInput: string, reason: string, conf: number, cat: 'descriptive' | 'conventional' | 'functional' | 'contextual') => {
     if (!baseNameInput || baseNameInput.trim() === "" || (baseNameInput.trim().startsWith('.') && baseNameInput.trim().length === 1 && fileType === 'file') ) return;
@@ -468,9 +1036,37 @@ function generateIntelligentSuggestions(
       usedNames.add(finalName.toLowerCase());
     }
   };
-  
-  if (analysis.mainFunctions.length > 0) {
-    addSuggestion(analysis.mainFunctions[0], `Based on the primary entity: ${analysis.mainFunctions[0]}`, 0.9, 'functional');
+
+  // Handle empty files with better suggestions
+  if (hasNoFunctions && isEmpty) {
+    if (fileType === 'file') {
+      if (analysis.detectedLanguage === 'Text' || analysis.detectedLanguage === 'Markdown') {
+        addSuggestion('notes', 'Simple name for a text file that might contain notes or documentation', 0.7, 'descriptive');
+        addSuggestion('untitled', 'Conventional placeholder name for new or undefined files', 0.6, 'conventional');
+        addSuggestion('draft', 'Suggests this file is a work in progress', 0.5, 'contextual');
+      } else if (analysis.detectedLanguage.includes('JavaScript') || analysis.detectedLanguage.includes('TypeScript')) {
+        addSuggestion('index', 'Common entry point file name', 0.8, 'conventional');
+        addSuggestion('main', 'Standard name for primary application file', 0.7, 'conventional');
+        addSuggestion('app', 'Typical name for application files', 0.6, 'descriptive');
+      } else if (analysis.detectedLanguage === 'Python') {
+        addSuggestion('main', 'Standard name for Python entry point', 0.8, 'conventional');
+        addSuggestion('app', 'Common name for Python application files', 0.7, 'descriptive');
+        addSuggestion('script', 'Generic name for Python scripts', 0.6, 'descriptive');
+      } else {
+        addSuggestion('main', 'Standard name for main files', 0.7, 'conventional');
+        addSuggestion('index', 'Common entry point name', 0.6, 'conventional');
+        addSuggestion('untitled', 'Placeholder name for new files', 0.5, 'conventional');
+      }
+    } else {
+      addSuggestion('new-folder', 'Descriptive name for a new folder', 0.7, 'descriptive');
+      addSuggestion('untitled-folder', 'Conventional placeholder for folders', 0.6, 'conventional');
+      addSuggestion('workspace', 'General purpose workspace folder', 0.5, 'contextual');
+    }
+  } else {
+    // Original logic for files with content
+    if (analysis.mainFunctions.length > 0) {
+      addSuggestion(analysis.mainFunctions[0], `Based on the primary entity: ${analysis.mainFunctions[0]}`, 0.9, 'functional');
+    }
   }
 
   if (analysis.codeType !== 'general' && analysis.codeType !== 'folder') {
@@ -527,6 +1123,26 @@ function generateIntelligentSuggestions(
     addSuggestion(fallbackBase, 'General purpose fallback name', 0.5 - (suggestions.length * 0.1), 'descriptive');
   }
   
-  return suggestions.sort((a, b) => b.confidence - a.confidence);
+  // Ensure we have at least 3 suggestions - add fallbacks if needed
+  if (suggestions.length < 3) {
+    const fallbackSuggestions = fileType === 'file' 
+      ? [
+          { name: 'untitled', reason: 'Standard placeholder name', conf: 0.4, cat: 'conventional' as const },
+          { name: 'new_file', reason: 'Generic name for new files', conf: 0.3, cat: 'descriptive' as const },
+          { name: 'document', reason: 'General purpose file name', conf: 0.2, cat: 'descriptive' as const },
+        ]
+      : [
+          { name: 'new-folder', reason: 'Standard name for new folders', conf: 0.4, cat: 'conventional' as const },
+          { name: 'workspace', reason: 'General workspace folder', conf: 0.3, cat: 'contextual' as const },
+          { name: 'untitled-folder', reason: 'Placeholder folder name', conf: 0.2, cat: 'conventional' as const },
+        ];
+    
+    for (const fallback of fallbackSuggestions) {
+      if (suggestions.length >= 3) break;
+      addSuggestion(fallback.name, fallback.reason, fallback.conf, fallback.cat);
+    }
+  }
+
+  return suggestions.slice(0, 3).sort((a, b) => b.confidence - a.confidence);
 }
 

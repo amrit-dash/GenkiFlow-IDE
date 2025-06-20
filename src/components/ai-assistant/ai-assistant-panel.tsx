@@ -73,7 +73,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     ideContext,
     setChatHistory,
     setAttachedFiles,
-    // setCopiedStates, // This setter might not be directly needed in useOperationHandler
+    setCopiedStates,
     setLoadingStates,
     setActionAppliedStates,
     setForceReplaceState,
@@ -83,7 +83,6 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
     prompt,
     setPrompt,
     attachedFiles,
-    setAttachedFiles,
     chatHistory,
     setChatHistory,
     setIsLoading, 
@@ -142,6 +141,7 @@ export function AiAssistantPanel({ isVisible, onToggleVisibility }: AiAssistantP
           setUndoStack={setUndoStack} 
           handleFileOperation={performFileOperation} 
           handleCopyCode={handleCopyCode}
+          updateAttachedFiles={setAttachedFiles}
         />
 
         <ChatInputArea

@@ -1,5 +1,4 @@
-
-import type { FileSystemNode, AiSuggestion, FileOperationSuggestion, AlternativeOption, CodeQuality, UsageAnalysisData, FileOperationExecutionData, TerminalCommandExecutionData, SmartCodePlacementData, FilenameSuggestionData, SmartFolderOperationData, ChatMessage as BaseChatMessage, ProgressData, ErrorValidationData } from '@/lib/types';
+import type { FileSystemNode, AiSuggestion, FileOperationSuggestion, AlternativeOption, CodeQuality, UsageAnalysisData, FileOperationExecutionData, TerminalCommandExecutionData, SmartCodePlacementData, FilenameSuggestionData, SmartFolderOperationData, ChatMessage as BaseChatMessage, ProgressData, ErrorValidationData, IdeState } from '@/lib/types';
 import type React from 'react'; // Added React import for RefObject
 
 // Represents data passed from UI to useAIInteraction for attached items
@@ -46,11 +45,11 @@ export interface ChatMessageItemProps {
   handleCreateFileAndInsert: (suggestedFileName: string, code: string, buttonKey: string) => Promise<void>;
   handleFileOperationSuggestionAction: (
     operationType: 'create' | 'rename' | 'delete' | 'move',
-    targetPath: string | undefined | null, // Made nullable to match FileOperationSuggestion
-    newName: string | undefined | null,    // Made nullable
+    targetPath: string | undefined,
+    newName: string | undefined,
     fileType: 'file' | 'folder' | undefined,
     buttonKey: string,
-    destinationPath?: string | undefined | null // Made nullable
+    destinationPath?: string | undefined
   ) => Promise<void>;
   
   actionAppliedStates: Record<string, boolean>;
@@ -73,6 +72,9 @@ export interface ChatMessageItemProps {
   expandedCodePreviews: Record<string, boolean>;
   forceReplaceState: Record<string, boolean>;
   setForceReplaceState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  
+  // Attachment management
+  updateAttachedFiles?: (updater: (prev: AttachedFileUIData[]) => AttachedFileUIData[]) => void;
 }
 
 // Base props for individual message display components, inheriting ChatMessageItemProps
@@ -82,14 +84,47 @@ export interface BaseMessageDisplayProps extends ChatMessageItemProps {
 
 
 // Specific props for ChatHistoryDisplay
-export interface ChatHistoryDisplayProps extends ChatMessageItemProps {
+export interface ChatHistoryDisplayProps {
   chatHistory: ChatMessage[];
-  // isLoading: boolean; // Already in ChatMessageItemProps
+  isLoading: boolean;
   scrollAreaRef: React.RefObject<HTMLDivElement>;
   // Empty state props
   setPromptForEmptyState: (value: string) => void;
   textareaRefForEmptyState: React.RefObject<HTMLTextAreaElement>;
-  attachedFilesForEmptyState: AttachedFileUIData[]; // Use specific UI data type
+  attachedFilesForEmptyState: AttachedFileUIData[];
+  // Props needed for ChatMessageItem components
+  activeFilePath: string | null;
+  currentCode: string | undefined;
+  openedFiles: Map<string, FileSystemNode>;
+  fileSystem: FileSystemNode[];
+  getFileSystemNode: (pathOrId: string) => FileSystemNode | FileSystemNode[] | undefined;
+  handleCopyCode: (codeToCopy: string, messageIdPlusAction: string) => void;
+  copiedStates: Record<string, boolean>;
+  handleApplyToEditor: (codeToApply: string, buttonKey: string, targetPath?: string, insertionContext?: string, forceReplace?: boolean) => Promise<void>;
+  handleCreateFileAndInsert: (suggestedFileName: string, code: string, buttonKey: string) => Promise<void>;
+  handleFileOperationSuggestionAction: (
+    operationType: 'create' | 'rename' | 'delete' | 'move',
+    targetPath: string | undefined,
+    newName: string | undefined,
+    fileType: 'file' | 'folder' | undefined,
+    buttonKey: string,
+    destinationPath?: string | undefined
+  ) => Promise<void>;
+  actionAppliedStates: Record<string, boolean>;
+  loadingStates: Record<string, boolean>;
+  undoStack: UndoOperation[];
+  executeUndo: (operation: UndoOperation) => Promise<void>;
+  setUndoStack: React.Dispatch<React.SetStateAction<UndoOperation[]>>;
+  handleFileOperation: (
+    operation: 'create' | 'delete' | 'rename' | 'move' | 'list',
+    operationData: any
+  ) => Promise<{ success: boolean; message: string; } | undefined>;
+  setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  toggleCodePreview: (msgId: string) => void;
+  expandedCodePreviews: Record<string, boolean>;
+  forceReplaceState: Record<string, boolean>;
+  setForceReplaceState: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  updateAttachedFiles?: (updater: (prev: AttachedFileUIData[]) => AttachedFileUIData[]) => void;
 }
 
 // Props for specific message types

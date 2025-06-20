@@ -197,6 +197,13 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   type: 'text' | 'generatedCode' | 'refactorSuggestion' | 'codeExamples' | 'error' | 'loading' | 'newFileSuggestion' | 'enhancedCodeGeneration' | 'fileOperationSuggestion' | 'progressUpdate' | 'errorValidation' | 'usageAnalysis' | 'fileOperationExecution' | 'terminalCommandExecution' | 'smartCodePlacement' | 'filenameSuggestion' | 'smartFolderOperation';
   content: string; // For text, error messages, or descriptions accompanying complex types
+  attachments?: Array<{
+    path: string;
+    name: string;
+    type: 'file' | 'folder';
+    size?: number; // File size in bytes (for files)
+    fileCount?: number; // Number of files (for folders)
+  }>; // For user messages with attached files/folders
   code?: string | null; // For generatedCode, newFileSuggestion, enhancedCodeGeneration
   suggestion?: AiSuggestion | null; // For refactorSuggestion (singular)
   examples?: string[]; // For codeExamples

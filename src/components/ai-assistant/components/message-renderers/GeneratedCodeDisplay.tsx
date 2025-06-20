@@ -1,143 +1,247 @@
-
 import React from 'react';
-import { CodeBlock } from './CodeBlock';
-import { ActionButton } from './ActionButton';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FilePlus2, Edit, Wand2, RotateCcw, Check, Brain } from 'lucide-react';
-import { getDynamicCodeQuality } from '@/components/ai-assistant/ai-assistant-utils';
+import { FilePlus2, Edit, RotateCcw, Check, Wand2, FileText, Merge, FolderOpen } from 'lucide-react';
+import { CodeBlock } from './CodeBlock';
+import { ActionButton } from './ActionButton';
 import type { GeneratedCodeDisplayProps } from '@/components/ai-assistant/types';
-import { useIde } from '@/contexts/ide-context'; // For getFileSystemNode
-import { cn } from '@/lib/utils'; // Added missing import
+import { getDynamicCodeQuality } from '@/components/ai-assistant/ai-assistant-utils';
 
 export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
   msg,
   isLoading,
   activeFilePath,
+  currentCode,
   getFileSystemNode,
-  handleCopyCode,
-  copiedStates,
   handleApplyToEditor,
-  actionAppliedStates,
-  loadingStates,
   handleCreateFileAndInsert,
   handleFileOperationSuggestionAction,
-  toggleCodePreview,
+  copiedStates,
+  actionAppliedStates,
+  loadingStates,
   expandedCodePreviews,
+  toggleCodePreview,
   forceReplaceState,
   setForceReplaceState,
+  handleCopyCode,
 }) => {
-  const applyEditorKey = `${msg.id}-apply-editor`;
-  const createFileKey = `${msg.id}-create-file`;
+  // Simple approach - access properties directly with type assertions where needed
+  const messageId = (msg as any).id;
+  const messageContent = (msg as any).content;
+  const messageCode = (msg as any).code;
+  const messageType = (msg as any).type;
+
+  const applyEditorKey = `${messageId}-apply-editor`;
+  const createFileKey = `${messageId}-create-file`;
+  const mergeFileKey = `${messageId}-merge-file`;
+  const chooseLocationKey = `${messageId}-choose-location`;
 
   return (
-    <div className="space-y-2">
-      <p className="whitespace-pre-wrap">{msg.content}</p>
-      {msg.code && (
+    <div className="space-y-3">
+      <p className="whitespace-pre-wrap">{messageContent}</p>
+      
+      {messageCode && (
         <>
           <CodeBlock
-            code={msg.code}
-            messageId={msg.id}
+            code={messageCode}
+            messageId={messageId}
             actionKeySuffix="code"
             handleCopyCode={handleCopyCode}
             copiedStates={copiedStates}
-            isExpanded={expandedCodePreviews[msg.id]}
-            onToggleExpand={() => toggleCodePreview(msg.id)}
+            isExpanded={expandedCodePreviews[messageId]}
+            onToggleExpand={() => toggleCodePreview(messageId)}
           />
-          {expandedCodePreviews[msg.id] && (
+          
+          {/* Interactive Options for New File Creation */}
+          {messageType === 'newFileSuggestion' && expandedCodePreviews[messageId] && (
+            <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium text-primary dark:text-primary">
+                    How would you like to use this code?
+                  </span>
+                </div>
+                
+                <div className="space-y-2">
+                  {/* Create New File Option */}
+                  <div className="flex items-center justify-between p-2 bg-background/50 rounded border">
+                    <div className="flex items-center gap-2">
+                      <FilePlus2 className="h-4 w-4 text-primary" />
+                      <div>
+                        <div className="text-sm font-medium">Create New File</div>
+                        <div className="text-xs text-muted-foreground">
+                          {(msg as any).suggestedFileName || 'new-file.ts'}
+                        </div>
+                      </div>
+                    </div>
+                    <ActionButton
+                      onClick={() => handleCreateFileAndInsert(
+                        (msg as any).suggestedFileName || 'new-file.ts', 
+                        messageCode!, 
+                        createFileKey
+                      )}
+                      isLoading={loadingStates[createFileKey]}
+                      isApplied={actionAppliedStates[createFileKey]}
+                      disabled={isLoading}
+                      icon={FilePlus2}
+                      buttonKey={createFileKey}
+                      size="sm"
+                    >
+                      Create File
+                    </ActionButton>
+                  </div>
+
+                  {/* Merge with Current File Option */}
+                  {activeFilePath && (
+                    <div className="flex items-center justify-between p-2 bg-background/50 rounded border">
+                      <div className="flex items-center gap-2">
+                        <Merge className="h-4 w-4 text-primary" />
+                        <div>
+                          <div className="text-sm font-medium">Merge with Current File</div>
+                          <div className="text-xs text-muted-foreground">
+                            {(() => {
+                              const activeNode = getFileSystemNode(activeFilePath);
+                              return (activeNode && !Array.isArray(activeNode)) ? activeNode.name : 'Active file';
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                      <ActionButton
+                        onClick={() => handleApplyToEditor(
+                          messageCode!, 
+                          mergeFileKey, 
+                          activeFilePath, 
+                          'Generated code merge', 
+                          forceReplaceState[mergeFileKey]
+                        )}
+                        isLoading={loadingStates[mergeFileKey]}
+                        isApplied={actionAppliedStates[mergeFileKey]}
+                        disabled={isLoading}
+                        icon={Merge}
+                        buttonKey={mergeFileKey}
+                        size="sm"
+                      >
+                        Merge
+                      </ActionButton>
+                    </div>
+                  )}
+
+                  {/* Choose Different Location Option */}
+                  <div className="flex items-center justify-between p-2 bg-background/50 rounded border">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4 text-primary" />
+                      <div>
+                        <div className="text-sm font-medium">Choose Different Location</div>
+                        <div className="text-xs text-muted-foreground">
+                          Select a specific folder or file
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // TODO: Implement file picker dialog
+                        console.log('Choose location clicked - TODO: implement file picker');
+                      }}
+                    >
+                      Browse
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Alternative Options */}
+                {(msg as any).alternativeOptions && (msg as any).alternativeOptions.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-primary/20">
+                    <div className="text-xs font-medium text-primary/80 mb-2">
+                      Alternative Options:
+                    </div>
+                    <div className="space-y-1">
+                      {(msg as any).alternativeOptions.slice(0, 2).map((option: any, idx: number) => (
+                        <div key={idx} className="text-xs text-primary/70">
+                          • {option.description}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Standard Options for Generated Code */}
+          {(messageType === 'generatedCode' || messageType === 'enhancedCodeGeneration') && expandedCodePreviews[messageId] && (
             <div className="flex items-center gap-2 flex-wrap">
-              {msg.type === 'newFileSuggestion' && msg.suggestedFileName && (
-                <ActionButton
-                  onClick={() => handleCreateFileAndInsert(msg.suggestedFileName!, msg.code!, createFileKey)}
-                  isLoading={loadingStates[createFileKey]}
-                  isApplied={actionAppliedStates[createFileKey]}
-                  disabled={isLoading}
-                  icon={FilePlus2}
-                  buttonKey={createFileKey}
-                  title="Create file and insert code"
-                >
-                  Create File & Insert
-                </ActionButton>
-              )}
-              {(msg.type === 'generatedCode' || msg.type === 'enhancedCodeGeneration') && (
-                <>
-                <ActionButton
-                    onClick={async () => await handleApplyToEditor(msg.code!, applyEditorKey, msg.targetPath, 'Generated code from AI assistant', forceReplaceState[applyEditorKey])}
-                    isLoading={loadingStates[applyEditorKey]}
-                    isApplied={actionAppliedStates[applyEditorKey]}
-                    disabled={isLoading || (!msg.targetPath && !activeFilePath)}
-                    icon={Edit}
-                    buttonKey={applyEditorKey}
-                    title={(() => {
-                        const targetPath = msg.targetPath || activeFilePath;
-                        if (!targetPath) return 'Insert (No file open)';
-                        const targetNode = getFileSystemNode(targetPath);
-                        const fileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'Editor';
-                        return forceReplaceState[applyEditorKey] ? `Replace in ${fileName}` : `Insert into ${fileName}`;
-                    })()}
-                >
-                    {(() => {
-                        const targetPath = msg.targetPath || activeFilePath;
-                        if (!targetPath) return 'Insert (No file open)';
-                        const targetNode = getFileSystemNode(targetPath);
-                        const fileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'Editor';
-                        return forceReplaceState[applyEditorKey] ? `Replace in ${fileName}` : `Insert into ${fileName}`;
-                    })()}
-                </ActionButton>
-                 {actionAppliedStates[applyEditorKey] && (msg.targetPath || activeFilePath) && (
-                     <Button
-                       size="icon"
-                       variant="ghost"
-                       onClick={async () => {
-                        setForceReplaceState(prev => ({...prev, [applyEditorKey]: !prev[applyEditorKey]}));
-                        await handleApplyToEditor(msg.code!, applyEditorKey, msg.targetPath, 'Generated code from AI assistant', !forceReplaceState[applyEditorKey]);
-                       }}
-                       disabled={isLoading || loadingStates[applyEditorKey]}
-                       title={forceReplaceState[applyEditorKey] ? "Undo Force Replace & Re-apply (Merge)" : "Force Replace & Re-apply"}
-                       className="h-7 w-7 hover:bg-transparent"
-                     >
-                       <RotateCcw className="h-4 w-4" />
-                     </Button>
-                   )}
-                </>
-              )}
+              <ActionButton
+                onClick={async () => await handleApplyToEditor(
+                  messageCode!, 
+                  applyEditorKey, 
+                  (msg as any).targetPath, 
+                  'Generated code from AI assistant', 
+                  forceReplaceState[applyEditorKey]
+                )}
+                isLoading={loadingStates[applyEditorKey]}
+                isApplied={actionAppliedStates[applyEditorKey]}
+                disabled={isLoading || (!(msg as any).targetPath && !activeFilePath)}
+                icon={Edit}
+                buttonKey={applyEditorKey}
+                title={(() => {
+                  const targetPath = (msg as any).targetPath || activeFilePath;
+                  if (!targetPath) return 'Insert (No file open)';
+                  const targetNode = getFileSystemNode(targetPath);
+                  const fileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'Editor';
+                  return forceReplaceState[applyEditorKey] ? `Replace in ${fileName}` : `Insert into ${fileName}`;
+                })()}
+              >
+                {(() => {
+                  const targetPath = (msg as any).targetPath || activeFilePath;
+                  if (!targetPath) return 'Insert (No file open)';
+                  const targetNode = getFileSystemNode(targetPath);
+                  const fileName = (targetNode && !Array.isArray(targetNode)) ? targetNode.name : 'Editor';
+                  return forceReplaceState[applyEditorKey] ? `Replace in ${fileName}` : `Insert into ${fileName}`;
+                })()}
+              </ActionButton>
             </div>
           )}
         </>
       )}
-      {msg.type === 'enhancedCodeGeneration' && (
+
+      {/* Enhanced Code Generation Additional Features */}
+      {messageType === 'enhancedCodeGeneration' && (
         <div className="mt-3 space-y-2">
-          {msg.fileOperationSuggestion && msg.fileOperationSuggestion.type !== 'none' && (
+          {(msg as any).fileOperationSuggestion && (msg as any).fileOperationSuggestion.type !== 'none' && (
             <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
               <CardContent className="p-2">
                 <div className="flex items-center gap-2 mb-1">
                   <FilePlus2 className="h-4 w-4 text-primary" />
                   <span className="text-xs font-medium text-primary dark:text-primary">File Operation Suggestion</span>
-                  <span className="text-xs text-primary/80 dark:text-primary/90">({Math.round(msg.fileOperationSuggestion.confidence * 100)}% confidence)</span>
+                  <span className="text-xs text-primary/80 dark:text-primary/90">({Math.round((msg as any).fileOperationSuggestion.confidence * 100)}% confidence)</span>
                 </div>
-                <p className="text-xs text-primary/90 dark:text-primary/90">{msg.fileOperationSuggestion.reasoning}</p>
+                <p className="text-xs text-primary/90 dark:text-primary/90">{(msg as any).fileOperationSuggestion.reasoning}</p>
                 <ActionButton
                   onClick={() => handleFileOperationSuggestionAction(
-                    msg.fileOperationSuggestion!.type as 'create' | 'rename' | 'delete' | 'move',
-                    msg.fileOperationSuggestion!.targetPath,
-                    msg.fileOperationSuggestion!.newName,
-                    msg.fileOperationSuggestion!.fileType,
-                    `${msg.id}-fos`,
-                    (msg.fileOperationSuggestion as any).destinationPath
+                    (msg as any).fileOperationSuggestion!.type as 'create' | 'rename' | 'delete' | 'move',
+                    (msg as any).fileOperationSuggestion!.targetPath,
+                    (msg as any).fileOperationSuggestion!.newName,
+                    (msg as any).fileOperationSuggestion!.fileType,
+                    `${messageId}-fos`,
+                    (msg as any).fileOperationSuggestion.destinationPath
                   )}
-                  isLoading={loadingStates[`${msg.id}-fos`]}
-                  isApplied={actionAppliedStates[`${msg.id}-fos`]}
+                  isLoading={loadingStates[`${messageId}-fos`]}
+                  isApplied={actionAppliedStates[`${messageId}-fos`]}
                   disabled={isLoading}
                   icon={Wand2}
-                  buttonKey={`${msg.id}-fos`}
+                  buttonKey={`${messageId}-fos`}
                   className="mt-2"
                 >
-                  Execute: {msg.fileOperationSuggestion.type}
+                  Execute: {(msg as any).fileOperationSuggestion.type}
                 </ActionButton>
               </CardContent>
             </Card>
           )}
-          {msg.alternativeOptions && msg.alternativeOptions.length > 0 && (
+
+          {(msg as any).alternativeOptions && (msg as any).alternativeOptions.length > 0 && (
             <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
               <CardContent className="p-2">
                 <div className="flex items-center gap-2 mb-1">
@@ -145,15 +249,16 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
                   <span className="text-xs font-medium text-primary dark:text-primary">Alternative Options</span>
                 </div>
                 <div className="space-y-1">
-                  {msg.alternativeOptions.slice(0, 2).map((option, idx) => (
+                  {(msg as any).alternativeOptions.slice(0, 2).map((option: any, idx: number) => (
                     <div key={idx} className="text-xs text-primary/90 dark:text-primary/90">• {option.description}</div>
                   ))}
                 </div>
               </CardContent>
             </Card>
           )}
-          {msg.codeQuality && msg.code && (() => {
-            const dynamicQuality = getDynamicCodeQuality(msg.codeQuality!, msg.code!);
+
+          {(msg as any).codeQuality && messageCode && (() => {
+            const dynamicQuality = getDynamicCodeQuality((msg as any).codeQuality!, messageCode!);
             return (
               <Card className="bg-primary/10 border-primary/20 dark:bg-primary/15 dark:border-primary/30">
                 <CardContent className="p-2">
@@ -166,18 +271,22 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
                     <span>{dynamicQuality.languageSpecific.languageIcon} {dynamicQuality.language}</span>
                     <span>📊 {dynamicQuality.functionCount} function{dynamicQuality.functionCount !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1 text-xs">
-                    <div className={cn("flex items-center gap-1", dynamicQuality.languageSpecific.languageCheck ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
-                      {dynamicQuality.languageSpecific.languageCheck ? "✓" : "○"} {dynamicQuality.languageSpecific.languageLabel}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${dynamicQuality.codeStandards ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                      <span>Code Standards</span>
                     </div>
-                    <div className={cn("flex items-center gap-1", dynamicQuality.codeStandards ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
-                      {dynamicQuality.codeStandards ? "✓" : "○"} Code Standards
+                    <div className="flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${dynamicQuality.languageSpecific.languageCheck ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                      <span>{dynamicQuality.languageSpecific.languageLabel}</span>
                     </div>
-                    <div className={cn("flex items-center gap-1", dynamicQuality.isWellRefactored ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
-                      {dynamicQuality.isWellRefactored ? "✓" : "○"} Well Refactored
+                    <div className="flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${dynamicQuality.isWellRefactored ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                      <span>Well Refactored</span>
                     </div>
-                    <div className={cn("flex items-center gap-1", msg.codeQuality!.isWellDocumented ? "text-primary dark:text-primary" : "text-orange-500 dark:text-orange-400")}>
-                      {msg.codeQuality!.isWellDocumented ? "✓" : "○"} Documented
+                    <div className="flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${(msg as any).codeQuality?.isWellDocumented ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                      <span>Documented</span>
                     </div>
                   </div>
                 </CardContent>

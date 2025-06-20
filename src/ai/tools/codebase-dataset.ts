@@ -1,5 +1,5 @@
 /**
- * @fileOverview Genkit dataset integration for codebase context.
+ * @fileOverview Genkit dataset integration for codebase context using Google Gemini.
  *
  * - codebaseDataset: Creates and manages a dataset of codebase information for better AI context.
  */
@@ -9,6 +9,7 @@ import {z} from 'genkit';
 import {
   indexCodebase,
   retrieveCode,
+  codeIndexer,
 } from './advanced-rag-system';
 
 import { parseFileSystemTree } from './file-system-tree-generator';
@@ -94,31 +95,61 @@ async function handleCreate(
 ): Promise<z.infer<typeof CodebaseDatasetOutputSchema>> {
   try {
     return await handleAsync('create', async () => {
+      console.log('Creating codebase dataset with Gemini RAG...');
+      
       // Parse file system tree
       const fileTree = parseFileSystemTree(input.fileSystemTree);
       
-      // Extract code chunks for indexing
-      const chunks = await extractCodeChunks((input.openFiles || []) as FileInfo[]);
+      // Process open files for indexing
+      const openFiles = (input.openFiles || []) as FileInfo[];
+      console.log(`Processing ${openFiles.length} open files for indexing`);
       
-      // Index the codebase using RAG
-      const indexResult = await indexCodebase(
-        input.projectContext?.name || 'default-project',
-        chunks
-      );
+      // Extract code chunks using the enhanced analyzer
+      const chunks = await extractCodeChunks(openFiles);
+      console.log(`Extracted ${chunks.length} code chunks`);
+      
+      // Add additional chunks by analyzing each file individually with Gemini
+      const additionalChunks = [];
+      for (const file of openFiles) {
+        try {
+          const indexResult = await codeIndexer({
+            fileContent: file.content,
+            filePath: file.path,
+            fileName: file.path.split('/').pop() || file.path,
+            projectContext: input.projectContext?.description,
+          });
+          
+          additionalChunks.push(...indexResult.chunks);
+        } catch (error) {
+          console.error(`Error indexing file ${file.path}:`, error);
+        }
+      }
+      
+      console.log(`Generated ${additionalChunks.length} additional chunks with Gemini`);
+      
+      // Combine all chunks
+      const allChunks = [...chunks, ...additionalChunks];
+      
+      // Index the codebase using the Gemini RAG system
+      const projectId = input.projectContext?.name || 'default-project';
+      const indexResult = await indexCodebase(projectId, allChunks);
+      
+      console.log(`Successfully indexed project ${projectId} with ${allChunks.length} total chunks`);
       
       return {
         success: true,
         operation: 'create',
-        message: `Created dataset with ${chunks.length} code chunks`,
-        datasetSize: chunks.length,
+        message: `Created dataset with ${allChunks.length} code chunks using Gemini RAG`,
+        datasetSize: allChunks.length,
         projectSummary: {
           totalFiles: fileTree.files.length,
-          mainLanguages: input.projectContext?.languages || [],
-          keyComponents: chunks
+          mainLanguages: input.projectContext?.languages || detectLanguages(fileTree.files),
+          keyComponents: allChunks
             .filter(c => c.chunkType === 'component' || c.chunkType === 'class')
             .map(c => c.functionName || c.fileName)
-            .filter((name): name is string => Boolean(name)),
-          architecture: 'modern-web-app', // TODO: Detect from project structure
+            .filter((name): name is string => Boolean(name))
+            .slice(0, 10), // Limit to top 10
+          architecture: detectArchitecture(input.fileSystemTree, input.projectContext?.languages || []),
         },
       };
     });
@@ -140,26 +171,28 @@ async function handleQuery(
 
   try {
     return await handleAsync('query', async () => {
-      // Query the RAG system
-      const results = await retrieveCode(
-        input.projectContext?.name || 'default-project',
-        {
-          query: input.query as string, // We've checked it's not undefined above
-          queryType: 'semantic',
-          maxResults: 10,
-          contextWindow: 5,
-          includeMetadata: true,
-          filters: {},
-        }
-      );
+      console.log(`Querying codebase with: "${input.query}"`);
+      
+      // Query the Gemini RAG system
+      const projectId = input.projectContext?.name || 'default-project';
+      const results = await retrieveCode(projectId, {
+        query: input.query!, // We've already checked it's not undefined above
+        queryType: 'semantic',
+        maxResults: 10,
+        contextWindow: 5,
+        includeMetadata: true,
+        filters: {},
+      });
+
+      console.log(`Found ${results.totalResults} relevant code chunks`);
 
       return {
         success: true,
         operation: 'query',
-        message: `Found ${results.totalResults} relevant code chunks`,
+        message: `Found ${results.totalResults} relevant code chunks using Gemini semantic search`,
         queryResults: results.chunks.map(result => ({
           file: result.chunk.filePath,
-          content: result.chunk.content,
+          content: result.chunk.content.slice(0, 1000) + (result.chunk.content.length > 1000 ? '...' : ''),
           relevance: result.relevanceScore,
           summary: result.chunk.semanticSummary,
         })),
@@ -175,6 +208,7 @@ async function handleRefresh(
   input: z.infer<typeof CodebaseDatasetInputSchema>
 ): Promise<z.infer<typeof CodebaseDatasetOutputSchema>> {
   try {
+    console.log('Refreshing codebase dataset...');
     return await handleCreate(input);
   } catch (err) {
     return handleError('refresh', err);
@@ -194,21 +228,42 @@ async function handleUpdate(
 
   try {
     return await handleAsync('update', async () => {
+      console.log(`Updating dataset with ${input.openFiles?.length} files`);
+      
       // Extract chunks from updated files
       const files = (input.openFiles || []) as FileInfo[];
       const chunks = await extractCodeChunks(files);
       
-      // Update the RAG index
-      await indexCodebase(
-        input.projectContext?.name || 'default-project',
-        chunks
-      );
+      // Also use Gemini to generate additional semantic chunks
+      const additionalChunks = [];
+      for (const file of files) {
+        try {
+          const indexResult = await codeIndexer({
+            fileContent: file.content,
+            filePath: file.path,
+            fileName: file.path.split('/').pop() || file.path,
+            projectContext: input.projectContext?.description,
+          });
+          
+          additionalChunks.push(...indexResult.chunks);
+        } catch (error) {
+          console.error(`Error indexing file ${file.path}:`, error);
+        }
+      }
+      
+      const allChunks = [...chunks, ...additionalChunks];
+      
+      // Update the Gemini RAG index
+      const projectId = input.projectContext?.name || 'default-project';
+      await indexCodebase(projectId, allChunks);
+
+      console.log(`Updated dataset with ${allChunks.length} total code chunks`);
 
       return {
         success: true,
         operation: 'update',
-        message: `Updated dataset with ${chunks.length} code chunks`,
-        datasetSize: chunks.length,
+        message: `Updated dataset with ${allChunks.length} code chunks using Gemini RAG`,
+        datasetSize: allChunks.length,
       };
     });
   } catch (err) {
@@ -220,7 +275,7 @@ async function handleUpdate(
 export const codebaseDataset = ai.defineTool(
   {
     name: 'codebaseDataset',
-    description: 'Manages a Genkit dataset of codebase information for enhanced AI context and semantic search across the project.',
+    description: 'Manages a Genkit dataset of codebase information using Google Gemini for enhanced AI context and semantic search across the project.',
     inputSchema: CodebaseDatasetInputSchema,
     outputSchema: CodebaseDatasetOutputSchema,
   },
@@ -249,15 +304,6 @@ export const codebaseDataset = ai.defineTool(
     }
   }
 );
-
-// Utility to clean output for schema compliance
-function cleanEnhancedCodegenOutput(output: any) {
-  if (output.fileOperationSuggestion == null) delete output.fileOperationSuggestion;
-  if (output.alternativeOptions == null) delete output.alternativeOptions;
-  if (output.codeQuality == null) delete output.codeQuality;
-  if (output.filenameSuggestionData == null) delete output.filenameSuggestionData;
-  return output;
-}
 
 // Helper functions for dataset operations
 function extractFilesFromTree(tree: string): string[] {
@@ -407,34 +453,41 @@ function detectArchitecture(tree: string, languages: string[]): string {
   return 'Web Application';
 }
 
-function performSemanticSearch(query: string, tree: string, openFiles?: any[]): any[] {
-  const results: any[] = [];
-  const queryLower = query.toLowerCase();
-  
-  // Simple keyword-based search for now
-  // In a real implementation, this would use semantic embeddings
-  
-  if (openFiles) {
-    for (const file of openFiles) {
-      const content = file.content.toLowerCase();
-      if (content.includes(queryLower)) {
-        const relevance = calculateRelevance(queryLower, content);
-        results.push({
-          file: file.path,
-          content: file.content.substring(0, 500) + '...',
-          relevance,
-          summary: `Contains "${query}" - ${file.path}`,
-        });
-      }
-    }
+// Auto-indexing function for when files are opened
+export async function autoIndexOpenFiles(
+  fileSystemTree: string,
+  openFiles: FileInfo[],
+  projectContext?: {
+    name?: string;
+    description?: string;
+    languages?: string[];
+    frameworks?: string[];
   }
-  
-  // Sort by relevance
-  return results.sort((a, b) => b.relevance - a.relevance);
+): Promise<{ success: boolean; message: string; chunksIndexed: number }> {
+  try {
+    console.log('Auto-indexing open files...');
+    
+    const result = await codebaseDataset({
+      operation: 'create',
+      fileSystemTree,
+      openFiles: openFiles.map(f => ({ path: f.path, content: f.content })),
+      projectContext,
+    });
+    
+    return {
+      success: result.success,
+      message: result.message,
+      chunksIndexed: result.datasetSize || 0,
+    };
+  } catch (error) {
+    console.error('Auto-indexing failed:', error);
+    return {
+      success: false,
+      message: `Auto-indexing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      chunksIndexed: 0,
+    };
+  }
 }
 
-function calculateRelevance(query: string, content: string): number {
-  const occurrences = (content.match(new RegExp(query, 'gi')) || []).length;
-  const density = occurrences / content.length;
-  return Math.min(density * 1000, 1); // Normalize to 0-1
-}
+// Export the auto-indexing function for use in other components
+export { autoIndexOpenFiles as triggerAutoIndexing };

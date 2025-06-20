@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useCallback } from 'react';
-import type { IdeState } from '@/contexts/ide-context';
+import type { IdeState } from '@/lib/types';
 import type { ChatMessage, UndoOperation, ConfirmationDialogData } from '../types';
 import { intelligentCodeMergerServer } from '@/app/(ide)/actions';
 import { isFullFileReplacement } from '../ai-assistant-utils';
@@ -344,7 +343,7 @@ export function useOperationHandler({
       } else if (operationType === 'delete' && targetPath) {
         const nodeToDelete = getFileSystemNode(targetPath);
         const itemTypeConfirm = nodeToDelete && !Array.isArray(nodeToDelete) && nodeToDelete.type === 'folder' ? 'folder' : 'file';
-        const itemNameConfirm = nodeToDelete ? nodeToDelete.name : targetPath.split('/').pop();
+        const itemNameConfirm = nodeToDelete && !Array.isArray(nodeToDelete) ? nodeToDelete.name : targetPath.split('/').pop();
         showConfirmationDialog(
           `Delete ${itemTypeConfirm}`,
           `AI suggested deleting "${itemNameConfirm}". This action cannot be undone. Confirm?`,

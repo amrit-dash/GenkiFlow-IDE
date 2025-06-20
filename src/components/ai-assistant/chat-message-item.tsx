@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -34,27 +33,27 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = (props) => {
       case 'generatedCode':
       case 'newFileSuggestion':
       case 'enhancedCodeGeneration':
-        return <GeneratedCodeDisplay {...props} msg={msg} />;
+        return <GeneratedCodeDisplay {...props} msg={msg as Extract<typeof msg, { type: 'generatedCode' | 'newFileSuggestion' | 'enhancedCodeGeneration' }>} />;
       case 'refactorSuggestion':
-        return <RefactorSuggestionDisplay {...props} msg={msg} />;
+        return <RefactorSuggestionDisplay {...props} msg={msg as Extract<typeof msg, { type: 'refactorSuggestion' }>} />;
       case 'codeExamples':
-        return <CodeExamplesDisplay {...props} msg={msg} />;
+        return <CodeExamplesDisplay {...props} msg={msg as Extract<typeof msg, { type: 'codeExamples' }>} />;
       case 'fileOperationExecution':
-        return <FileOperationDisplay {...props} msg={msg} />;
+        return <FileOperationDisplay {...props} msg={msg as Extract<typeof msg, { type: 'fileOperationExecution' }>} />;
       case 'terminalCommandExecution':
-        return <TerminalCommandDisplay {...props} msg={msg} />;
+        return <TerminalCommandDisplay {...props} msg={msg as Extract<typeof msg, { type: 'terminalCommandExecution' }>} />;
       case 'smartCodePlacement':
-        return <SmartCodePlacementDisplay {...props} msg={msg} />;
+        return <SmartCodePlacementDisplay {...props} msg={msg as Extract<typeof msg, { type: 'smartCodePlacement' }>} />;
       case 'filenameSuggestion':
-        return <FilenameSuggestionDisplay {...props} msg={msg} />;
+        return <FilenameSuggestionDisplay {...props} msg={msg as Extract<typeof msg, { type: 'filenameSuggestion' }>} />;
       case 'smartFolderOperation':
-        return <SmartFolderOperationDisplay {...props} msg={msg} />;
+        return <SmartFolderOperationDisplay {...props} msg={msg as Extract<typeof msg, { type: 'smartFolderOperation' }>} />;
       case 'errorValidation':
-        return <ErrorValidationDisplay {...props} msg={msg}/>;
+        return <ErrorValidationDisplay {...props} msg={msg as Extract<typeof msg, { type: 'errorValidation' }>}/>;
       case 'usageAnalysis':
-        return <UsageAnalysisDisplay {...props} msg={msg}/>;
+        return <UsageAnalysisDisplay {...props} msg={msg as Extract<typeof msg, { type: 'usageAnalysis' }>}/>;
       case 'progressUpdate':
-        return <ProgressUpdateDisplay {...props} msg={msg}/>;
+        return <ProgressUpdateDisplay {...props} msg={msg as Extract<typeof msg, { type: 'progressUpdate' }>}/>;
       default:
         // Fallback for any unknown message types
         return <p className="whitespace-pre-wrap">{(msg as any).content || 'Unsupported message type'}</p>;
