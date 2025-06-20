@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FilePlus2, Edit, RotateCcw, Check, Wand2, FileText, Merge, FolderOpen } from 'lucide-react';
+import { FilePlus2, Edit, RotateCcw, Check, Wand2, FileText, Merge } from 'lucide-react';
 import { CodeBlock } from './CodeBlock';
 import { ActionButton } from './ActionButton';
 import type { GeneratedCodeDisplayProps } from '@/components/ai-assistant/types';
@@ -127,14 +127,14 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
                     </div>
                   )}
 
-                  {/* Choose Different Location Option */}
+                  {/* View Generated Code Option */}
                   <div className="flex items-center justify-between p-2 bg-background/50 rounded border">
                     <div className="flex items-center gap-2">
-                      <FolderOpen className="h-4 w-4 text-primary" />
+                      <FileText className="h-4 w-4 text-primary" />
                       <div>
-                        <div className="text-sm font-medium">Choose Different Location</div>
+                        <div className="text-sm font-medium">View Generated Code</div>
                         <div className="text-xs text-muted-foreground">
-                          Select a specific folder or file
+                          Preview code in a dedicated viewer
                         </div>
                       </div>
                     </div>
@@ -142,11 +142,19 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        // TODO: Implement file picker dialog
-                        console.log('Choose location clicked - TODO: implement file picker');
+                        // Toggle the code preview to show the generated code
+                        if (!expandedCodePreviews[messageId]) {
+                          toggleCodePreview(messageId);
+                        }
+                        // Scroll to the code block
+                        const codeElement = document.querySelector(`[data-message-id="${messageId}"] .code-block`);
+                        if (codeElement) {
+                          codeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
                       }}
                     >
-                      Browse
+                      <FileText className="h-4 w-4 mr-1" />
+                      View Code
                     </Button>
                   </div>
                 </div>
@@ -226,7 +234,8 @@ export const GeneratedCodeDisplay: React.FC<GeneratedCodeDisplayProps> = ({
                     (msg as any).fileOperationSuggestion!.newName,
                     (msg as any).fileOperationSuggestion!.fileType,
                     `${messageId}-fos`,
-                    (msg as any).fileOperationSuggestion.destinationPath
+                    (msg as any).fileOperationSuggestion.destinationPath,
+                    (msg as any).fileOperationSuggestion.content || messageCode
                   )}
                   isLoading={loadingStates[`${messageId}-fos`]}
                   isApplied={actionAppliedStates[`${messageId}-fos`]}

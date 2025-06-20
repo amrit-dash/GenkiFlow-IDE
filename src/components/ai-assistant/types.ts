@@ -49,7 +49,8 @@ export interface ChatMessageItemProps {
     newName: string | undefined,
     fileType: 'file' | 'folder' | undefined,
     buttonKey: string,
-    destinationPath?: string | undefined
+    destinationPath?: string | undefined,
+    content?: string
   ) => Promise<void>;
   
   actionAppliedStates: Record<string, boolean>;
@@ -108,7 +109,8 @@ export interface ChatHistoryDisplayProps {
     newName: string | undefined,
     fileType: 'file' | 'folder' | undefined,
     buttonKey: string,
-    destinationPath?: string | undefined
+    destinationPath?: string | undefined,
+    content?: string
   ) => Promise<void>;
   actionAppliedStates: Record<string, boolean>;
   loadingStates: Record<string, boolean>;

@@ -148,10 +148,16 @@ export function useOperationHandler({
             const parentId = parentNode && !Array.isArray(parentNode) ? parentNode.id : null;
             const newNode = addNode(parentId, operationData.fileName, operationData.fileType, parentPath);
             if (newNode) {
-              if (operationData.content && operationData.fileType === 'file') updateFileContent(newNode.path, operationData.content);
-              if (operationData.openInIDE && operationData.fileType === 'file') openFile(newNode.path, newNode);
+              // Always apply content if provided, regardless of file type
+              if (operationData.content && operationData.fileType === 'file') {
+                console.log('Applying content to new file:', operationData.content.substring(0, 100) + '...'); // Debug log
+                updateFileContent(newNode.path, operationData.content);
+                openFile(newNode.path, newNode);
+              } else if (operationData.fileType === 'file') {
+                openFile(newNode.path, newNode);
+              }
               success = true;
-              message = `Successfully created ${operationData.fileType}: ${operationData.fileName}.`;
+              message = `Successfully created ${operationData.fileType}: ${operationData.fileName}${operationData.content ? ' with content' : ''}.`;
                undoOperation = {
                 type: 'create',
                 data: { name: newNode.name, path: newNode.path, type: newNode.type },
@@ -315,8 +321,12 @@ export function useOperationHandler({
     const newNode = addNode(parentIdForNewNode, suggestedFileName, 'file', baseDirForNewNode);
     if (newNode) {
       openFile(newNode.path, newNode);
-      updateFileContent(newNode.path, code);
-      toast({ title: "File Created", description: `"${newNode.name}" created.`});
+      // CRITICAL: Ensure content is actually applied
+      if (code && code.trim()) {
+        console.log('Applying code to new file:', code.substring(0, 100) + '...'); // Debug log
+        updateFileContent(newNode.path, code);
+      }
+      toast({ title: "File Created", description: `"${newNode.name}" created with ${code ? code.split('\n').length + ' lines of code' : 'no content'}.`});
       setActionAppliedStates(prev => ({ ...prev, [buttonKey]: true }));
       addToUndoStack({ type: 'create', data: { name: newNode.name, path: newNode.path, type: newNode.type }, timestamp: Date.now(), description: `Created ${newNode.name}`});
     } else {
@@ -331,13 +341,20 @@ export function useOperationHandler({
     newName: string | undefined,
     fileType: 'file' | 'folder' | undefined,
     buttonKey: string,
-    destinationPath?: string
+    destinationPath?: string,
+    content?: string
   ) => {
     setLoadingStates(prev => ({...prev, [buttonKey]: true}));
     try {
       let result;
       if (operationType === 'create' && newName && fileType) {
-        result = await performFileOperation('create', { parentPath: targetPath || '/', fileName: newName, fileType, openInIDE: true });
+        result = await performFileOperation('create', { 
+          parentPath: targetPath || '/', 
+          fileName: newName, 
+          fileType, 
+          content: content || '',
+          openInIDE: true 
+        });
       } else if (operationType === 'rename' && targetPath && newName) {
         result = await performFileOperation('rename', { targetPath, newName });
       } else if (operationType === 'delete' && targetPath) {

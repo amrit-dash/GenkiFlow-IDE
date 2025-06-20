@@ -1,4 +1,3 @@
-
 export interface FileSystemNode {
   id: string;
   name: string;
@@ -287,10 +286,9 @@ export interface FilenameSuggestionData { // For ChatMessage.filenameSuggestionD
   itemType?: 'file' | 'folder'; // Type of item being named
 }
 
-
-interface ToastOptions {
-  title?: React.ReactNode;
-  description?: React.ReactNode;
+export interface ToastOptions {
+  title?: string;
+  description?: string;
   action?: React.ReactElement;
   variant?: "default" | "destructive";
   [key: string]: any;

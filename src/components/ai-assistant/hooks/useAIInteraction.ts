@@ -722,15 +722,24 @@ export function useAIInteraction({
       }
       // 3. Refactor Intent
       else if (lowerPrompt.includes("refactor")) {
-          const codeToRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].content : currentFileContentForContext;
-          const pathForRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].path : activeFilePath;
+          let codeToRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].content : currentFileContentForContext;
+          let pathForRefactor = attachedFilesDataForAI.length > 0 ? attachedFilesDataForAI[0].path : activeFilePath;
+          
+          // *** CRITICAL FIX: Ensure we always have content for refactoring ***
+          if (!codeToRefactor && pathForRefactor) {
+            // Try to get content from the file system if not in currentFileContentForContext
+            const fileNode = getFileSystemNode(pathForRefactor);
+            if (fileNode && !Array.isArray(fileNode) && fileNode.type === 'file') {
+              codeToRefactor = fileNode.content || '';
+            }
+          }
           
           if (codeToRefactor && pathForRefactor) {
             const fileNameForRefactor = pathForRefactor.split('/').pop() || "selected code";
             const result = await refactorCodeServer({
-                attachedFilesDataForAI,
-                currentFilePath: activeFilePath || undefined,
-                currentFileContent: currentFileContentForContext,
+                attachedFilesDataForAI: codeToRefactor === currentFileContentForContext ? [] : [{ path: pathForRefactor, content: codeToRefactor }],
+                currentFilePath: pathForRefactor === activeFilePath ? activeFilePath : undefined,
+                currentFileContent: pathForRefactor === activeFilePath ? codeToRefactor : undefined,
             });
             
             // Auto-apply refactoring if suggestion exists
@@ -750,6 +759,13 @@ export function useAIInteraction({
                 content: "No significant refactoring improvements were identified for the selected code.",
             };
             }
+            intentHandled = true;
+          } else {
+            // Show error if no content found
+            responseMessage = {
+              id: assistantMessageId, role: 'assistant', type: 'error',
+              content: "No code content found for refactoring. Please open a file or attach a file with code content.",
+            };
             intentHandled = true;
           }
       }

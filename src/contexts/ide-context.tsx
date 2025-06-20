@@ -1,4 +1,3 @@
-
 "use client";
 
 import type React from 'react';
@@ -320,6 +319,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateFileContent = useCallback((filePath: string, newContent: string) => {
+    // Update the opened files state
     setOpenedFilesState(prevMap => {
       const newMap = new Map(prevMap);
       const file = newMap.get(filePath);
@@ -344,6 +344,27 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         newMap.set(filePath, updatedFile);
       }
       return newMap;
+    });
+
+    // *** CRITICAL FIX: Also update the file system state ***
+    setFileSystemState(prevFs => {
+      const updateNodeInFS = (nodes: FileSystemNode[]): FileSystemNode[] => {
+        return nodes.map(node => {
+          if (node.path === filePath && node.type === 'file') {
+            return {
+              ...node,
+              content: newContent,
+              contentHistory: node.contentHistory ? [...node.contentHistory, newContent] : [newContent],
+              historyIndex: node.contentHistory ? node.contentHistory.length : 0
+            };
+          }
+          if (node.children) {
+            return { ...node, children: updateNodeInFS(node.children) };
+          }
+          return node;
+        });
+      };
+      return updateNodeInFS(prevFs);
     });
   }, []);
 
@@ -468,7 +489,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
 
       let counter = 1;
       const targetChildrenArray = parentNode ? parentNode.children || [] : newFs; 
-      const nameExists = (nameToCheck: string) => targetChildrenArray.some(child => child.name === nameToCheck);
+      const nameExists = (nameToCheck: string) => targetChildrenArray.some((child: FileSystemNode) => child.name === nameToCheck);
 
       let tempFinalName = finalName;
       while (nameExists(tempFinalName)) {
@@ -527,8 +548,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         const findOriginalNode = (nodes: FileSystemNode[], targetIdOrPath: string): FileSystemNode | undefined => { for (const node of nodes) { if (node.id === targetIdOrPath || node.path === targetIdOrPath) return node; if (node.children) { const found = findOriginalNode(node.children, targetIdOrPath); if (found) return found; } } return undefined; } 
         nodeToDeleteRefForClosing = findOriginalNode(prevFs, nodeIdOrPath); 
         if (!nodeToDeleteInClone) { console.error("Node to delete not found:", nodeIdOrPath); success = false; return prevFs; }
-        if (parentOfDeletedNode && parentOfDeletedNode.children) { parentOfDeletedNode.children = parentOfDeletedNode.children.filter(child => child.id !== nodeToDeleteInClone!.id); newFsStructure = newFsDeepClone;
-        } else { newFsStructure = newFsDeepClone.filter(n => n.id !== nodeToDeleteInClone!.id); } 
+        if (parentOfDeletedNode && parentOfDeletedNode.children) { parentOfDeletedNode.children = parentOfDeletedNode.children.filter((child: FileSystemNode) => child.id !== nodeToDeleteInClone!.id); newFsStructure = newFsDeepClone;
+        } else { newFsStructure = newFsDeepClone.filter((n: FileSystemNode) => n.id !== nodeToDeleteInClone!.id); } 
         success = true; return newFsStructure;
     });
     if (success && nodeToDeleteRefForClosing) {
@@ -573,7 +594,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
           if (node.id === nodeId) {
             parentOfTargetNode = currentParent; 
             const siblings = parentOfTargetNode ? parentOfTargetNode.children || [] : newFs; 
-            if (siblings.some(sibling => sibling.id !== nodeId && sibling.name === cleanNewNameInput)) { console.error(`Node "${cleanNewNameInput}" already exists in this directory.`); success = false; return true;  }
+            if (siblings.some((sibling: FileSystemNode) => sibling.id !== nodeId && sibling.name === cleanNewNameInput)) { console.error(`Node "${cleanNewNameInput}" already exists in this directory.`); success = false; return true;  }
 
             oldPath = node.path; 
             nodeType = node.type;
@@ -642,8 +663,8 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
                     nodes.splice(i, 1); 
                     return nodeToDrag;
                 }
-                if (nodes[i].children) {
-                    const found = findAndDetachRecursive(nodes[i].children, nodes[i]);
+                if (nodes[i].children && nodes[i].children!.length > 0) {
+                    const found = findAndDetachRecursive(nodes[i].children!, nodes[i]);
                     if (found) return found;
                 }
             }
@@ -668,8 +689,11 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             targetParentNode = findTargetRecursive(newFs);
             if (!targetParentNode) { 
                 console.warn("Target parent folder not found or is not a folder:", targetParentFolderId, "Reverting move."); 
-                if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode);
-                else if (!sourceParentNode) newFs.push(draggedNode); 
+                if (sourceParentNode && (sourceParentNode as FileSystemNode).type === 'folder' && (sourceParentNode as FileSystemNode).children) {
+                    (sourceParentNode as FileSystemNode).children!.push(draggedNode);
+                } else if (!sourceParentNode) {
+                    newFs.push(draggedNode);
+                }
                 return prevFs; 
             }
         }
@@ -679,7 +703,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             while (currentCheckNodePath !== '/') { 
                 if (currentCheckNodePath === draggedNode.path) { 
                     console.error("Cannot move a folder into itself or one of its descendants.");
-                    if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode);
+                    if (sourceParentNode && (sourceParentNode as FileSystemNode).type === 'folder' && (sourceParentNode as FileSystemNode).children) (sourceParentNode as FileSystemNode).children!.push(draggedNode);
                     else if (!sourceParentNode) newFs.push(draggedNode);
                     return prevFs; 
                 }
@@ -689,7 +713,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
             }
              if (currentCheckNodePath === draggedNode.path) { 
                   console.error("Cannot move a folder into itself.");
-                  if (sourceParentNode && sourceParentNode.children) sourceParentNode.children.push(draggedNode);
+                  if (sourceParentNode && (sourceParentNode as FileSystemNode).type === 'folder' && (sourceParentNode as FileSystemNode).children) (sourceParentNode as FileSystemNode).children!.push(draggedNode);
                   else if (!sourceParentNode) newFs.push(draggedNode);
                   return prevFs;
              }
@@ -707,7 +731,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
         }
 
 
-        while (destinationArray.some(child => child.name === newProposedName && child.id !== draggedNode!.id)) { 
+        while (destinationArray.some((child: FileSystemNode) => child.name === newProposedName && child.id !== draggedNode!.id)) { 
              if (draggedNode.type === 'file') {
                 if (originalBaseName.startsWith('.')) { 
                     newProposedName = `${originalBaseName}(${tempCounter})`;
@@ -833,7 +857,24 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     isBusy, nodeToAutoRenameId, setNodeToAutoRenameId,
     undoContentChange, redoContentChange,
     accentColor, setAccentColor,
-    toast, // Ensure toast is included in the context value
+    toast: (options: ToastOptions) => {
+      const toastResult = toast({
+        title: options.title,
+        description: options.description,
+        action: options.action,
+        variant: options.variant
+      });
+      return {
+        id: toastResult.id,
+        dismiss: toastResult.dismiss,
+        update: (props: ToastOptions) => toastResult.update({
+          title: props.title,
+          description: props.description,
+          action: props.action,
+          variant: props.variant
+        } as any)
+      };
+    },
     analyzeFileSystemStructure,
   }), [
     fileSystem, openedFiles, activeFilePath, setActiveFilePath, openFile, closeFile,
@@ -842,7 +883,7 @@ export function IdeProvider({ children }: { children: React.ReactNode }) {
     isBusy, nodeToAutoRenameId, setNodeToAutoRenameId,
     undoContentChange, redoContentChange,
     accentColor, setAccentColor,
-    toast, // And in its dependency array
+    toast,
     analyzeFileSystemStructure,
   ]);
 

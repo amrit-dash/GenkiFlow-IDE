@@ -130,33 +130,34 @@ export const FileOperationDisplay: React.FC<FileOperationDisplayProps> = ({
       
       // If targetPath looks like a full file path (e.g., "/news_scraper.py"), extract parent
       let parentPath = '/';
+      let actualFileName = fileName;
+      
       if (fullPath.includes('/') && fullPath !== '/' && !fileName) {
         // Extract filename from targetPath and use parent as parentPath
         const pathParts = fullPath.split('/');
-        const extractedFileName = pathParts.pop() || 'new_file';
+        actualFileName = pathParts.pop() || 'new_file';
         parentPath = pathParts.join('/') || '/';
-        
-        operationParams = {
-          parentPath: parentPath,
-          fileName: extractedFileName,
-          fileType: operationData.fileType || 'file',
-          content: operationData.content,
-          openInIDE: true
-        };
       } else {
         // Normal case where we have separate parent path and filename
-        operationParams = {
-          parentPath: fullPath === '/' ? '/' : fullPath,
-          fileName: fileName || 'new_file',
-          fileType: operationData.fileType || 'file',
-          content: operationData.content,
-          openInIDE: true
-        };
+        parentPath = fullPath === '/' ? '/' : fullPath;
+        actualFileName = fileName || 'new_file';
       }
+      
+      operationParams = {
+        parentPath: parentPath,
+        fileName: actualFileName,
+        fileType: operationData.fileType || 'file',
+        content: operationData.content || '', // Ensure content is always passed
+        openInIDE: true
+      };
+      
+      console.log('Create operation params:', operationParams); // Debug log
     }
 
     const result = await handleFileOperation(operationData.operation, operationParams);
-
+    
+    console.log('File operation result:', result); // Debug log
+    
     if (result?.success) {
       setOperationCompleted(true);
       setOperationResult(result);
@@ -488,23 +489,23 @@ export const FileOperationDisplay: React.FC<FileOperationDisplayProps> = ({
                         id: Date.now().toString(),
                         role: 'assistant',
                         type: 'fileOperationExecution',
-                        content: `Choose a different location for "${fileName}":`,
+                        content: `Specify a custom location for "${fileName}":`,
                         fileOperationData: {
                           operation: 'create',
                           success: false,
                           targetPath: '/', // Default to root, user can specify
                           newName: fileName,
                           content: content,
-                          message: `Please specify the location where you'd like to create "${fileName}". You can say something like "create in src/", "put it in the components folder", or "save to scripts/".`,
+                          message: `Please specify where you'd like to create "${fileName}". You can say something like "create in src/", "put it in the components folder", or "save to scripts/".`,
                           requiresConfirmation: true,
-                          confirmationMessage: `Create "${fileName}" in a different location?`,
+                          confirmationMessage: `Create "${fileName}" in a custom location?`,
                           fileType: 'file',
                         },
                       }]);
                     }
                   }}
                 >
-                  Different Location
+                  Custom Location
                 </Button>
                 {activeFilePath && (
             <Button
